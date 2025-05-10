@@ -36,7 +36,7 @@ Blocky Collector 3D is a fast-paced 3D browser game built with HTML, CSS, and Ja
     *   Implement orbiting behavior when within an `engagementRadius` of the player.
     *   Employ a random drift component to their movement.
     *   Actively avoid other enemies with improved force and radius to prevent clumping.
-*   **Spawning**: One enemy (50% taller than player) spawns initially. When an enemy is defeated, two new enemies spawn (each 50% taller than the player) at an increased distance.
+*   **Spawning**: One enemy (50% taller than player) spawns initially. When an enemy is defeated, two new enemies spawn (each 50% taller than the player) at an increased distance and with improved angular separation to ensure they are more spread out.
 *   **Interaction**: If a non-killable enemy touches the player, game over. If a killable (yellow) enemy is touched by the player, the enemy is defeated.
 
 ### World & Food

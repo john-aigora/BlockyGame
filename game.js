@@ -28,15 +28,13 @@ let playerSpeed; // To be set in init
 let enemySpeed;  // To be set in init
 const keys = {}; // Object to keep track of currently pressed keys
 // NEW Joystick Variables - repurposed for touch-anywhere
-let touchActive = false; // Renamed from joystickActive
-let gameScreenContainer; // Will be #game-container
-// let joystickThumb; // No longer needed
-// let joystickRadius = 0; // No longer needed for visual joystick base
-// let thumbRadius = 0; // No longer needed
+let touchActive = false;
+let gameScreenContainer;
+let touchStartPoint = { x: 0, y: 0 };
 let currentTouchPoint = { x: 0, y: 0 };
 let movementVector = { x: 0, y: 0 };
-const MAX_DRAG_DISTANCE = 75; // Pixels for full speed input
-const DEAD_ZONE_RADIUS = 10; // Pixels, touches within this from start are no input
+const MAX_DRAG_DISTANCE = 75;
+const DEAD_ZONE_RADIUS = 10;
 // World and spawning parameters
 const worldSize = 200; // Defines the size of the ground plane (illusion of infinite space)
 const worldBoundary = worldSize / 2; // Define world boundary for wrapping
@@ -58,9 +56,6 @@ let animationFrameId; // ID for the animation loop, used for potential cancellat
 const initialCollectTime = 10; // Player has 10 seconds to collect a block
 let collectTimerValue = initialCollectTime;
 let collectTimerInterval; // Stores the interval ID for the collect timer
-
-let gameCanvasCenterX = 0; // NEW: To store center of game container
-let gameCanvasCenterY = 0; // NEW: To store center of game container
 
 let isMobile = false; // For mobile-specific adjustments
 
@@ -152,15 +147,6 @@ function init() {
     gameScreenContainer = document.getElementById('game-container'); // Control area
 
     if (gameScreenContainer) {
-        // Calculate game container center once, and on resize
-        const updateGameCanvasCenter = () => {
-            const rect = gameScreenContainer.getBoundingClientRect();
-            gameCanvasCenterX = rect.left + rect.width / 2;
-            gameCanvasCenterY = rect.top + rect.height / 2;
-        };
-        updateGameCanvasCenter(); // Initial calculation
-        window.addEventListener('resize', updateGameCanvasCenter); // Update on window resize
-
         gameScreenContainer.addEventListener('touchstart', (e) => {
             const targetElement = e.target;
             if (!targetElement.closest('button')) {
@@ -168,20 +154,22 @@ function init() {
             }
             if (e.touches.length > 0) {
                 touchActive = true;
+                touchStartPoint.x = e.touches[0].clientX;
+                touchStartPoint.y = e.touches[0].clientY;
                 currentTouchPoint.x = e.touches[0].clientX;
                 currentTouchPoint.y = e.touches[0].clientY;
-                updateMovementVectorFromScreenCenter(); // Call new function
+                updateMovementVector();
             }
         });
 
         gameScreenContainer.addEventListener('touchmove', (e) => {
-            if (touchActive) { // Only prevent default if our control is active
+            if (touchActive) {
                 e.preventDefault();
             }
             if (touchActive && e.touches.length > 0) {
                 currentTouchPoint.x = e.touches[0].clientX;
                 currentTouchPoint.y = e.touches[0].clientY;
-                updateMovementVectorFromScreenCenter(); // Call new function
+                updateMovementVector();
             }
         });
 
@@ -795,17 +783,24 @@ function spawnNewEnemies() {
     const currentPlayerActualHeight = playerScale * 1.0;
     const newEnemyTargetHeight = currentPlayerActualHeight * 1.5; // New enemies 50% taller than current player
     const newEnemyScaleFactor = newEnemyTargetHeight / enemyBaseHeight;
+    const spawnDistance = 35; // INCREASED from 30 to 35
 
-    for (let i = 0; i < 2; i++) {
-        const enemy = createEnemy();
-        enemy.scale.set(newEnemyScaleFactor, newEnemyScaleFactor, newEnemyScaleFactor);
-        enemy.position.y = 0; // MODIFIED: Group origin at feet level
+    // Spawn first enemy at a random angle
+    const enemy1 = createEnemy();
+    enemy1.scale.set(newEnemyScaleFactor, newEnemyScaleFactor, newEnemyScaleFactor);
+    enemy1.position.y = 0;
+    const angle1 = Math.random() * Math.PI * 2; // Random angle (0 to 360 degrees)
+    enemy1.position.x = player.position.x + Math.cos(angle1) * spawnDistance;
+    enemy1.position.z = player.position.z + Math.sin(angle1) * spawnDistance;
 
-        const angle = (i * Math.PI) + Math.random() * 0.5;
-        const distance = 30; // INCREASED from 20 to 30
-        enemy.position.x = player.position.x + Math.cos(angle) * distance;
-        enemy.position.z = player.position.z + Math.sin(angle) * distance;
-    }
+    // Spawn second enemy on the opposite side with some deviation
+    const enemy2 = createEnemy();
+    enemy2.scale.set(newEnemyScaleFactor, newEnemyScaleFactor, newEnemyScaleFactor);
+    enemy2.position.y = 0;
+    // Opposite side (angle1 + PI) with a random deviation of +/- 45 degrees (PI/4 radians)
+    const angle2 = angle1 + Math.PI + (Math.random() - 0.5) * (Math.PI / 2);
+    enemy2.position.x = player.position.x + Math.cos(angle2) * spawnDistance;
+    enemy2.position.z = player.position.z + Math.sin(angle2) * spawnDistance;
 }
 
 function avoidOtherEnemies(enemyGroup, index) {
@@ -828,10 +823,10 @@ function avoidOtherEnemies(enemyGroup, index) {
     });
 }
 
-// NEW Function: updateMovementVectorFromScreenCenter
-function updateMovementVectorFromScreenCenter() {
-    let deltaX = currentTouchPoint.x - gameCanvasCenterX;
-    let deltaY = currentTouchPoint.y - gameCanvasCenterY;
+// NEW Function: updateMovementVector
+function updateMovementVector() {
+    let deltaX = currentTouchPoint.x - touchStartPoint.x;
+    let deltaY = currentTouchPoint.y - touchStartPoint.y;
 
     const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
 
