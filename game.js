@@ -15,8 +15,10 @@ let enemies = []; // Array to store multiple enemies
 let canKillEnemy = false; // Track if player is big enough to kill enemies
 let killIndicatorVisible = false; // For flashing kill indicator
 // Movement and speed constants
-const playerSpeed = 0.05; // Player speed reduced to 1/4 of previous
-const enemySpeed = playerSpeed * 0.5; // Enemy is half of player speed (also 1/4 of its previous)
+const BASE_PLAYER_SPEED = 0.05; // Player speed reduced to 1/4 of previous base
+const MOBILE_SPEED_MULTIPLIER = 1.75; // Player is 75% faster on mobile than desktop base
+let playerSpeed; // To be set in init
+let enemySpeed;  // To be set in init
 const keys = {}; // Object to keep track of currently pressed keys
 // NEW Joystick Variables - repurposed for touch-anywhere
 let touchActive = false; // Renamed from joystickActive
@@ -53,6 +55,8 @@ let collectTimerInterval; // Stores the interval ID for the collect timer
 let gameCanvasCenterX = 0; // NEW: To store center of game container
 let gameCanvasCenterY = 0; // NEW: To store center of game container
 
+let isMobile = false; // For mobile-specific adjustments
+
 // --- Initialization Function ---
 // This function sets up the entire game scene, objects, and event listeners.
 function init() {
@@ -61,6 +65,18 @@ function init() {
         console.error('Game container not found!');
         return;
     }
+
+    // Mobile detection and speed adjustment
+    isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || /Mobi|Android/i.test(navigator.userAgent);
+    if (isMobile) {
+        playerSpeed = BASE_PLAYER_SPEED * MOBILE_SPEED_MULTIPLIER;
+        console.log("Mobile device detected. Player speed adjusted to:", playerSpeed);
+    } else {
+        playerSpeed = BASE_PLAYER_SPEED;
+        console.log("Desktop device detected. Player speed:", playerSpeed);
+    }
+    enemySpeed = playerSpeed * 0.5; // Enemy speed is always half of the current playerSpeed
+    console.log("Enemy speed set to:", enemySpeed);
 
     // 1. Scene: The container for all 3D objects.
     scene = new THREE.Scene();
