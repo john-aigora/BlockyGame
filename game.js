@@ -14,6 +14,13 @@ const enemyBaseHeight = 1.2; // Base height of enemy
 let enemies = []; // Array to store multiple enemies
 let canKillEnemy = false; // Track if player is big enough to kill enemies
 let killIndicatorVisible = false; // For flashing kill indicator
+
+// Speed Multiplier Variables
+const speedMultipliers = [1.0, 1.5, 2.0, 3.0, 0.5]; // Speed multipliers (1x, 1.5x, 2x, 3x, 0.5x)
+let currentSpeedMultiplierIndex = 0;
+let actualPlayerSpeed; // Will store the fully adjusted player speed
+let actualEnemySpeed;  // Will store the fully adjusted enemy speed
+
 // Movement and speed constants
 const BASE_PLAYER_SPEED = 0.05; // Player speed reduced to 1/4 of previous base
 const MOBILE_SPEED_MULTIPLIER = 1.75; // Player is 75% faster on mobile than desktop base
@@ -73,10 +80,12 @@ function init() {
         console.log("Mobile device detected. Player speed adjusted to:", playerSpeed);
     } else {
         playerSpeed = BASE_PLAYER_SPEED;
-        console.log("Desktop device detected. Player speed:", playerSpeed);
+        console.log("Desktop device detected. Player speed base:", playerSpeed);
     }
-    enemySpeed = playerSpeed * 0.5; // Enemy speed is always half of the current playerSpeed
-    console.log("Enemy speed set to:", enemySpeed);
+    // REMOVED: enemySpeed = playerSpeed * 0.5; // This is now handled by applySpeedMultiplier
+    // console.log("Enemy speed set to:", enemySpeed);
+
+    applySpeedMultiplier(); // Apply initial speed multiplier
 
     // 1. Scene: The container for all 3D objects.
     scene = new THREE.Scene();
@@ -137,6 +146,7 @@ function init() {
 
     // Add event listeners for pause and restart buttons
     document.getElementById('pause-button').addEventListener('click', togglePause);
+    document.getElementById('speed-cycle-button').addEventListener('click', cycleSpeed);
 
     // NEW Touch Anywhere Event Listeners
     gameScreenContainer = document.getElementById('game-container'); // Control area
@@ -593,7 +603,7 @@ function update() {
         // --- Random Movement Component ---
         enemyGroup.timeToChangeRandomVelocity -= (1 / 60); // Approximate delta time for 60FPS
         if (enemyGroup.timeToChangeRandomVelocity <= 0) {
-            const randomStrength = enemySpeed * enemyRandomDriftFactor;
+            const randomStrength = actualEnemySpeed * enemyRandomDriftFactor; // USE actualEnemySpeed
             enemyGroup.randomVelocity.set(
                 (Math.random() - 0.5) * 2 * randomStrength,
                 0,
@@ -612,10 +622,10 @@ function update() {
             const chaseComponent = chaseDirection.clone().multiplyScalar(1.0 - orbitStrengthFactor);
             const orbitComponent = orbitVector.normalize().multiplyScalar(orbitStrengthFactor);
 
-            combinedMovement.add(chaseComponent).add(orbitComponent).normalize().multiplyScalar(enemySpeed);
+            combinedMovement.add(chaseComponent).add(orbitComponent).normalize().multiplyScalar(actualEnemySpeed); // USE actualEnemySpeed
         } else {
             // --- Pure Chase Behavior (outside engagement radius) ---
-            combinedMovement.copy(chaseDirection).multiplyScalar(enemySpeed);
+            combinedMovement.copy(chaseDirection).multiplyScalar(actualEnemySpeed); // USE actualEnemySpeed
         }
 
         // Add random drift to the calculated movement
@@ -662,17 +672,15 @@ function update() {
     // Player movement and other game updates (ground, light, camera, collectibles)
     if (gameActive) {
         // Keyboard movement (can coexist or be removed)
-        if (keys['arrowup']) player.position.z -= playerSpeed;
-        if (keys['arrowdown']) player.position.z += playerSpeed;
-        if (keys['arrowleft']) player.position.x -= playerSpeed;
-        if (keys['arrowright']) player.position.x += playerSpeed;
+        if (keys['arrowup']) player.position.z -= actualPlayerSpeed; // USE actualPlayerSpeed
+        if (keys['arrowdown']) player.position.z += actualPlayerSpeed; // USE actualPlayerSpeed
+        if (keys['arrowleft']) player.position.x -= actualPlayerSpeed; // USE actualPlayerSpeed
+        if (keys['arrowright']) player.position.x += actualPlayerSpeed; // USE actualPlayerSpeed
 
         // Joystick movement - now touch-anywhere movement
-        if (touchActive) { // Or simply if (movementVector.x !== 0 || movementVector.y !== 0)
-            player.position.x += movementVector.x * playerSpeed;
-            // Invert Y for Z-axis movement: screen down (positive Y) should often mean game world forward (negative Z)
-            // or positive Z depending on camera setup. Let's assume screen Y down = game Z positive for now.
-            player.position.z += movementVector.y * playerSpeed;
+        if (touchActive) {
+            player.position.x += movementVector.x * actualPlayerSpeed; // USE actualPlayerSpeed
+            player.position.z += movementVector.y * actualPlayerSpeed; // USE actualPlayerSpeed
         }
 
         // Player Wrapping Logic
@@ -794,15 +802,15 @@ function spawnNewEnemies() {
         enemy.position.y = 0; // MODIFIED: Group origin at feet level
 
         const angle = (i * Math.PI) + Math.random() * 0.5;
-        const distance = 20;
+        const distance = 30; // INCREASED from 20 to 30
         enemy.position.x = player.position.x + Math.cos(angle) * distance;
         enemy.position.z = player.position.z + Math.sin(angle) * distance;
     }
 }
 
 function avoidOtherEnemies(enemyGroup, index) {
-    const avoidRadius = 4; // Adjusted radius
-    const avoidForce = 0.15; // Increased strength of avoidance force
+    const avoidRadius = 7; // INCREASED from 5 to 7
+    const avoidForce = 0.35; // INCREASED from 0.25 to 0.35
 
     enemies.forEach((otherEnemyGroup, otherIndex) => {
         if (index !== otherIndex) {
@@ -844,6 +852,26 @@ function updateMovementVectorFromScreenCenter() {
 
     movementVector.x = normX;
     movementVector.y = normY;
+}
+
+// NEW function to apply speed multiplier and update speeds
+function applySpeedMultiplier() {
+    const baseSpeedForDevice = isMobile ? BASE_PLAYER_SPEED * MOBILE_SPEED_MULTIPLIER : BASE_PLAYER_SPEED;
+    actualPlayerSpeed = baseSpeedForDevice * speedMultipliers[currentSpeedMultiplierIndex];
+    actualEnemySpeed = (baseSpeedForDevice * 0.5) * speedMultipliers[currentSpeedMultiplierIndex]; // Enemy is 50% of player's base, then multiplied
+
+    const speedButton = document.getElementById('speed-cycle-button');
+    if (speedButton) {
+        speedButton.textContent = `Speed: ${speedMultipliers[currentSpeedMultiplierIndex]}x`;
+    }
+    console.log(`Current Speed Multiplier: ${speedMultipliers[currentSpeedMultiplierIndex]}x`);
+    console.log(`Actual Player Speed: ${actualPlayerSpeed}, Actual Enemy Speed: ${actualEnemySpeed}`);
+}
+
+// NEW function to handle speed cycle button click
+function cycleSpeed() {
+    currentSpeedMultiplierIndex = (currentSpeedMultiplierIndex + 1) % speedMultipliers.length;
+    applySpeedMultiplier();
 }
 
 // --- Start the game ---

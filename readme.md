@@ -2,7 +2,7 @@
 
 ## Overview
 
-Blocky Collector 3D is a fast-paced 3D browser game built with HTML, CSS, and JavaScript, utilizing the Three.js library. Players control a character with a distinct face and legs, navigating a wrap-around world to collect "food" particles (lime green blocks). The game features enemies, also with faces and legs, that dynamically change color based on killability and employ orbiting and separation behaviors. The objective is to achieve the highest score by collecting food and strategically defeating enemies, which then spawn more challenging foes and additional food.
+Blocky Collector 3D is a fast-paced 3D browser game built with HTML, CSS, and JavaScript, utilizing the Three.js library. Players control a character with a distinct face and legs, navigating a wrap-around world to collect "food" particles (lime green blocks). The game features enemies, also with faces and legs, that dynamically change color based on killability and employ orbiting and enhanced separation behaviors. The objective is to achieve the highest score by collecting food and strategically defeating enemies, which then spawn more challenging foes (at a greater distance) and additional food.
 
 ## Project Structure
 
@@ -35,8 +35,8 @@ Blocky Collector 3D is a fast-paced 3D browser game built with HTML, CSS, and Ja
     *   Chase the player.
     *   Implement orbiting behavior when within an `engagementRadius` of the player.
     *   Employ a random drift component to their movement.
-    *   Actively avoid other enemies to prevent clumping.
-*   **Spawning**: One enemy (50% taller than player) spawns initially. When an enemy is defeated, two new enemies spawn, each 50% taller than the player at that moment.
+    *   Actively avoid other enemies with improved force and radius to prevent clumping.
+*   **Spawning**: One enemy (50% taller than player) spawns initially. When an enemy is defeated, two new enemies spawn (each 50% taller than the player) at an increased distance.
 *   **Interaction**: If a non-killable enemy touches the player, game over. If a killable (yellow) enemy is touched by the player, the enemy is defeated.
 
 ### World & Food
@@ -50,9 +50,10 @@ Blocky Collector 3D is a fast-paced 3D browser game built with HTML, CSS, and Ja
 *   **"Collect Block" Timer**: A 10-second timer, resets on food collection. Game over if it reaches zero.
 *   **Kill Indicator**: A flashing "KILL!" sign appears in the top-left when at least one enemy is killable by the player.
 *   **Pause/Resume**: Game can be paused/resumed using the Spacebar or on-screen buttons.
+*   **Speed Control**: An on-screen button cycles through game speeds (0.5x, 1x, 1.5x, 2x, 3x) affecting player and enemies.
 *   **Restart**: Game can be restarted via on-screen buttons (in-game or on game over screen).
 *   **Color Scheme**: "Deep Dive Arcade" theme with dark teal background and contrasting vibrant colors for characters and UI elements.
-*   **Mobile Support**: Touch-and-drag controls for movement. UI buttons are touch-responsive.
+*   **Mobile Support**: Touch-and-drag controls for movement. UI buttons are touch-responsive. Player speed is increased on mobile.
 *   **Game Over**: Occurs if caught by a non-killable enemy or if the collect timer runs out.
 
 ## Potential Future Development (Ideas for Cursor AI)
