@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blocky Collector 3D - Collect or Die!</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+
+<body>
+    <div id="game-container">
+        <div id="message-box" class="message-box">
+            <p id="message-text"></p>
+            <button id="restart-button">Play Again</button>
+        </div>
+        <div id="top-controls">
+            <button id="pause-button" class="game-button">Pause</button>
+            <button id="restart-game-button" class="game-button">Restart</button>
+        </div>
+    </div>
+
+    <div id="ui-container">
+        <div id="kill-indicator" class="kill-indicator">KILL!</div>
+        <div class="ui-element">Score: <span id="score">0</span></div>
+        <div class="ui-element" id="collect-timer-display">Collect In: <span id="collect-time">10</span>s</div>
+        <div id="instructions">
+            Arrow Keys: Move <br>
+            Spacebar: Pause / Resume <br>
+            Collect LIME blocks to grow! <br>
+            If TALLER than an enemy, they turn YELLOW. <br>
+            Touch YELLOW enemies to defeat them. <br>
+            Defeating an enemy spawns two new, larger foes. <br>
+            Survive & get a high score!
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+    <script>
+        // Ensure the game starts after the page is fully loaded
+        window.addEventListener('load', function () {
+            console.log('Window loaded, initializing game...');
+            init();
+        });
+    </script>
+</body>
+
+</html>

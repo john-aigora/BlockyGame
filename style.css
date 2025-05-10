@@ -1,0 +1,209 @@
+/* General body styling */
+body {
+    margin: 0;
+    overflow: hidden;
+    /* Prevent scrollbars */
+    font-family: 'Press Start 2P', cursive;
+    /* Arcade-style font */
+    background-color: #263238;
+    /* Cool Dark Grey */
+    color: #ECEFF1;
+    /* Off-White */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    /* Full viewport height */
+}
+
+/* Container for the game canvas */
+#game-container {
+    width: 90vw;
+    /* Responsive width (90% of viewport width) */
+    max-width: 800px;
+    /* Maximum width for larger screens */
+    height: 65vh;
+    /* Responsive height (65% of viewport height) */
+    max-height: 550px;
+    /* Maximum height */
+    border: 5px solid #555;
+    /* Dark gray border */
+    border-radius: 10px;
+    /* Rounded corners */
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    /* Shadow for depth */
+    position: relative;
+    /* For positioning UI elements like the message box inside */
+}
+
+/* Styling for the Three.js canvas */
+canvas {
+    display: block;
+    /* Remove extra space below canvas */
+    width: 100% !important;
+    /* Ensure canvas fills its container */
+    height: 100% !important;
+    border-radius: 5px;
+    /* Slightly rounded corners for the canvas itself */
+}
+
+/* Container for UI elements like score and timer */
+#ui-container {
+    margin-top: 15px;
+    padding: 10px 15px;
+    background-color: #263238;
+    /* Cool Dark Grey */
+    border-radius: 10px;
+    text-align: center;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+    width: 90vw;
+    max-width: 800px;
+}
+
+/* Styling for individual UI elements (score, timer) */
+.ui-element {
+    display: inline-block;
+    /* Allow elements to sit side-by-side */
+    margin: 0 10px;
+    /* Spacing between UI elements */
+    font-size: 1.2em;
+    /* Font size for UI text */
+}
+
+/* Specific styling for the score display */
+#score {
+    color: #ECEFF1;
+    /* Off-White */
+}
+
+/* Specific styling for the "Collect In" timer display */
+#collect-timer-display {
+    color: #FFEB3B;
+    /* Bright Yellow */
+}
+
+/* Styling for game instructions text */
+#instructions {
+    margin-top: 10px;
+    font-size: 0.7em;
+    color: #ECEFF1;
+    /* Off-White */
+}
+
+/* Styling for the message box (game over, etc.) */
+.message-box {
+    position: absolute;
+    /* Position relative to game-container */
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    /* Center the box */
+    background-color: rgba(0, 0, 0, 0.85);
+    /* Darker semi-transparent background */
+    color: white;
+    padding: 25px;
+    border-radius: 15px;
+    /* More rounded corners */
+    text-align: center;
+    z-index: 100;
+    /* Ensure it's on top of other elements */
+    font-size: 1.3em;
+    display: none;
+    /* Hidden by default */
+    border: 3px solid #f00;
+    /* Red border (game over style) */
+    width: 80%;
+    /* Responsive width within its container */
+    max-width: 400px;
+    /* Max width for the message box */
+}
+
+/* Styling for the button inside the message box */
+.message-box button {
+    margin-top: 15px;
+    padding: 10px 20px;
+    font-family: 'Press Start 2P', cursive;
+    background-color: #66BB6A;
+    /* Muted Green for Resume */
+    color: #FFFFFF;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.8em;
+    transition: background-color 0.3s;
+}
+
+/* Hover effect for the message box button */
+.message-box button:hover {
+    background-color: #4CAF50;
+    /* Darker Muted Green on hover */
+}
+
+/* Top controls styling */
+#top-controls {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    z-index: 100;
+    display: flex;
+    gap: 10px;
+}
+
+/* Game button styling */
+.game-button {
+    background-color: #66BB6A;
+    /* Muted Green */
+    border: 2px solid #FFFFFF;
+    color: #FFFFFF;
+    padding: 8px 16px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 14px;
+    cursor: pointer;
+    border-radius: 5px;
+    font-family: 'Press Start 2P', cursive;
+    transition: all 0.3s;
+    text-shadow: 2px 2px 2px rgba(0, 0, 0, 0.5);
+}
+
+.game-button:hover {
+    background-color: #4CAF50;
+    /* Darker Muted Green */
+    transform: scale(1.05);
+}
+
+.game-button:active {
+    transform: scale(0.95);
+}
+
+#pause-button.paused {
+    background-color: #EF5350;
+    /* Muted Red */
+}
+
+#pause-button.paused:hover {
+    background-color: #E53935;
+    /* Darker Muted Red */
+}
+
+/* Kill indicator styling */
+.kill-indicator {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background-color: rgba(255, 69, 0, 0.8);
+    /* Bright Orange-Red with transparency */
+    color: #FFFFFF;
+    padding: 10px 20px;
+    border-radius: 5px;
+    font-size: 1.5em;
+    font-weight: bold;
+    text-transform: uppercase;
+    display: none;
+    transition: opacity 0.3s ease;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    border: 2px solid #FFFFFF;
+    box-shadow: 0 0 10px rgba(255, 69, 0, 0.5);
+}
