@@ -3,14 +3,8 @@
 # Stage all changes
 git add .
 
-# Prompt for a commit message
-$commitMessage = Read-Host -Prompt "Enter commit message"
-
-if (-not $commitMessage) {
-    Write-Host "Commit message cannot be empty. Aborting."
-    exit 1
-}
-
+# Commit with a pre-defined message for this script update
+$commitMessage = "Chore: Update push_changes.ps1 to use a predefined commit message for script tests"
 git commit -m $commitMessage
 
 # Push to the main branch on origin
