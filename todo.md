@@ -2,41 +2,53 @@
 
 This file tracks potential future enhancements and features for the game.
 
-## Gameplay Enhancements
-- [ ] **Enhanced Player Movement (Little Big Snake Style - Major Refactor):**
-    - [ ] **Desktop:** Continuous movement at constant speed (e.g., 5 units/second) towards mouse cursor (projected on XZ plane).
-    - [ ] **Desktop:** Smooth player rotation to face cursor (e.g., lerp, 0.1 factor).
-    - [ ] **Mobile:** Virtual joystick for direction, continuous movement at constant speed.
-    - [ ] **Mobile:** Movement continues in last direction if joystick input stops (persistent movement, like LBS).
-    - [ ] Player stops movement only on pause or game over.
+## Core Gameplay & Feature Additions (New & From Grok/Gemini Summary)
+- [ ] **Extra Life System:**
+    - [ ] Allow players to watch an ad (if platform supports) to get an extra life upon game over.
+- [ ] **Username System:**
+    - [ ] Allow players to choose and display a username (for high scores, etc.).
+- [ ] **"Wins" Currency System:**
+    - [ ] Players earn 1 "Win" for every X points scored (e.g., 50 points).
+    - [ ] Wins are awarded/tallied when the player dies.
+    - [ ] Use "Wins" as a currency for in-game unlocks (e.g., Pets).
+- [ ] **Pets System:**
+    - [ ] Players can buy/unlock Pets using "Wins".
+    - [ ] Pets provide passive bonuses, e.g., increase food value (player gains more size per food block).
+    - [ ] Pets could visually follow the player.
+
+## Gameplay Enhancements (Existing & From Grok/Gemini Summary)
+- [ ] **Enhanced Player Movement (Consider Little Big Snake Style - Major Refactor):**
+    - [ ] **Desktop:** Option for continuous movement towards mouse cursor.
+    - [ ] **Desktop:** Option for smooth player rotation to face cursor.
+    - [ ] **Mobile:** Option for virtual joystick with continuous movement / persistent direction.
+    - [ ] General: Aim for smoother, more fluid gameplay feel ("Little Big Snake feel").
 - [ ] **Boost Mechanic with Energy System (Inspired by LBS):**
     - [ ] Activation: Hold Left-click/Space (desktop), or a dedicated touch button (mobile).
-    - [ ] Speed Increase: e.g., 1.5x base speed (e.g., 7.5 units/sec if base is 5).
-    - [ ] Energy Meter: Max capacity (e.g., 100), drains during boost (e.g., -10/sec), regenerates when not boosting (e.g., +5/sec).
+    - [ ] Speed Increase: e.g., 1.5x base speed.
+    - [ ] Energy Meter: Max capacity, drains during boost, regenerates when not boosting.
     - [ ] UI: Visual energy bar.
-    - [ ] Visuals: Particle trail effect (e.g., lime green sparks) during boost.
+    - [ ] Visuals: Particle trail effect during boost.
 - [ ] **Trailing Body Segments (Visual Growth & Gameplay Impact - LBS Style):**
-    - [ ] Each food block collected adds a segment (e.g., smaller cubes, different color/texture) up to a max (e.g., 10 segments).
-    - [ ] Segments follow player's path history smoothly (e.g., spaced 10 units apart).
-    - [ ] Collision Risk: Game over if a non-killable (blue) enemy collides with one of the player's body segments (not just the head).
-- [ ] **Dynamic Food Spawns (Post-Enemy Defeat - LBS Nectar Burst Style):**
-    - [ ] When a yellow (killable) enemy is defeated, spawn 4–6 food blocks in a random spread/burst around the enemy's last position (e.g., within a 20-unit radius).
+    - [ ] Each food block collected adds a segment up to a max.
+    - [ ] Segments follow player's path history.
+    - [ ] Collision Risk: Game over if a non-killable enemy collides with a player's body segment.
+- [ ] **Dynamic Food Spawns:**
+    - [ ] Current: Enemy defeat spawns 4 food particles at death location.
+    - [ ] LBS Style: When a yellow (killable) enemy is defeated, spawn 4–6 food blocks in a wider random spread/burst around the enemy's last position.
+    - [ ] Adjust spawning/size of initial "Noob" (food) blocks if they feel "too close and too big".
 - [ ] **More Varied Enemy Types:**
-    - [ ] Existing: Enemies with different movement patterns (e.g., zig-zag, patrol).
-    - [ ] Existing: Enemies with ranged attacks (if a player attack is added).
-    - [ ] Existing: "Boss" enemies with unique mechanics.
+    - [ ] Existing ideas: Different movement patterns, ranged attacks, boss enemies.
     - [ ] **"Juja-like" Enemies (Low-Risk, Resource Drop - LBS Beetles Style):**
-        - [ ] Appearance: Smaller, faster, distinct-looking (e.g., different shape or green color).
-        - [ ] Spawning: Periodically (e.g., every 30 seconds).
-        - [ ] Behavior: May have simpler movement, less aggressive.
-        - [ ] Reward: Drop extra food when defeated (e.g., 2 blocks).
-        - [ ] Consequence: Do *not* cause game over on player contact (or perhaps only a minor penalty like a brief stun or losing one segment).
+        - [ ] Appearance: Smaller, faster, distinct (e.g., different shape/color).
+        - [ ] Spawning: Periodically.
+        - [ ] Behavior: Simpler movement, less aggressive.
+        - [ ] Reward: Drop extra food when defeated.
+        - [ ] Consequence: No game over on player contact (or minor penalty).
 - [ ] **Power-ups (Spawned Randomly as Collectible Orbs - LBS Style):**
-    - [ ] **Magnet:** Pulls nearby food blocks toward the player (e.g., 10-unit radius, active for 10s).
-    - [ ] **Speed Burst:** Temporarily increases player's base speed (e.g., to 7 units/sec for 10s) *without* energy cost.
-    - [ ] **Shield:** Prevents game-over from non-killable enemy collisions for a short duration (e.g., 5s).
-    - [ ] General: Power-ups appear as distinct glowing orbs, last ~10 seconds when collected.
-    - [ ] UI: Icon for active power-up.
+    - [ ] **Magnet:** Pulls nearby food.
+    - [ ] **Speed Burst:** Temporary base speed increase (no energy cost).
+    - [ ] **Shield:** Temporary invulnerability to non-killable enemies.
+    - [ ] General: Distinct orb appearance, timed duration, UI icon for active power-up.
     - [ ] _Existing ideas: Score multipliers, "Clear screen" power-up._
 - [ ] **Environmental Obstacles:**
     *   [ ] Static blocks that impede movement.
@@ -46,14 +58,25 @@ This file tracks potential future enhancements and features for the game.
     *   [ ] Increase enemy speed or spawn rate over time or based on score.
     *   [ ] Introduce tougher enemy variants as the game progresses.
 
+## Monetization & Platform Specifics (Roblox Focus - From Gemini Summary)
+- [ ] **Roblox Platform Integration:** (General task for deployment)
+- [ ] **Skin Packs / Visual Overhaul for Roblox:**
+    - [ ] Enemies (currently blue blocks) become Corgis with red eyes.
+    - [ ] Player character uses player's Roblox avatar with a large mouth.
+    - [ ] Food items (lime green blocks) become "Noobs" (possibly with "oof" sound on collection).
+- [ ] **Robux Purchases (In-Game Advantages):**
+    - [ ] "+X speed" (e.g., +50 speed) permanent or temporary boost.
+    - [ ] "+X size" (e.g., +1000 size) instant growth.
+    - [ ] Purchase "Wins" currency with Robux.
+
 ## Audio
 - [ ] **Sound Effects:**
-    *   [ ] Player movement (continuous engine/hum if LBS style, or steps if current).
+    *   [ ] Player movement (continuous if LBS style, or steps).
     *   [ ] Boost activation/deactivation/loop.
     *   [ ] Energy depletion/recharge sounds.
-    *   [ ] Food collection.
+    *   [ ] Food collection (consider "oof" sound if food becomes "Noobs").
     *   [ ] Player growth / segment addition.
-    *   [ ] Enemy movement/spawn.
+    *   [ ] Enemy movement/spawn (Corgi sounds if skinned?).
     *   [ ] Enemy defeat (explosion/food burst).
     *   [ ] Player-enemy collision (game over).
     *   [ ] Player segment collision (game over).
@@ -84,20 +107,23 @@ This file tracks potential future enhancements and features for the game.
     *   [ ] More distinct styling for active/hover states on UI buttons.
     *   [ ] Potentially a start screen/main menu.
     *   [ ] On-screen indication of current speed multiplier (if button text isn't enough).
-    *   [ ] Energy Bar for Boost Mechanic (visual display).
+    *   [ ] Energy Bar for Boost Mechanic.
     *   [ ] Icon display for active Power-Up.
-    *   [ ] Skin selector UI (post-game or in menu).
+    *   [ ] Skin selector UI (post-game or in menu for Roblox skins).
+    *   [ ] Improve "New Game" start flow/button for user-friendliness.
 - [ ] **Improved Off-Screen Indicators:**
     *   [ ] Make indicators fade based on distance.
     *   [ ] Ensure indicators don't overlap UI elements too much (z-index management).
+- [ ] **Dynamic Camera Zoom:** (Already implemented - verify if any further tweaks needed).
 
 ## Features & Long-Term
-- [ ] **Leaderboard / High Score System (LBS Style):**
-    *   [ ] Local high score saving (using `localStorage`) - Track top 5 scores.
+- [ ] **High Score System:**
+    *   [ ] Track and display personal high scores (local storage).
+    *   [ ] Track and display a global high score (requires backend).
+    *   [ ] Track and display a daily high score (requires backend).
     *   [ ] Display leaderboard on game-over screen.
-    *   [ ] Online leaderboard (would require backend).
-- [ ] **Unlockable Skins & Progression (LBS Style):**
-    *   [ ] Unlock skins (e.g., different player colors, face designs like purple cube, smiley face) by reaching score milestones (e.g., 100, 500 points).
+- [ ] **Unlockable Skins & Progression (LBS Style & Roblox):**
+    *   [ ] Unlock cosmetic skins (e.g., different player colors, face designs, Roblox avatar items if applicable) by reaching score milestones or using "Wins".
 - [ ] **Save Game State (More Advanced):**
     *   [ ] Allow pausing and resuming session later (e.g., via `localStorage`).
 - [ ] **More Levels or Game Modes (Advanced):**
@@ -106,6 +132,11 @@ This file tracks potential future enhancements and features for the game.
 - [ ] **Settings Menu:**
     *   [ ] Toggle sound/music on/off.
     *   [ ] Adjust control sensitivity (if applicable for new movement styles).
+
+## Bug Fixes & Known Issues (From Gemini Summary)
+- [ ] **Shaking/Immobile Bug:** Investigate and fix issue where characters might shake or player becomes unable to move.
+- [ ] **Teleporting Enemy Glitch:** Fix instances where enemies might appear to teleport unfairly (distinct from world wrapping).
+- [ ] **General Glitch Prioritization:** Ongoing effort to identify and fix gameplay bugs.
 
 ## Code & Technical Refinements
 - [ ] **Performance Optimization:**
@@ -118,7 +149,7 @@ This file tracks potential future enhancements and features for the game.
 - [ ] **Enhanced Mobile UI/UX:**
     *   [ ] Consider dedicated pause button for touch interface that's larger/better placed than top-corner controls.
     *   [ ] Test on various device sizes and adjust UI breakpoints.
-    *   [ ] Design/Implement dedicated touch button for Boost if LBS movement is adopted.
+    *   [ ] Design/Implement dedicated touch button for Boost if LBS movement and boost are adopted.
 
 ---
-*This todo list has been updated with suggestions inspired by Little Big Snake, based on feedback from Grok (via User).* 
+*This todo list has been updated with suggestions inspired by Little Big Snake (from Grok via User) and a summary from Gemini (via User).* 

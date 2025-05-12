@@ -3,8 +3,8 @@
 # Stage all changes
 git add .
 
-# Commit with a pre-defined message for this script update
-$commitMessage = "Chore: Update push_changes.ps1 to use a predefined commit message for script tests"
+# Commit with the new message
+$commitMessage = "Doc: Update todo.md with comprehensive feature list from Grok/Gemini. Added sections for Core Gameplay, Monetization/Roblox, Bugs. Integrated LBS-inspired ideas."
 git commit -m $commitMessage
 
 # Push to the main branch on origin
