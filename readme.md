@@ -2,7 +2,7 @@
 
 ## Overview
 
-Blocky Collector 3D is a fast-paced 3D browser game built with HTML, CSS, and JavaScript, utilizing the Three.js library. Players control a character with a distinct face and legs, navigating a wrap-around world to collect "food" particles (lime green blocks). The game features enemies, also with faces and legs, that dynamically change color based on killability and employ orbiting and enhanced separation behaviors. The objective is to achieve the highest score by collecting food and strategically defeating enemies, which then spawn more challenging foes (at a greater distance) and additional food.
+Blocky Collector 3D is a fast-paced 3D browser game built with HTML, CSS, and JavaScript, utilizing the Three.js library. Players control a character with a distinct face and legs, navigating a wrap-around world to collect "food" particles (lime green blocks). The game features enemies, also with faces and legs, that dynamically change color based on killability (turning yellow and fleeing when vulnerable) and employ orbiting and enhanced separation behaviors. The objective is to achieve the highest score by collecting food and strategically defeating enemies, which then spawn more challenging foes (at a distance that scales with player size) and additional food.
 
 ## Project Structure
 
@@ -25,18 +25,19 @@ Blocky Collector 3D is a fast-paced 3D browser game built with HTML, CSS, and Ja
 
 ### Player
 *   **Appearance**: Orange-Red character with legs and a face.
-*   **Control**: Arrow Keys (desktop) or Touch-and-Drag (mobile - touch anywhere on the game screen relative to the player's visual center to move).
+*   **Control**: Arrow Keys (desktop) or Touch-and-Drag (mobile - virtual joystick anchored at first touch point on the game screen).
 *   **Growth**: Collecting lime green food blocks increases the player's size (`playerScale`).
 *   **Objective**: Survive, collect food, and defeat enemies for a high score.
 
 ### Enemies
 *   **Appearance**: Electric Blue characters with legs and faces. They turn **Bright Yellow** when the player is taller and can defeat them.
 *   **AI Behavior**:
-    *   Chase the player.
-    *   Implement orbiting behavior when within an `engagementRadius` of the player.
+    *   Chase the player when not killable.
+    *   **Flee** from the player when killable (yellow).
+    *   Implement orbiting behavior (when chasing and within `engagementRadius`).
     *   Employ a random drift component to their movement.
-    *   Actively avoid other enemies with improved force and radius to prevent clumping.
-*   **Spawning**: One enemy (50% taller than player) spawns initially. When an enemy is defeated, two new enemies spawn (each 50% taller than the player) at an increased distance and with improved angular separation to ensure they are more spread out.
+    *   Actively avoid other enemies with improved force and radius.
+*   **Spawning**: One enemy (50% taller than player) spawns initially. When an enemy is defeated, two new enemies spawn (each 50% taller than the player). Their spawn distance from the player scales with the player's current size, and they appear with improved angular separation.
 *   **Interaction**: If a non-killable enemy touches the player, game over. If a killable (yellow) enemy is touched by the player, the enemy is defeated.
 
 ### World & Food
@@ -48,11 +49,13 @@ Blocky Collector 3D is a fast-paced 3D browser game built with HTML, CSS, and Ja
 
 ### Gameplay & UI
 *   **"Collect Block" Timer**: A 15-second timer, resets on food collection. Game over if it reaches zero.
-*   **Kill Indicator**: A flashing "KILL!" sign appears in the top-left when at least one enemy is killable by the player.
-*   **Pause/Resume**: Game can be paused/resumed using the Spacebar or on-screen buttons.
-*   **Speed Control**: An on-screen button cycles through game speeds (0.5x, 1x, 1.5x, 2x, 3x) affecting player and enemies.
-*   **Restart**: Game can be restarted via on-screen buttons (in-game or on game over screen).
-*   **Color Scheme**: "Deep Dive Arcade" theme with dark teal background and contrasting vibrant colors for characters and UI elements.
+*   **Kill Indicator**: A flashing "KILL!" sign appears in the **top-center** of the game area when at least one enemy is killable.
+*   **Off-Screen Enemy Indicators**: Arrows at the edge of the game area point towards off-screen enemies, colored blue (dangerous) or yellow (killable).
+*   **Pause/Resume**: Game can be paused/resumed using the Spacebar or on-screen buttons (Pause top-right, Restart top-left).
+*   **Speed Control**: An on-screen button (bottom-left) cycles through game speeds (0.5x, 1x, 1.5x, 2x, 3x, 5x) affecting player and enemies.
+*   **Zoom Control**: An on-screen button (bottom-right) allows cumulative "Zoom Out" (each click increases camera offset by 50%), updates instantly even if paused.
+*   **Restart**: Game can be restarted via on-screen buttons (Restart top-left, or "Play Again" on game over screen).
+*   **Color Scheme**: "Deep Dive Arcade" theme.
 *   **Mobile Support**: Touch-and-drag controls for movement. UI buttons are touch-responsive. Player speed is increased on mobile.
 *   **Game Over**: Occurs if caught by a non-killable enemy or if the collect timer runs out.
 
