@@ -21,14 +21,12 @@ let currentSpeedMultiplierIndex = 0;
 let actualPlayerSpeed; // Will store the fully adjusted player speed
 let actualEnemySpeed;  // Will store the fully adjusted enemy speed
 
-// Zoom Variables
-let currentZoomLevel = 1.0; // 1.0 for normal, 1.5 for zoomed out
-const NORMAL_CAMERA_Y_OFFSET = 15;
-const ZOOMED_OUT_CAMERA_Y_OFFSET = NORMAL_CAMERA_Y_OFFSET * 1.5;
-const NORMAL_CAMERA_Z_OFFSET = 12;
-const ZOOMED_OUT_CAMERA_Z_OFFSET = NORMAL_CAMERA_Z_OFFSET * 1.5;
-let activeCameraYOffset = NORMAL_CAMERA_Y_OFFSET; // To store current offset
-let activeCameraZOffset = NORMAL_CAMERA_Z_OFFSET; // To store current offset
+// Zoom Variables - REVISED
+const ZOOM_OUT_FACTOR = 1.5;
+const INITIAL_CAMERA_Y_OFFSET = 15; // Base Y offset
+const INITIAL_CAMERA_Z_OFFSET = 12; // Base Z offset
+let activeCameraYOffset = INITIAL_CAMERA_Y_OFFSET;
+let activeCameraZOffset = INITIAL_CAMERA_Z_OFFSET;
 
 // Movement and speed constants
 const BASE_PLAYER_SPEED = 0.05; // Player speed reduced to 1/4 of previous base
@@ -90,7 +88,9 @@ function init() {
     // console.log("Enemy speed set to:", enemySpeed);
 
     applySpeedMultiplier(); // Apply initial speed multiplier
-    applyZoomLevel(); // Apply initial zoom level and set button text
+    // REMOVED: applyZoomLevel(); // Initial zoom is now handled by direct variable initialization
+    // Ensure camera offsets are set for the first frame, even if not explicitly calling an applyZoom function here.
+    // activeCameraYOffset and activeCameraZOffset are already initialized globally.
 
     // 1. Scene: The container for all 3D objects.
     scene = new THREE.Scene();
@@ -152,7 +152,7 @@ function init() {
     // Add event listeners for pause and restart buttons
     document.getElementById('pause-button').addEventListener('click', togglePause);
     document.getElementById('speed-cycle-button').addEventListener('click', cycleSpeed);
-    document.getElementById('zoom-toggle-button').addEventListener('click', toggleZoom);
+    document.getElementById('zoom-toggle-button').addEventListener('click', zoomOutCamera);
 
     // NEW Touch Anywhere Event Listeners
     gameScreenContainer = document.getElementById('game-container'); // Control area
@@ -881,25 +881,11 @@ function cycleSpeed() {
     applySpeedMultiplier();
 }
 
-// NEW function to toggle zoom level
-function toggleZoom() {
-    currentZoomLevel = (currentZoomLevel === 1.0) ? 1.5 : 1.0;
-    applyZoomLevel();
-}
-
-// NEW function to apply zoom level and update camera offsets
-function applyZoomLevel() {
-    const zoomButton = document.getElementById('zoom-toggle-button');
-    if (currentZoomLevel === 1.0) {
-        activeCameraYOffset = NORMAL_CAMERA_Y_OFFSET;
-        activeCameraZOffset = NORMAL_CAMERA_Z_OFFSET;
-        if (zoomButton) zoomButton.textContent = "Zoom: 1x";
-    } else {
-        activeCameraYOffset = ZOOMED_OUT_CAMERA_Y_OFFSET;
-        activeCameraZOffset = ZOOMED_OUT_CAMERA_Z_OFFSET;
-        if (zoomButton) zoomButton.textContent = "Zoom: 1.5x";
-    }
-    console.log(`Zoom level set to: ${currentZoomLevel}x, YOffset: ${activeCameraYOffset}, ZOffset: ${activeCameraZOffset}`);
+// NEW function to handle zoom out button click
+function zoomOutCamera() {
+    activeCameraYOffset *= ZOOM_OUT_FACTOR;
+    activeCameraZOffset *= ZOOM_OUT_FACTOR;
+    console.log(`Zoomed Out. New YOffset: ${activeCameraYOffset}, New ZOffset: ${activeCameraZOffset}`);
 }
 
 // --- Start the game ---

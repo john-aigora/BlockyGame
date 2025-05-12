@@ -148,7 +148,7 @@ canvas {
     width: 100%;
     height: 100%;
     z-index: 100;
-    pointer-events: none;
+    pointer-events: auto;
     /* Allow clicks to pass through to game canvas if no button is hit */
     /* Removed display:flex, gap, and specific top/right offsets */
 }
@@ -187,12 +187,12 @@ canvas {
 /* Specific positioning for each button in corners */
 #pause-button {
     top: 10px;
-    left: 10px;
+    right: 10px;
 }
 
 #restart-game-button {
     top: 10px;
-    right: 10px;
+    left: 10px;
 }
 
 #speed-cycle-button {
@@ -208,8 +208,12 @@ canvas {
 /* Kill indicator styling */
 .kill-indicator {
     position: absolute;
-    top: 20px;
-    left: 20px;
+    top: 10px;
+    /* Keep small top offset */
+    left: 50%;
+    /* Center horizontally */
+    transform: translateX(-50%);
+    /* Adjust for horizontal centering */
     background-color: rgba(255, 69, 0, 0.8);
     /* Bright Orange-Red with transparency */
     color: #FFFFFF;
