@@ -598,11 +598,12 @@ function update() {
 
         // --- Enemy AI: Movement Logic ---
         const distanceToPlayer = player.position.distanceTo(enemyGroup.position);
+        let combinedMovement = new THREE.Vector3();
 
-        // --- Random Movement Component ---
-        enemyGroup.timeToChangeRandomVelocity -= (1 / 60); // Approximate delta time for 60FPS
+        // --- Random Movement Component (calculated for all states) ---
+        enemyGroup.timeToChangeRandomVelocity -= (1 / 60);
         if (enemyGroup.timeToChangeRandomVelocity <= 0) {
-            const randomStrength = actualEnemySpeed * enemyRandomDriftFactor; // USE actualEnemySpeed
+            const randomStrength = actualEnemySpeed * enemyRandomDriftFactor;
             enemyGroup.randomVelocity.set(
                 (Math.random() - 0.5) * 2 * randomStrength,
                 0,
@@ -611,24 +612,33 @@ function update() {
             enemyGroup.timeToChangeRandomVelocity = Math.random() * 2 + 1;
         }
 
-        // --- Chase and Orbit Logic ---
-        const chaseDirection = new THREE.Vector3().subVectors(player.position, enemyGroup.position).normalize();
-        let combinedMovement = new THREE.Vector3();
-
-        if (distanceToPlayer < engagementRadius) {
-            // --- Orbiting Behavior ---
-            const orbitVector = new THREE.Vector3(-chaseDirection.z * enemyGroup.orbitDirection, 0, chaseDirection.x * enemyGroup.orbitDirection);
-            const chaseComponent = chaseDirection.clone().multiplyScalar(1.0 - orbitStrengthFactor);
-            const orbitComponent = orbitVector.normalize().multiplyScalar(orbitStrengthFactor);
-
-            combinedMovement.add(chaseComponent).add(orbitComponent).normalize().multiplyScalar(actualEnemySpeed); // USE actualEnemySpeed
+        if (canKillSpecificEnemy(enemyGroup)) {
+            // --- Fleeing Behavior ---
+            if (distanceToPlayer > 0) { // Avoid issues if somehow at the exact same spot
+                const fleeDirection = new THREE.Vector3().subVectors(enemyGroup.position, player.position).normalize();
+                combinedMovement.copy(fleeDirection).multiplyScalar(actualEnemySpeed);
+            }
         } else {
-            // --- Pure Chase Behavior (outside engagement radius) ---
-            combinedMovement.copy(chaseDirection).multiplyScalar(actualEnemySpeed); // USE actualEnemySpeed
+            // --- Normal Chase and Orbit Logic ---
+            const chaseDirection = new THREE.Vector3().subVectors(player.position, enemyGroup.position).normalize();
+            if (distanceToPlayer < engagementRadius) {
+                // --- Orbiting Behavior ---
+                const orbitVector = new THREE.Vector3(-chaseDirection.z * enemyGroup.orbitDirection, 0, chaseDirection.x * enemyGroup.orbitDirection);
+                const chaseComponent = chaseDirection.clone().multiplyScalar(1.0 - orbitStrengthFactor);
+                const orbitComponent = orbitVector.normalize().multiplyScalar(orbitStrengthFactor);
+                combinedMovement.add(chaseComponent).add(orbitComponent).normalize().multiplyScalar(actualEnemySpeed);
+            } else {
+                // --- Pure Chase Behavior (outside engagement radius) ---
+                combinedMovement.copy(chaseDirection).multiplyScalar(actualEnemySpeed);
+            }
         }
 
-        // Add random drift to the calculated movement
+        // Add random drift to the calculated movement (applies to both flee and chase/orbit)
         combinedMovement.add(enemyGroup.randomVelocity);
+        // Ensure total speed doesn't exceed actualEnemySpeed due to drift, by re-normalizing if drift was added to a full-speed vector
+        if (combinedMovement.length() > actualEnemySpeed) {
+            combinedMovement.normalize().multiplyScalar(actualEnemySpeed);
+        }
 
         enemyGroup.position.add(combinedMovement);
 
