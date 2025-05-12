@@ -50,10 +50,11 @@ const initialFoodDensityArea = 1000; // Target one food item per this many squar
 const collectibleSpawnRadius = 30; // How far from the player new collectibles can appear
 const minSpawnDistanceFromPlayer = 5; // Minimum distance a new collectible spawns from player
 const enemyStartOffset = 10; // Initial distance of enemy from player
-const maxEnemyTeleportDistance = 40; // If enemy is further than this, it teleports
 const engagementRadius = 15; // Enemies within this radius will try to orbit
 const orbitStrengthFactor = 0.4; // How strongly enemies try to orbit (0 to 1)
 const enemyRandomDriftFactor = 0.3; // How strong the random drift is, relative to enemySpeed
+const BASE_ENEMY_SPAWN_DISTANCE = 30; // New constant for base spawn distance
+const SPAWN_DISTANCE_SCALE_FACTOR = 10; // New constant for scaling spawn distance with player size
 
 // HTML Element references
 let gameContainer; // The div that will hold the Three.js canvas
@@ -786,6 +787,8 @@ function update() {
             ground.position.x = player.position.x;
             ground.position.z = player.position.z;
         }
+
+        // Update directional light to follow player
         const dirLight = scene.children.find(child => child instanceof THREE.DirectionalLight);
         if (dirLight) {
             dirLight.position.set(player.position.x + 10, player.position.y + 20, player.position.z + 5);
@@ -793,11 +796,7 @@ function update() {
             dirLight.target.updateMatrixWorld();
         }
 
-        // const cameraOffset = new THREE.Vector3(0, 15, 12); // Old fixed offset
-        const cameraOffset = new THREE.Vector3(0, activeCameraYOffset, activeCameraZOffset); // USE DYNAMIC OFFSETS
-        camera.position.copy(player.position).add(cameraOffset);
-        camera.lookAt(player.position);
-
+        // Collectibles collision
         const playerBoxForCollectibles = new THREE.Box3().setFromObject(player);
         for (let i = collectibles.length - 1; i >= 0; i--) {
             const collectible = collectibles[i];
@@ -815,6 +814,9 @@ function update() {
             }
         }
     }
+
+    // Update camera position consistently every frame game is active & not paused
+    updateCameraPosition();
 }
 
 // --- Animation Loop ---
@@ -887,9 +889,12 @@ function canKillSpecificEnemy(enemyGroup) {
 
 function spawnNewEnemies() {
     const currentPlayerActualHeight = playerScale * 1.0;
-    const newEnemyTargetHeight = currentPlayerActualHeight * 1.5; // New enemies 50% taller than current player
+    const newEnemyTargetHeight = currentPlayerActualHeight * 1.5;
     const newEnemyScaleFactor = newEnemyTargetHeight / enemyBaseHeight;
-    const spawnDistance = 50; // INCREASED from 35 to 50
+
+    // Calculate dynamic spawn distance based on playerScale
+    const spawnDistance = BASE_ENEMY_SPAWN_DISTANCE + (playerScale * SPAWN_DISTANCE_SCALE_FACTOR);
+    console.log(`Player scale: ${playerScale}, New enemy spawn distance: ${spawnDistance}`); // For debugging
 
     // Spawn first enemy at a random angle
     const enemy1 = createEnemy();
@@ -980,6 +985,18 @@ function zoomOutCamera() {
     activeCameraYOffset *= ZOOM_OUT_FACTOR;
     activeCameraZOffset *= ZOOM_OUT_FACTOR;
     console.log(`Zoomed Out. New YOffset: ${activeCameraYOffset}, New ZOffset: ${activeCameraZOffset}`);
+    updateCameraPosition(); // Immediately update camera position
+    if (renderer && scene && camera) { // Ensure renderer is ready
+        renderer.render(scene, camera); // Re-render if paused to show zoom change
+    }
+}
+
+// NEW function to specifically update camera position
+function updateCameraPosition() {
+    if (!player || !camera) return; // Check for player and camera
+    const cameraOffset = new THREE.Vector3(0, activeCameraYOffset, activeCameraZOffset);
+    camera.position.copy(player.position).add(cameraOffset);
+    camera.lookAt(player.position);
 }
 
 // --- Start the game ---
