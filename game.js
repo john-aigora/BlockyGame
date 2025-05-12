@@ -16,10 +16,19 @@ let canKillEnemy = false; // Track if player is big enough to kill enemies
 let killIndicatorVisible = false; // For flashing kill indicator
 
 // Speed Multiplier Variables
-const speedMultipliers = [1.0, 1.5, 2.0, 3.0, 0.5]; // Speed multipliers (1x, 1.5x, 2x, 3x, 0.5x)
+const speedMultipliers = [1.0, 1.5, 2.0, 3.0, 5.0, 0.5]; // ADDED 5.0x, re-ordered
 let currentSpeedMultiplierIndex = 0;
 let actualPlayerSpeed; // Will store the fully adjusted player speed
 let actualEnemySpeed;  // Will store the fully adjusted enemy speed
+
+// Zoom Variables
+let currentZoomLevel = 1.0; // 1.0 for normal, 1.5 for zoomed out
+const NORMAL_CAMERA_Y_OFFSET = 15;
+const ZOOMED_OUT_CAMERA_Y_OFFSET = NORMAL_CAMERA_Y_OFFSET * 1.5;
+const NORMAL_CAMERA_Z_OFFSET = 12;
+const ZOOMED_OUT_CAMERA_Z_OFFSET = NORMAL_CAMERA_Z_OFFSET * 1.5;
+let activeCameraYOffset = NORMAL_CAMERA_Y_OFFSET; // To store current offset
+let activeCameraZOffset = NORMAL_CAMERA_Z_OFFSET; // To store current offset
 
 // Movement and speed constants
 const BASE_PLAYER_SPEED = 0.05; // Player speed reduced to 1/4 of previous base
@@ -81,6 +90,7 @@ function init() {
     // console.log("Enemy speed set to:", enemySpeed);
 
     applySpeedMultiplier(); // Apply initial speed multiplier
+    applyZoomLevel(); // Apply initial zoom level and set button text
 
     // 1. Scene: The container for all 3D objects.
     scene = new THREE.Scene();
@@ -142,6 +152,7 @@ function init() {
     // Add event listeners for pause and restart buttons
     document.getElementById('pause-button').addEventListener('click', togglePause);
     document.getElementById('speed-cycle-button').addEventListener('click', cycleSpeed);
+    document.getElementById('zoom-toggle-button').addEventListener('click', toggleZoom);
 
     // NEW Touch Anywhere Event Listeners
     gameScreenContainer = document.getElementById('game-container'); // Control area
@@ -688,7 +699,8 @@ function update() {
             dirLight.target.updateMatrixWorld();
         }
 
-        const cameraOffset = new THREE.Vector3(0, 15, 12);
+        // const cameraOffset = new THREE.Vector3(0, 15, 12); // Old fixed offset
+        const cameraOffset = new THREE.Vector3(0, activeCameraYOffset, activeCameraZOffset); // USE DYNAMIC OFFSETS
         camera.position.copy(player.position).add(cameraOffset);
         camera.lookAt(player.position);
 
@@ -867,6 +879,27 @@ function applySpeedMultiplier() {
 function cycleSpeed() {
     currentSpeedMultiplierIndex = (currentSpeedMultiplierIndex + 1) % speedMultipliers.length;
     applySpeedMultiplier();
+}
+
+// NEW function to toggle zoom level
+function toggleZoom() {
+    currentZoomLevel = (currentZoomLevel === 1.0) ? 1.5 : 1.0;
+    applyZoomLevel();
+}
+
+// NEW function to apply zoom level and update camera offsets
+function applyZoomLevel() {
+    const zoomButton = document.getElementById('zoom-toggle-button');
+    if (currentZoomLevel === 1.0) {
+        activeCameraYOffset = NORMAL_CAMERA_Y_OFFSET;
+        activeCameraZOffset = NORMAL_CAMERA_Z_OFFSET;
+        if (zoomButton) zoomButton.textContent = "Zoom: 1x";
+    } else {
+        activeCameraYOffset = ZOOMED_OUT_CAMERA_Y_OFFSET;
+        activeCameraZOffset = ZOOMED_OUT_CAMERA_Z_OFFSET;
+        if (zoomButton) zoomButton.textContent = "Zoom: 1.5x";
+    }
+    console.log(`Zoom level set to: ${currentZoomLevel}x, YOffset: ${activeCameraYOffset}, ZOffset: ${activeCameraZOffset}`);
 }
 
 // --- Start the game ---
