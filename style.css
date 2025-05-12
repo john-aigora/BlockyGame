@@ -143,29 +143,35 @@ canvas {
 /* Top controls styling */
 #top-controls {
     position: absolute;
-    top: 20px;
-    right: 20px;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
     z-index: 100;
-    display: flex;
-    gap: 10px;
+    pointer-events: none;
+    /* Allow clicks to pass through to game canvas if no button is hit */
+    /* Removed display:flex, gap, and specific top/right offsets */
 }
 
 /* Game button styling */
 .game-button {
+    position: absolute;
+    /* Each button positioned absolutely within #top-controls */
     background-color: #66BB6A;
     /* Muted Green */
     border: 2px solid #FFFFFF;
     color: #FFFFFF;
-    padding: 8px 16px;
+    padding: 6px 10px;
     text-align: center;
     text-decoration: none;
     display: inline-block;
-    font-size: 14px;
+    font-size: 12px;
     cursor: pointer;
     border-radius: 5px;
     font-family: 'Press Start 2P', cursive;
     transition: all 0.3s;
     text-shadow: 2px 2px 2px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 0 10px rgba(255, 69, 0, 0.5);
 }
 
 .game-button:hover {
@@ -178,14 +184,25 @@ canvas {
     transform: scale(0.95);
 }
 
-#pause-button.paused {
-    background-color: #EF5350;
-    /* Muted Red */
+/* Specific positioning for each button in corners */
+#pause-button {
+    top: 10px;
+    left: 10px;
 }
 
-#pause-button.paused:hover {
-    background-color: #E53935;
-    /* Darker Muted Red */
+#restart-game-button {
+    top: 10px;
+    right: 10px;
+}
+
+#speed-cycle-button {
+    bottom: 10px;
+    left: 10px;
+}
+
+#zoom-toggle-button {
+    bottom: 10px;
+    right: 10px;
 }
 
 /* Kill indicator styling */
