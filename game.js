@@ -66,6 +66,16 @@ let collectTimerInterval; // Stores the interval ID for the collect timer
 
 let isMobile = false; // For mobile-specific adjustments
 
+// Off-Screen Enemy Indicator Variables
+const MAX_ENEMY_INDICATORS = 10; // Max number of indicators to show
+let enemyIndicators = [];
+let offscreenIndicatorContainer;
+
+// Game Area Screen Coords (for indicators)
+let gameCanvasRect = { left: 0, top: 0, width: 0, height: 0 }; // Store game container dimensions
+let gameCanvasCenterX = 0;
+let gameCanvasCenterY = 0;
+
 // --- Initialization Function ---
 // This function sets up the entire game scene, objects, and event listeners.
 function init() {
@@ -158,6 +168,17 @@ function init() {
     gameScreenContainer = document.getElementById('game-container'); // Control area
 
     if (gameScreenContainer) {
+        // Calculate game container center once, and on resize
+        const updateGameCanvasBounds = () => { // Renamed for clarity
+            const rect = gameScreenContainer.getBoundingClientRect();
+            gameCanvasRect = rect; // Store the whole rect
+            gameCanvasCenterX = rect.left + rect.width / 2;
+            gameCanvasCenterY = rect.top + rect.height / 2;
+            console.log("Game canvas bounds updated:", gameCanvasRect);
+        };
+        updateGameCanvasBounds(); // Initial calculation
+        window.addEventListener('resize', updateGameCanvasBounds); // Update on window resize
+
         gameScreenContainer.addEventListener('touchstart', (e) => {
             const targetElement = e.target;
             if (!targetElement.closest('button')) {
@@ -205,6 +226,19 @@ function init() {
     animate();
 
     console.log('Game initialized successfully');
+
+    offscreenIndicatorContainer = document.getElementById('offscreen-indicator-container');
+    if (offscreenIndicatorContainer) {
+        for (let i = 0; i < MAX_ENEMY_INDICATORS; i++) {
+            const indicator = document.createElement('div');
+            indicator.className = 'enemy-indicator';
+            // Base arrow points up (due to clip-path), will be rotated. 
+            // Set initial rotation if your default arrow shape points differently, e.g., right.
+            // indicator.style.transform = 'rotate(90deg)'; // If your base arrow points right
+            offscreenIndicatorContainer.appendChild(indicator);
+            enemyIndicators.push(indicator);
+        }
+    }
 }
 
 // --- Setup New Game ---
@@ -587,6 +621,56 @@ function update() {
         }
     }
 
+    // --- Off-Screen Enemy Indicator Logic ---
+    let indicatorsUsed = 0;
+    const screenPadding = 15; // How far from the game edge indicators should sit (reduced slightly)
+
+    enemies.forEach(enemyGroup => {
+        const enemyPos = enemyGroup.position.clone();
+        const screenPos = enemyPos.project(camera);
+
+        const isOffScreenX = screenPos.x < -1 || screenPos.x > 1;
+        const isOffScreenY = screenPos.y < -1 || screenPos.y > 1;
+
+        if ((isOffScreenX || isOffScreenY) && indicatorsUsed < MAX_ENEMY_INDICATORS) {
+            const indicator = enemyIndicators[indicatorsUsed];
+            indicator.style.display = 'block';
+
+            // Set indicator color based on killability
+            if (canKillSpecificEnemy(enemyGroup)) {
+                indicator.style.backgroundColor = 'rgba(255, 235, 59, 0.8)'; // Yellow (match enemy killable color, with alpha)
+            } else {
+                indicator.style.backgroundColor = 'rgba(3, 169, 244, 0.8)'; // Electric Blue (match enemy normal color, with alpha)
+            }
+
+            // Convert NDC to pixels relative to gameCanvasRect origin
+            let x = (screenPos.x * gameCanvasRect.width / 2) + gameCanvasRect.width / 2;
+            let y = -(screenPos.y * gameCanvasRect.height / 2) + gameCanvasRect.height / 2;
+
+            // Clamp position to gameCanvasRect edges with padding
+            // Position is relative to the #offscreen-indicator-container, which is viewport-sized.
+            // So, we need to add gameCanvasRect.left and gameCanvasRect.top for final screen position.
+            let clampedX = Math.max(screenPadding, Math.min(x, gameCanvasRect.width - screenPadding)) + gameCanvasRect.left;
+            let clampedY = Math.max(screenPadding, Math.min(y, gameCanvasRect.height - screenPadding)) + gameCanvasRect.top;
+
+            // Angle calculation from gameCanvasCenter to clamped enemy screen position (relative to viewport for atan2)
+            const angle = Math.atan2(clampedY - gameCanvasCenterY, clampedX - gameCanvasCenterX) * 180 / Math.PI;
+
+            indicator.style.transform = `translate(-50%, -50%) rotate(${angle + 90}deg)`;
+            indicator.style.left = `${clampedX}px`;
+            indicator.style.top = `${clampedY}px`;
+
+            indicatorsUsed++;
+        }
+    });
+
+    // Hide any unused indicators from the pool
+    for (let i = indicatorsUsed; i < MAX_ENEMY_INDICATORS; i++) {
+        if (enemyIndicators[i].style.display !== 'none') {
+            enemyIndicators[i].style.display = 'none';
+        }
+    }
+
     enemies.forEach((enemyGroup, index) => {
         const bodyMesh = enemyGroup.getObjectByName('body'); // Get the body mesh
 
@@ -805,7 +889,7 @@ function spawnNewEnemies() {
     const currentPlayerActualHeight = playerScale * 1.0;
     const newEnemyTargetHeight = currentPlayerActualHeight * 1.5; // New enemies 50% taller than current player
     const newEnemyScaleFactor = newEnemyTargetHeight / enemyBaseHeight;
-    const spawnDistance = 35; // INCREASED from 30 to 35
+    const spawnDistance = 50; // INCREASED from 35 to 50
 
     // Spawn first enemy at a random angle
     const enemy1 = createEnemy();

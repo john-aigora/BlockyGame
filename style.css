@@ -228,3 +228,37 @@ canvas {
     border: 2px solid #FFFFFF;
     box-shadow: 0 0 10px rgba(255, 69, 0, 0.5);
 }
+
+/* Off-Screen Enemy Indicator Styling */
+#offscreen-indicator-container {
+    position: fixed;
+    /* Full viewport overlay */
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    /* Doesn't interfere with other interactions */
+    z-index: 50;
+    /* Below top controls, above game elements if needed, but below game over */
+    overflow: hidden;
+    /* Prevent indicators from making scrollbars if they slightly exceed edge */
+}
+
+.enemy-indicator {
+    position: absolute;
+    /* Positioned within the container */
+    width: 20px;
+    /* Example size */
+    height: 20px;
+    /* Example size */
+    background-color: rgba(255, 0, 0, 0.7);
+    /* Red, semi-transparent */
+    clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+    /* Basic triangle shape pointing up */
+    transform-origin: center center;
+    display: none;
+    /* Hidden by default */
+}
+
+/* Media Query for Mobile Screen Adjustments */
