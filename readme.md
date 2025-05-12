@@ -47,7 +47,7 @@ Blocky Collector 3D is a fast-paced 3D browser game built with HTML, CSS, and Ja
     *   The game attempts to maintain a target number of food items on screen (`targetCollectiblesOnScreen`), which increases as enemies are defeated.
 
 ### Gameplay & UI
-*   **"Collect Block" Timer**: A 10-second timer, resets on food collection. Game over if it reaches zero.
+*   **"Collect Block" Timer**: A 15-second timer, resets on food collection. Game over if it reaches zero.
 *   **Kill Indicator**: A flashing "KILL!" sign appears in the top-left when at least one enemy is killable by the player.
 *   **Pause/Resume**: Game can be paused/resumed using the Spacebar or on-screen buttons.
 *   **Speed Control**: An on-screen button cycles through game speeds (0.5x, 1x, 1.5x, 2x, 3x) affecting player and enemies.

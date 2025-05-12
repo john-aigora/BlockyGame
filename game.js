@@ -53,7 +53,7 @@ let gameContainer; // The div that will hold the Three.js canvas
 let animationFrameId; // ID for the animation loop, used for potential cancellation
 
 // Collect Timer variables
-const initialCollectTime = 10; // Player has 10 seconds to collect a block
+const initialCollectTime = 15; // MODIFIED from 10 to 15 seconds
 let collectTimerValue = initialCollectTime;
 let collectTimerInterval; // Stores the interval ID for the collect timer
 
