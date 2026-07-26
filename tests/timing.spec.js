@@ -142,3 +142,13 @@ test('WASD alias: holding D moves the player toward +x', async ({ page }) => {
   expect(moved).toBeGreaterThan(expected * 0.7);
   expect(moved).toBeLessThan(expected * 1.3);
 });
+
+test('Enter pauses and resumes mid-run', async ({ page }) => {
+  await startGame(page);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#pause-button')).toHaveText('Resume');
+  expect(await page.evaluate(() => window.__game.state.isPaused)).toBe(true);
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#pause-button')).toHaveText('Pause');
+  expect(await page.evaluate(() => window.__game.state.isPaused)).toBe(false);
+});

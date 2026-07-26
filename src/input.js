@@ -78,6 +78,18 @@ export function onKeyDown(event) {
         return;
     }
 
+    // Enter = pause/resume in BOTH modes (owner request) — a consistent
+    // pause key regardless of what Space means in the current mode. Only
+    // reachable mid-run: the overlay and death-screen guards above already
+    // consumed Enter in those states (start / restart respectively).
+    if (event.code === 'Enter') {
+        if (!isRepeat) {
+            sfx.click();
+            togglePause();
+        }
+        return;
+    }
+
     // F cycles the speed multiplier mid-run — owner: "shouldn't have to use
     // the mouse". Only reachable DURING a run: the start overlay consumed
     // the key above (any key starts there), and the death screen returned
