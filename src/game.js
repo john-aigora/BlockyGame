@@ -1,3 +1,5 @@
+import * as THREE from 'three';
+
 // --- Global Variables ---
 // Scene, camera, and renderer are fundamental to Three.js
 let scene, camera, renderer;
@@ -1000,7 +1002,9 @@ function updateCameraPosition() {
 }
 
 // --- Start the game ---
-// This ensures the init function is called only after the entire HTML document is loaded.
-// window.onload = function () {  // REMOVE THIS BLOCK
-//     init();
-// };
+// Startup call (moved here from the old inline script in index.html).
+if (document.readyState === 'complete') {
+    init();
+} else {
+    window.addEventListener('load', init);
+}

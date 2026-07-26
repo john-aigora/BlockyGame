@@ -18,6 +18,30 @@
 
 ---
 
+## Batch 1 complete: 2026-07-25
+
+**Batch:** 1: Tooling baseline (plan 001)
+**Contract status:** all plan-001 done criteria met (contract = the plan file's steps/criteria)
+
+**What changed:**
+- `package.json`, `package-lock.json`, `vite.config.js`, `eslint.config.js`, `playwright.config.js`: created per plan
+- `three@0.128.0` (exact), `vite@5.4.21`, `eslint@9.39.5` + `@eslint/js@^9`, `globals`, `@playwright/test` installed; Chromium headless shell downloaded
+- `game.js` → `src/game.js` (git mv) + `import * as THREE from 'three'` + readyState startup call replacing the old commented block; `src/main.js` entry; `index.html` CDN/classic scripts → one module script
+- `tests/smoke.spec.js`: 4 DOM-level smoke tests
+- `style.css`: **BUG FIX (user bug rule)** — `#top-controls` full-screen overlay had `pointer-events: auto`, silently blocking the game-over "Play Again" button in the SHIPPED game (its own CSS comment claimed pass-through). Now `none` on overlay, `auto` on `.game-button`. Found by smoke test 4; Playwright error context proved the interception.
+
+**Commands run:** `npm run lint` → 0 errors/6 warnings (expected dead-var warnings; plan 002 removes — note: 4 more dead vars than the plan predicted: canKillEnemy, enemySpeed, animationFrameId, unused catch param) · `CI=true npm test` → 4 passed · `npm run build` → built in 590ms, dist OK · `grep cdnjs index.html` → 0
+
+**Review (light, per launch directive):** direct review — diff is config + mechanical entry conversion, verified by gates; no out-of-scope changes beyond the documented bug fix. One dependency decision: `@eslint/js` pinned `^9` (latest v10 requires eslint 10 — ERESOLVE).
+
+**Decisions made:** fixed the pointer-events bug in-batch per the user's "no excusing pre-existing bugs" directive rather than deferring to a plan.
+
+**Regression attestation:** cumulative diff = tooling additions + file move + 2-line CSS fix; no game-logic changes. Test baseline CAPTURED: 4 total / 4 passed / 0 skipped. Confidence HIGH — the game code is byte-identical except the import/startup mechanics, and all 4 behavioral smoke tests pass against it.
+
+**Next:** Batch 2 (plan 002 — modularize + dedupe). Tag elves/pre-batch-2 first.
+
+---
+
 ## Staging Amendment: 2026-07-25 (still staging — before launch)
 
 Three mid-staging user directives, all incorporated:

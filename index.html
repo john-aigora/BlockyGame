@@ -7,7 +7,6 @@
     <title>Blocky Collector 3D - Collect or Die!</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 
 <body>
@@ -41,14 +40,7 @@
         </div>
     </div>
 
-    <script src="game.js"></script>
-    <script>
-        // Ensure the game starts after the page is fully loaded
-        window.addEventListener('load', function () {
-            console.log('Window loaded, initializing game...');
-            init();
-        });
-    </script>
+    <script type="module" src="/src/main.js"></script>
 </body>
 
 </html>

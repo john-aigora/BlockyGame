@@ -34,6 +34,9 @@ conditions. `plans/README.md` is the authoritative index and dependency graph.
 - **Batch completion rule:** every completed batch ends with `update execution log → update survival guide → commit` (LOCAL commit only — no push)
 - **Re-read rule:** immediately after every commit, re-read this survival guide
 - **Continuation rule:** if batches remain and stop conditions are not met, continue without waiting for acknowledgment
+- **Review depth (user directive at launch):** LIGHT — one review pass per batch (fresh subagent or direct diff review), fix blockers, repair, commit, move on. No multi-cycle review churn. "complete the batch, commit with a progress report, review lightly, repair, commit, and move on"
+- **Merge rule (reaffirmed at launch):** do not merge between batches or at the end; commit to the branch only
+- **Bug rule (user directive, mid-Batch-1):** "fix any bugs you find along the way. make a note about that and continue. do not excuse 'pre-existing bugs'" — any real bug discovered during a batch gets a root-cause fix + a Decisions-made note, even if outside the plan's nominal scope. Note it, fix it, continue.
 
 ### LOCAL-ONLY MODE (user directive — overrides default elves PR flow)
 
@@ -78,11 +81,10 @@ also verified DENIED for this machine's account (`RBrownHOPE` has read-only acce
 ## Stop Gate
 
 - **Planned batches remaining:** 11
-- **Stop allowed right now:** yes — STAGING IS COMPLETE BUT THE RUN HAS NOT LAUNCHED. Staging ends
-  with a deliberate stop; the unattended run starts only from the launch prompt in a fresh call.
-- **Why:** two-stage rule (stage, then start in a fresh call). No open blockers.
-- **Next required action:** user sends the launch prompt (recorded in the execution log Session
-  Setup entry). After launch, this gate flips to `Stop allowed right now: no`.
+- **Stop allowed right now:** no — RUN LAUNCHED 2026-07-25 via /goal ("do not stop. do not ask
+  questions. i will not be here"). A session Stop hook enforces completion of all 11 batches.
+- **Why:** launched; batches remain.
+- **Next required action:** execute Batch 1 (plans/001-tooling-baseline.md).
 
 ### RESOLVED — Node.js toolchain (was a launch blocker)
 
@@ -150,12 +152,12 @@ to); this feels like a natural checkpoint (there is no one to check in with).
 
 **Status:** Staging complete — launch-ready, awaiting launch prompt
 
-**Active batch:** none (Batch 0 = session setup committed)
+**Active batch:** none — Batch 1 complete
 
 **What was just finished:** Full audit → 14 plans written to `plans/` → elves session scaffolding
 created → local-only mode configured.
 
-**Single next action:** On launch: verify `node --version` ≥ 18, run Verify Green (minimal smoke:
+**Single next action:** Tag elves/pre-batch-2, execute Batch 2 (plan 002). (stale text below:
 `npm --version`, `git status` clean), tag `elves/pre-batch-1`, then execute Batch 1 (plan 001).
 
 ---

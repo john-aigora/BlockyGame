@@ -148,14 +148,16 @@ canvas {
     width: 100%;
     height: 100%;
     z-index: 100;
-    pointer-events: auto;
-    /* Allow clicks to pass through to game canvas if no button is hit */
-    /* Removed display:flex, gap, and specific top/right offsets */
+    pointer-events: none;
+    /* The overlay itself passes clicks through; only the buttons capture them
+       (previously pointer-events: auto here silently blocked the game-over
+       "Play Again" button underneath — discovered by the smoke tests). */
 }
 
 /* Game button styling */
 .game-button {
     position: absolute;
+    pointer-events: auto;
     /* Each button positioned absolutely within #top-controls */
     background-color: #66BB6A;
     /* Muted Green */
