@@ -3,11 +3,11 @@ import {
     growthFactor, enemyBaseHeight, speedMultipliers,
     FOOD_POINTS, ENEMY_HEIGHT_FACTOR, MILESTONE_STEP,
     SPEED_GROWTH_FACTOR, SPEED_GROWTH_CAP,
-    BASE_PLAYER_SPEED, MOBILE_SPEED_MULTIPLIER,
+    BASE_PLAYER_SPEED, BASE_ENEMY_SPEED, MOBILE_SPEED_MULTIPLIER,
     worldSize, initialFoodDensityArea,
     enemyStartOffset, MOVEMENT_MODE,
     CHUNK_SIZE, REBASE_DISTANCE,
-    COLLIDER_RADIUS_FACTOR, RAMP_DISTANCE, RAMP_SPEED_STEP, RAMP_SPEED_MAX,
+    PLAYER_COLLIDER_HALF_WIDTH, RAMP_DISTANCE, RAMP_SPEED_STEP, RAMP_SPEED_MAX,
     DISTANCE_MILESTONE_STEP
 } from './constants.js';
 import { initContinuousMovement, resetContinuousMovement, updateContinuousMovement } from './movement-continuous.js';
@@ -17,7 +17,7 @@ import { createPlayer, disposeCharacter } from './characters.js';
 import { createEnemy, updateEnemies, updateEnemyStreaming, resetEnemyStreaming, playerBox, scratchBox, beginMaterialize } from './enemies.js';
 import { spawnNearPlayer, spawnAnywhere } from './collectibles.js';
 import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoomIn, zoomOut, updateGroundScroll } from './world.js';
-import { initTerrain, setTerrainActive, resetTerrainForNewRun, updateTerrain, shiftTerrain, groundHeightAt, isWalkable } from './terrain.js';
+import { initTerrain, setTerrainActive, resetTerrainForNewRun, updateTerrain, shiftTerrain, groundHeightAt, slideMove } from './terrain.js';
 import { initEffects, updateEffects, resetEffects, onCollect, onGrowthMilestone, shiftActiveParticles, spawnTextPopup } from './effects.js';
 import { keys, keyboardVector, onKeyDown, onKeyUp, setupTouchControls } from './input.js';
 import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension, resetIndicators, showGoFlourish, initModePicker, updateModePicker, updateDistanceDisplay, resetDistanceDisplay } from './ui.js';
@@ -266,9 +266,10 @@ function update(dt) {
             updateContinuousMovement(dt);
         } else if (state.worldMode === 'endless') {
         // Endless movement: same keyboard+touch input, but water and rocks
-        // are impassable — resolve by axis-separated slide (try x and z
-        // independently; a blocked axis is simply zeroed), which turns a
-        // blocked diagonal into a natural slide along the shoreline.
+        // are impassable — resolved honestly by the shared slide (terrain.js
+        // slideMove: the collider is the body's true visual half-width,
+        // sampled at the leading edge + lateral extremes of travel; a
+        // blocked diagonal creeps along the shoreline instead of freezing).
         const kv = keyboardVector();
         let moveX = kv.x * state.actualPlayerSpeed * dt;
         let moveZ = kv.z * state.actualPlayerSpeed * dt;
@@ -276,13 +277,10 @@ function update(dt) {
             moveX += state.movementVector.x * state.actualPlayerSpeed * dt;
             moveZ += state.movementVector.y * state.actualPlayerSpeed * dt;
         }
-        const playerRadius = state.playerScale * COLLIDER_RADIUS_FACTOR;
-        if (moveX !== 0 && isWalkable(state.player.position.x + moveX, state.player.position.z, playerRadius)) {
-            state.player.position.x += moveX;
-        }
-        if (moveZ !== 0 && isWalkable(state.player.position.x, state.player.position.z + moveZ, playerRadius)) {
-            state.player.position.z += moveZ;
-        }
+        const p = state.player.position;
+        const applied = slideMove(p.x, p.z, moveX, moveZ, state.playerScale * PLAYER_COLLIDER_HALF_WIDTH);
+        p.x += applied.x;
+        p.z += applied.z;
         } else {
         // Keyboard movement: arrows or WASD, as a normalized vector — a
         // diagonal is exactly actualPlayerSpeed, not the old 1.41x per-axis
@@ -547,11 +545,18 @@ export function applySpeedMultiplier() {
     const baseSpeedForDevice = state.isMobile ? BASE_PLAYER_SPEED * MOBILE_SPEED_MULTIPLIER : BASE_PLAYER_SPEED;
     const sizeFactor = Math.min(1 + (state.playerScale - 1) * SPEED_GROWTH_FACTOR, SPEED_GROWTH_CAP);
     state.actualPlayerSpeed = baseSpeedForDevice * speedMultipliers[state.currentSpeedMultiplierIndex] * sizeFactor;
-    state.actualEnemySpeed = (baseSpeedForDevice * 0.5) * speedMultipliers[state.currentSpeedMultiplierIndex]; // Enemy is 50% of player's base, then multiplied
+    // Enemy speed is DECOUPLED from the player base (owner: the 2x player
+    // rebase must not touch enemies). BASE_ENEMY_SPEED is the pre-rebase
+    // effective value; the mobile boost stays so enemies are byte-identical
+    // to before on every device. Only the multiplier button (which scales
+    // the whole world) and the endless ramp below still apply.
+    state.actualEnemySpeed = BASE_ENEMY_SPEED
+        * (state.isMobile ? MOBILE_SPEED_MULTIPLIER : 1)
+        * speedMultipliers[state.currentSpeedMultiplierIndex];
     if (state.worldMode === 'endless') {
         // Distance difficulty ramp: +RAMP_SPEED_STEP per level, capped so a
-        // ramped enemy (0.5x base * RAMP_SPEED_MAX) can never outrun the
-        // player's base speed. Classic never reads the ramp.
+        // ramped enemy (BASE_ENEMY_SPEED * RAMP_SPEED_MAX = 2.4 u/s) can
+        // never outrun the player's base 6. Classic never reads the ramp.
         state.actualEnemySpeed *= Math.min(1 + state.endlessRampLevel * RAMP_SPEED_STEP, RAMP_SPEED_MAX);
     }
 
@@ -560,8 +565,9 @@ export function applySpeedMultiplier() {
     }
 }
 
-// NEW function to handle speed cycle button click
-function cycleSpeed() {
+// Speed cycle: the button's click handler AND the F key (input.js) — the
+// keyboard path must behave exactly like the mouse path.
+export function cycleSpeed() {
     state.currentSpeedMultiplierIndex = (state.currentSpeedMultiplierIndex + 1) % speedMultipliers.length;
     applySpeedMultiplier();
 }

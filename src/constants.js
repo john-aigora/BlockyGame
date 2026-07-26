@@ -10,6 +10,10 @@ export const ENEMIES_PER_KILL = 2; // spawned per kill, subject to the cap
 export const ENEMY_HEIGHT_FACTOR = 1.5; // new-enemy height vs player (existing value, now named)
 export const SPEED_GROWTH_FACTOR = 0.18; // extra speed per point of playerScale above 1 (big = faster)
 export const SPEED_GROWTH_CAP = 2.2; // max multiple of base speed the size bonus can ever reach
+// Enemy pace is DECOUPLED from the player base (owner: doubling the player
+// must NOT speed enemies up). 1.5 is the exact pre-rebase effective enemy
+// base (old 3.0 player base × the old 0.5 enemy factor) — enemies unchanged.
+export const BASE_ENEMY_SPEED = 1.5; // units/s at 1x, before the multiplier button / endless ramp
 export const SIZE_BOUNTY_PER_UNIT = 5; // extra kill points per whole unit of the enemy's scaled body height
 export const COMBO_WINDOW = 4; // seconds after a kill in which the next kill escalates the combo
 export const COMBO_MAX = 5; // combo multiplier cap (x1..x5)
@@ -41,7 +45,7 @@ export const INITIAL_CAMERA_Y_OFFSET = 15; // Base Y offset
 export const INITIAL_CAMERA_Z_OFFSET = 12; // Base Z offset
 
 // Movement and speed constants (units are per SECOND — applied × dt each frame)
-export const BASE_PLAYER_SPEED = 3.0; // units/s (was 0.05/frame at 60fps)
+export const BASE_PLAYER_SPEED = 6.0; // units/s — owner playtest: "1x should be twice as fast" (was 3.0)
 export const MOBILE_SPEED_MULTIPLIER = 1.75; // Player is 75% faster on mobile than desktop base
 export const MAX_DRAG_DISTANCE = 75;
 export const DEAD_ZONE_RADIUS = 10;
@@ -102,9 +106,27 @@ export const ROCK_SPAWN_CLEARANCE = 8; // No rocks within this distance of the r
 // --- ENDLESS WORLD (gameplay streaming — stage 2) ---
 // Collision, food/monster streaming, and the distance difficulty ramp.
 // Endless-mode only; classic never reads these.
-export const WATER_WALK_MARGIN = 0.05; // Terrain must clear WATER_LEVEL by this much to be walkable
-export const COLLIDER_RADIUS_FACTOR = 0.45; // Entity collision radius as a fraction of its body height
-export const ROCK_COLLIDER_FACTOR = 0.7; // Rock collision-circle radius as a fraction of the boulder's base size
+// HONEST COLLISION (owner, twice-reported: "stuck where it looks like we
+// should be able to get through"). The rules are now visual: colliders are
+// the TRUE half-width of the body block, the walkable boundary is the
+// VISIBLE shoreline, and rock circles match the boulder's visible base.
+// If it looks like it fits, it fits; a genuinely-too-big block honestly
+// fails to fit — that's fair.
+export const WATER_WALK_MARGIN = 0.02; // Walkable = terrain clears WATER_LEVEL by this hair (was 0.05 —
+// that margin, over shore slopes, blocked up to ~1.5u bands of VISUALLY DRY
+// beach; reproduced at seed spot (224, -134): h=-0.854, dry above WL=-0.9,
+// old rule said water). Feet may now touch the waterline — honestly.
+export const PLAYER_COLLIDER_HALF_WIDTH = 0.54; // The hero body is 1.08 wide → true visual half-width × playerScale
+export const ENEMY_COLLIDER_HALF_WIDTH = 0.6; // The enemy body cube is 1.2 wide → true visual half-width × scale.y
+// (Both replace COLLIDER_RADIUS_FACTOR 0.45 × body HEIGHT — a height-based
+// radius was a lie about width in both directions.)
+export const ROCK_COLLIDER_FACTOR = 0.55; // Rock collision-circle radius as a fraction of the boulder's base size.
+// Audit vs the mesh: the base block's half-extent is 0.425-0.575 × size
+// (scale roll 0.85-1.15) plus a ±0.15 × size center offset, at random yaw.
+// The old 0.7 circle overhung the visible faces by up to ~0.28 × size —
+// invisible walls. 0.55 matches the typical visible footprint; a worst-roll
+// corner may clip slightly, which is the fair direction (never block what
+// looks open).
 export const ENEMY_WEDGE_TIME = 2; // Seconds a chasing enemy may be fully blocked before detouring
 export const ENEMY_DETOUR_TIME = 1; // Seconds the 45-degree detour heading is held
 // Playtest-tuned (stage 3): the run BUILDS pressure instead of opening at
@@ -122,7 +144,7 @@ export const ENDLESS_SPAWN_INTERVAL = 1.25; // Seconds between bubble top-up spa
 export const RAMP_DISTANCE = 150; // Every this many units of furthest distance = +1 difficulty level
 export const RAMP_HEIGHT_STEP = 0.2; // Extra enemy target-height factor per ramp level (+20%)
 export const RAMP_SPEED_STEP = 0.05; // Extra enemy speed factor per ramp level (+5%)
-export const RAMP_SPEED_MAX = 1.6; // Speed ramp cap: 0.5x base * 1.6 = 0.8x — always outrunnable
+export const RAMP_SPEED_MAX = 1.6; // Speed ramp cap: 1.5 base * 1.6 = 2.4 u/s vs the player's 6 — always outrunnable
 export const FOOD_PER_CHUNK_MIN = 3; // Seeded food per streamed chunk (land only)...
 export const FOOD_PER_CHUNK_MAX = 5; // ...plentiful on purpose: the pressure is routing, not scarcity
 export const FOOD_WATER_CLEARANCE = 0.2; // Food needs terrain this far above WATER_LEVEL (not at the brink)

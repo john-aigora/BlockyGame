@@ -1,6 +1,7 @@
 import { MAX_DRAG_DISTANCE, DEAD_ZONE_RADIUS, MOVEMENT_MODE } from './constants.js';
 import { state } from './state.js';
-import { togglePause, startRun, resetGame } from './game.js';
+import { togglePause, startRun, resetGame, cycleSpeed } from './game.js';
+import { sfx } from './audio.js';
 
 export const keys = {}; // Object to keep track of currently pressed keys
 
@@ -69,6 +70,18 @@ export function onKeyDown(event) {
     }
     if (MOVEMENT_MODE === 'continuous' && key === 'p') {
         if (!isRepeat) togglePause();
+        return;
+    }
+
+    // F cycles the speed multiplier mid-run — owner: "shouldn't have to use
+    // the mouse". Only reachable DURING a run: the start overlay consumed
+    // the key above (any key starts there), and the death screen returned
+    // before this. Mirrors the button path exactly (click sfx included).
+    if (key === 'f') {
+        if (!isRepeat) {
+            sfx.click();
+            cycleSpeed();
+        }
         return;
     }
 

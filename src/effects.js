@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import {
     worldSize,
     DUST_PARTICLES_PER_STEP, DUST_LIFE, DUST_SPEED, DUST_COLOR_FROM, DUST_COLOR_TO,
-    POPUP_RISE, POPUP_LIFE, GROWTH_FRAME_FACTOR, PANIC_TIME, DEATH_SQUASH_TIME
+    POPUP_RISE, POPUP_LIFE, GROWTH_FRAME_FACTOR, PANIC_TIME, DEATH_SQUASH_TIME,
+    WATER_LEVEL
 } from './constants.js';
 import { state } from './state.js';
 import { torusDelta, torusDistance } from './worldmath.js';
@@ -566,6 +567,64 @@ function updatePlayerScaleFx(dt) {
 // with the camera's growth pull-back (like the score popups) so it stays
 // the same size on screen, and vanishes the moment the timer resets or the
 // run ends. The bob is object motion — allowed under reduced motion.
+//
+// ENDLESS ONLY: a panicking kid must not be sent swimming — among the
+// ARROW_CANDIDATES nearest foods, the arrow prefers the nearest one whose
+// straight line from the player crosses no water (8 samples against
+// terrainHeight — cheap, and only while panic is active). If every
+// candidate is across a lake, it falls back to the absolute nearest.
+// Classic has no water and keeps the plain nearest-food behavior.
+const ARROW_CANDIDATES = 5;
+const arrowCandidate = new Array(ARROW_CANDIDATES).fill(null); // Top-k scratch, reused per frame
+const arrowCandidateDist = new Float64Array(ARROW_CANDIDATES);
+let lastArrowTarget = null; // Test introspection (effectsInfo)
+
+function lineCrossesWater(fromX, fromZ, toX, toZ) {
+    for (let i = 1; i <= 8; i++) {
+        const t = i / 9;
+        if (groundHeightAt(fromX + (toX - fromX) * t, fromZ + (toZ - fromZ) * t) < WATER_LEVEL) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function pickArrowTarget() {
+    const p = state.player.position;
+    if (state.worldMode !== 'endless') {
+        let nearest = null;
+        let best = Infinity;
+        for (const c of state.collectibles) {
+            const d = torusDistance(p, c.position);
+            if (d < best) {
+                best = d;
+                nearest = c;
+            }
+        }
+        return nearest;
+    }
+    // Top-k nearest by insertion (k is tiny; zero allocation).
+    let count = 0;
+    for (const c of state.collectibles) {
+        const d = torusDistance(p, c.position);
+        if (count === ARROW_CANDIDATES && d >= arrowCandidateDist[count - 1]) continue;
+        let i = Math.min(count, ARROW_CANDIDATES - 1);
+        while (i > 0 && arrowCandidateDist[i - 1] > d) {
+            arrowCandidateDist[i] = arrowCandidateDist[i - 1];
+            arrowCandidate[i] = arrowCandidate[i - 1];
+            i--;
+        }
+        arrowCandidateDist[i] = d;
+        arrowCandidate[i] = c;
+        if (count < ARROW_CANDIDATES) count++;
+    }
+    for (let i = 0; i < count; i++) {
+        const c = arrowCandidate[i];
+        if (!lineCrossesWater(p.x, p.z, c.position.x, c.position.z)) return c;
+    }
+    return arrowCandidate[0]; // Every candidate is across water — honest nearest
+}
+
 function updateFoodArrow() {
     if (!foodArrow || !state.player) return;
     const active = state.gameActive &&
@@ -573,17 +632,11 @@ function updateFoodArrow() {
         state.collectibles.length > 0;
     if (!active) {
         if (foodArrow.visible) foodArrow.visible = false;
+        lastArrowTarget = null;
         return;
     }
-    let nearest = null;
-    let best = Infinity;
-    for (const c of state.collectibles) {
-        const d = torusDistance(state.player.position, c.position);
-        if (d < best) {
-            best = d;
-            nearest = c;
-        }
-    }
+    const nearest = pickArrowTarget();
+    lastArrowTarget = nearest;
     torusDelta(state.player.position, nearest.position, arrowDelta);
     const frame = 1 + (state.playerScale - 1) * GROWTH_FRAME_FACTOR;
     const baseY = state.worldMode === 'endless' ? state.player.position.y : 0; // Above the head even on a hill
@@ -860,5 +913,14 @@ export function shiftActiveParticles(dx, dz) {
 
 // Debug/test introspection (read-only) — wired into window.__game by main.js.
 export function effectsInfo() {
-    return { reducedMotion, activeParticles, poolSize: MAX_PARTICLES, lastPopupText };
+    return {
+        reducedMotion,
+        activeParticles,
+        poolSize: MAX_PARTICLES,
+        lastPopupText,
+        // Panic-arrow target (null when the arrow is hidden) — the lake-
+        // avoidance spec asserts on this.
+        arrowTargetX: lastArrowTarget ? lastArrowTarget.position.x : null,
+        arrowTargetZ: lastArrowTarget ? lastArrowTarget.position.z : null
+    };
 }

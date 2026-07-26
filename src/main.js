@@ -5,7 +5,7 @@ import { spawnNewEnemies } from './enemies.js';
 import { onTouchStart, onTouchMove, onTouchEndOrCancel } from './input.js';
 import { sfx, isMuted, audioState, music } from './audio.js';
 import { spawnBurst, spawnScorePopup, effectsInfo } from './effects.js';
-import { terrainHeight, groundHeightAt, terrainInfo, isWalkable, terrainTint } from './terrain.js';
+import { terrainHeight, groundHeightAt, terrainInfo, isWalkable, canMove, terrainTint } from './terrain.js';
 import { movementDebug } from './movement-continuous.js';
 
 // Read-only debug/test handle; production code must never read it.
@@ -33,6 +33,7 @@ window.__game = {
         terrainInfo, // { activeChunks, pooledMeshes, queued, builds, ... } — streaming/pool checks
         terrainTint, // { h, r, g, b } vertex color at TRUE coords — biome/shoreline checks
         isWalkable, // Endless collision query (water + rocks) — impassability checks
+        canMove, // Honest directional movement probe — gap-width fairness checks
         movementDebug // Plan 014 spike introspection: { energy, boostHeld, heading, hasMouse }
     }
 };

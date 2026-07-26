@@ -549,11 +549,94 @@ function blockedByRock(tx, tz, radius) {
 }
 
 // Can an entity of the given collision radius stand at this LOCAL position?
+// STATIC query (spawn placement and the like): center-sampled water plus a
+// conservative circle-vs-circle rock test. MOVEMENT resolution goes through
+// canMove below, which samples the collider honestly.
 export function isWalkable(localX, localZ, radius) {
     const tx = localX + state.worldOrigin.x;
     const tz = localZ + state.worldOrigin.z;
     if (terrainHeight(tx, tz) < WATER_LEVEL + WATER_WALK_MARGIN) return false;
     return !blockedByRock(tx, tz, radius);
+}
+
+// One honest sample point: dry land (above the visible shoreline plus the
+// hair margin) and not inside a rock's collision circle.
+function probeOk(tx, tz) {
+    if (terrainHeight(tx, tz) < WATER_LEVEL + WATER_WALK_MARGIN) return false;
+    return !blockedByRock(tx, tz, 0);
+}
+
+// --- Honest movement probe (owner escalation: "respect the size of the gap
+// and the size of the player's block") ---
+// May an entity whose collider is the TRUE visual half-width `radius` take
+// the step (mx, mz) from LOCAL (localX, localZ)? The destination is sampled
+// at the center, the LEADING edge of travel, and the two LATERAL extremes
+// perpendicular to travel — the honest circle. Deliberately NOT the full
+// circle: the trailing side is where the entity already stands, and sampling
+// it is exactly what wedged both slide axes at corners (diagnosed cause (a)).
+// Consequences, by construction:
+//   - a gap passes iff gapWidth >= 2×radius (the lateral extremes ARE the
+//     body edges — no hidden extra margin);
+//   - the body never visually overhangs water (the old center-only test let
+//     the block wade edge-deep — measured south edge at h=-0.906 < WL);
+//   - at a corner the blocked axis fails while the open axis's own probes
+//     still pass, so the axis-separated slide creeps instead of freezing.
+export function canMove(localX, localZ, mx, mz, radius) {
+    const len = Math.hypot(mx, mz);
+    if (len === 0) return true;
+    const nx = localX + state.worldOrigin.x + mx;
+    const nz = localZ + state.worldOrigin.z + mz;
+    const ux = (mx / len) * radius; // Travel direction scaled to the collider edge
+    const uz = (mz / len) * radius;
+    return probeOk(nx, nz) && // Center
+        probeOk(nx + ux, nz + uz) && // Leading edge
+        probeOk(nx - uz, nz + ux) && // Lateral extreme (left of travel)
+        probeOk(nx + uz, nz - ux); // Lateral extreme (right of travel)
+}
+
+// --- The slide (shared by the player and enemies) ---
+// Resolves a desired step into the applied step, written into `slideResult`
+// (module scratch — read it, don't keep it): the full step first (a narrow
+// DIAGONAL corridor must pass even when both single axes wouldn't), then
+// the axis-separated slide, then the corner deflections. The deflections
+// fix the last freeze mode: a diagonal held INTO a wiggling shoreline
+// creeps the body flush against the contour, where the open axis's lateral
+// probe starts failing by a hair — retreating that hair on the pressed
+// axis (one frame's own step, dt-scaled, probe-verified like every other
+// move) frees the open axis without ever letting the body overlap water.
+export const slideResult = { x: 0, z: 0 };
+
+export function slideMove(px, pz, mx, mz, radius) {
+    slideResult.x = 0;
+    slideResult.z = 0;
+    if (mx === 0 && mz === 0) return slideResult;
+    if (canMove(px, pz, mx, mz, radius)) {
+        slideResult.x = mx;
+        slideResult.z = mz;
+        return slideResult;
+    }
+    let ax = 0;
+    if (mx !== 0 && canMove(px, pz, mx, 0, radius)) ax = mx;
+    if (mz !== 0 && canMove(px + ax, pz, 0, mz, radius)) {
+        slideResult.x = ax;
+        slideResult.z = mz;
+        return slideResult;
+    }
+    if (ax !== 0) {
+        slideResult.x = ax;
+        return slideResult;
+    }
+    if (mx !== 0 && mz !== 0) {
+        // Corner wedge: advance the open axis, retreat the pressed one.
+        if (canMove(px, pz, mx, -mz, radius)) {
+            slideResult.x = mx;
+            slideResult.z = -mz;
+        } else if (canMove(px, pz, -mx, mz, radius)) {
+            slideResult.x = -mx;
+            slideResult.z = mz;
+        }
+    }
+    return slideResult;
 }
 
 // Food placement check in TRUE coordinates: dry land with real clearance

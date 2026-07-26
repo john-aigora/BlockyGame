@@ -5,13 +5,13 @@ import {
     KILL_POINTS, MAX_ENEMIES, ENEMIES_PER_KILL, ENEMY_HEIGHT_FACTOR,
     SIZE_BOUNTY_PER_UNIT, COMBO_WINDOW, COMBO_MAX,
     SPAWN_MATERIALIZE_TIME, SPAWN_MATERIALIZE_START_SCALE,
-    COLLIDER_RADIUS_FACTOR, ENEMY_WEDGE_TIME, ENEMY_DETOUR_TIME,
+    ENEMY_COLLIDER_HALF_WIDTH, ENEMY_WEDGE_TIME, ENEMY_DETOUR_TIME,
     ENDLESS_ENEMY_TARGET, ENDLESS_ENEMY_CAP, ENEMY_DESPAWN_RADIUS,
     ENDLESS_SPAWN_MIN, ENDLESS_SPAWN_MAX, ENDLESS_SPAWN_INTERVAL, RAMP_HEIGHT_STEP
 } from './constants.js';
 import { state } from './state.js';
 import { createCharacter, disposeCharacter, shadeColor, CAP_LIGHTEN } from './characters.js';
-import { groundHeightAt, isWalkable } from './terrain.js';
+import { groundHeightAt, isWalkable, slideMove } from './terrain.js';
 import { spawnAtPosition } from './collectibles.js';
 import { endGame, updateScoreDisplay, showComboChip } from './ui.js';
 import { wrapPosition, torusDelta, torusDistance } from './worldmath.js';
@@ -336,7 +336,7 @@ export function spawnNewEnemies() {
             // re-roll around the circle. All-water rings are practically
             // impossible at this world's lake coverage; if it happens the
             // bubble spawner (updateEnemyStreaming) tops the count back up.
-            const radius = enemyBaseHeight * newEnemyScaleFactor * COLLIDER_RADIUS_FACTOR;
+            const radius = newEnemyScaleFactor * ENEMY_COLLIDER_HALF_WIDTH;
             let placed = isWalkable(spawnX, spawnZ, radius);
             for (let attempt = 0; !placed && attempt < 8; attempt++) {
                 angle = Math.random() * Math.PI * 2;
@@ -380,11 +380,14 @@ function moveEnemyWithCollision(enemyGroup, movement, dt) {
     }
     const mx = movement.x * dt;
     const mz = movement.z * dt;
-    const radius = enemyBaseHeight * enemyGroup.scale.y * COLLIDER_RADIUS_FACTOR;
+    // Honest collider: the enemy body cube's true visual half-width,
+    // resolved by the same shared slide as the player (terrain.js).
+    const radius = enemyGroup.scale.y * ENEMY_COLLIDER_HALF_WIDTH;
     const p = enemyGroup.position;
-    let appliedX = 0, appliedZ = 0;
-    if (mx !== 0 && isWalkable(p.x + mx, p.z, radius)) { p.x += mx; appliedX = mx; }
-    if (mz !== 0 && isWalkable(p.x, p.z + mz, radius)) { p.z += mz; appliedZ = mz; }
+    const step = slideMove(p.x, p.z, mx, mz, radius);
+    p.x += step.x;
+    p.z += step.z;
+    const appliedX = step.x, appliedZ = step.z;
 
     const desired = Math.hypot(mx, mz);
     const applied = Math.hypot(appliedX, appliedZ);
@@ -430,7 +433,7 @@ export function updateEnemyStreaming(dt) {
     bubbleSpawnCooldown = ENDLESS_SPAWN_INTERVAL;
 
     const scaleFactor = currentEnemyScaleFactor();
-    const radius = enemyBaseHeight * scaleFactor * COLLIDER_RADIUS_FACTOR;
+    const radius = scaleFactor * ENEMY_COLLIDER_HALF_WIDTH;
     for (let attempt = 0; attempt < 10; attempt++) {
         const angle = Math.random() * Math.PI * 2;
         const dist = ENDLESS_SPAWN_MIN + Math.random() * (ENDLESS_SPAWN_MAX - ENDLESS_SPAWN_MIN);
