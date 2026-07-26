@@ -614,7 +614,7 @@ function updateWalk(group, dt) {
         const step = Math.floor(w.phase / Math.PI);
         if (step !== w.step) {
             w.step = step;
-            if (w.swing > 0.35) spawnFootstepDust(group);
+            if (w.swing > 0.35) spawnFootstepDust(group, walkScratch.dx, walkScratch.dz, dist);
         }
     }
     // Swing amplitude eases in when moving, out when idle (legs settle to rest)
@@ -667,14 +667,18 @@ function updateWalk(group, dt) {
     }
 }
 
-// Footstep dust: a tiny, soft puff at ground level under the character on
-// each stride plant. Uses the ONE pooled burst engine — 3-5 particles, pale
-// teal-white, low velocity, gone in ~0.3s. Dust, not smoke.
+// Footstep dust: a tiny, soft puff kicked up BEHIND the character on each
+// stride plant (trailing the direction of travel, so the body never occludes
+// it — the verify pass caught center-spawned dust hiding inside the
+// silhouette). Uses the ONE pooled burst engine. Dust, not smoke.
 const dustOrigin = { x: 0, y: 0, z: 0 }; // Scratch — never allocated per step
-function spawnFootstepDust(group) {
-    dustOrigin.x = group.position.x;
+function spawnFootstepDust(group, dx, dz, dist) {
+    // Trail offset: opposite the movement heading, scaled to the character
+    // so big stompers kick dust at their heels, not inside their block.
+    const back = (dist > 0.0001) ? (0.62 * Math.max(group.scale.y, 0.5)) / dist : 0;
+    dustOrigin.x = group.position.x - dx * back;
     dustOrigin.y = 0.06; // Just above the ground-bounce plane
-    dustOrigin.z = group.position.z;
+    dustOrigin.z = group.position.z - dz * back;
     spawnBurst(dustOrigin, {
         count: DUST_PARTICLES_PER_STEP,
         colorFrom: DUST_COLOR_FROM,

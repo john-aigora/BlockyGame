@@ -68,9 +68,9 @@ export const MAX_ENEMY_INDICATORS = 10; // Max number of indicators to show
 
 // Footstep dust (game-feel pass) — soft pooled puffs on each stride plant.
 // Deliberately tiny numbers: it must read as dust kicked up by feet, not smoke.
-export const DUST_PARTICLES_PER_STEP = 4; // Pooled particles per foot plant
-export const DUST_LIFE = 0.3; // Seconds a puff lives
-export const DUST_SPEED = 0.7; // Outward drift, units/s (very low = soft)
+export const DUST_PARTICLES_PER_STEP = 5; // Pooled particles per foot plant
+export const DUST_LIFE = 0.5; // Seconds a puff lives (long enough to clear the heel)
+export const DUST_SPEED = 1.0; // Outward drift, units/s (low = soft)
 export const DUST_COLOR_FROM = 0xB2DFDB; // Pale teal-white puff...
 export const DUST_COLOR_TO = 0x6B9E97; // ...settling toward the ground teal
 
