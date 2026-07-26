@@ -98,27 +98,39 @@ test('terrain height is deterministic: same coords, same height, across reloads'
   expect(third).toEqual(first); // Seeded — identical across sessions
 });
 
-test('floating-origin rebase preserves the relative world in one frame', async ({ page }) => {
+test('floating-origin rebase preserves the local bubble in one frame', async ({ page }) => {
   await page.locator('#mode-endless').click();
   await startGame(page);
   await waitGameSeconds(page, 0.2);
+  // Stage 2 streams gameplay: enemies despawn beyond 80u and food lives
+  // with its chunk, so a bare 2500u teleport would (correctly) replace the
+  // whole neighborhood. To test the REBASE itself we carry the local
+  // bubble along — enemies teleport WITH the player, exactly as if the run
+  // had walked there — and assert their player-relative deltas survive the
+  // origin shift. (The old-origin chunk food is chunk-owned and streams
+  // out; fresh food streaming in at the destination is asserted after.)
   const result = await page.evaluate(() => new Promise((resolve) => {
     const s = window.__game.state;
-    // Teleport far past REBASE_DISTANCE (2048). The next update frame must
-    // rebase: origin absorbs the nearest CHUNK_SIZE multiple.
+    const dx = 2500 - s.player.position.x;
+    const dz = -100 - s.player.position.z;
     s.player.position.x = 2500;
     s.player.position.z = -100;
-    const rel = (list) => list.map((o) => ({
-      x: o.position.x - s.player.position.x,
-      z: o.position.z - s.player.position.z
-    }));
-    const before = { enemies: rel(s.enemies), food: rel(s.collectibles) };
+    const tracked = s.enemies.map((e) => {
+      e.position.x += dx;
+      e.position.z += dz;
+      return { ref: e, relX: e.position.x - 2500, relZ: e.position.z - -100 };
+    });
     // Two RAFs: the game's animate (registered earlier) runs the rebase
     // frame first; the second RAF reads the settled world.
     requestAnimationFrame(() => requestAnimationFrame(() => {
+      const survivors = tracked.filter((t) => s.enemies.includes(t.ref));
       resolve({
-        before,
-        after: { enemies: rel(s.enemies), food: rel(s.collectibles) },
+        trackedCount: tracked.length,
+        survivorCount: survivors.length,
+        drift: survivors.map((t) => ({
+          x: (t.ref.position.x - s.player.position.x) - t.relX,
+          z: (t.ref.position.z - s.player.position.z) - t.relZ
+        })),
         origin: { x: s.worldOrigin.x, z: s.worldOrigin.z },
         px: s.player.position.x,
         pz: s.player.position.z,
@@ -134,18 +146,24 @@ test('floating-origin rebase preserves the relative world in one frame', async (
   expect(result.origin.z).toBe(-96);
   expect(Math.abs(result.px - 4)).toBeLessThan(1); // 2500 - 2496 (idle player)
   expect(Math.abs(result.pz - -4)).toBeLessThan(1);
-  // No visual jump: player-relative deltas survive the rebase (tolerance
-  // covers up to two frames of live enemy AI movement).
-  expect(result.after.enemies.length).toBe(result.before.enemies.length);
-  expect(result.after.food.length).toBe(result.before.food.length);
-  for (let i = 0; i < result.before.enemies.length; i++) {
-    expect(Math.abs(result.after.enemies[i].x - result.before.enemies[i].x)).toBeLessThan(0.6);
-    expect(Math.abs(result.after.enemies[i].z - result.before.enemies[i].z)).toBeLessThan(0.6);
-  }
-  for (let i = 0; i < result.before.food.length; i++) {
-    expect(Math.abs(result.after.food[i].x - result.before.food[i].x)).toBeLessThan(0.01);
-    expect(Math.abs(result.after.food[i].z - result.before.food[i].z)).toBeLessThan(0.01);
+  // The co-teleported bubble is inside the despawn ring — nobody vanishes,
+  // and no visual jump: player-relative deltas survive the rebase
+  // (tolerance covers up to two frames of live enemy AI movement).
+  expect(result.trackedCount).toBeGreaterThan(0);
+  expect(result.survivorCount).toBe(result.trackedCount);
+  for (const d of result.drift) {
+    expect(Math.abs(d.x)).toBeLessThan(0.6);
+    expect(Math.abs(d.z)).toBeLessThan(0.6);
   }
   // Grounding still tracks the terrain through the new origin.
   expect(result.groundDelta).toBeLessThan(0.001);
+  // The destination's chunk food streams in under the rebased origin — and
+  // every piece of it sits on dry land.
+  await page.waitForFunction(() => window.__game.state.collectibles.length > 5, null, { timeout: 30000 });
+  const foodOnLand = await page.evaluate(() => {
+    const g = window.__game;
+    return g.state.collectibles.every((c) =>
+      g.debug.groundHeightAt(c.position.x, c.position.z) >= -0.9 + 0.15);
+  });
+  expect(foodOnLand).toBe(true);
 });

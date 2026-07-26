@@ -6,19 +6,20 @@ import {
     BASE_PLAYER_SPEED, MOBILE_SPEED_MULTIPLIER,
     worldSize, initialFoodDensityArea,
     enemyStartOffset, MOVEMENT_MODE,
-    CHUNK_SIZE, REBASE_DISTANCE
+    CHUNK_SIZE, REBASE_DISTANCE,
+    COLLIDER_RADIUS_FACTOR, RAMP_DISTANCE, RAMP_SPEED_STEP, RAMP_SPEED_MAX
 } from './constants.js';
 import { initContinuousMovement, resetContinuousMovement, updateContinuousMovement } from './movement-continuous.js';
 import { wrapPosition, torusDeltaComponent } from './worldmath.js';
 import { state } from './state.js';
 import { createPlayer, disposeCharacter } from './characters.js';
-import { createEnemy, updateEnemies, playerBox, scratchBox, beginMaterialize } from './enemies.js';
+import { createEnemy, updateEnemies, updateEnemyStreaming, resetEnemyStreaming, playerBox, scratchBox, beginMaterialize } from './enemies.js';
 import { spawnNearPlayer, spawnAnywhere } from './collectibles.js';
 import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoomIn, zoomOut, updateGroundScroll } from './world.js';
-import { initTerrain, setTerrainActive, resetTerrainForNewRun, updateTerrain, shiftTerrain, groundHeightAt } from './terrain.js';
+import { initTerrain, setTerrainActive, resetTerrainForNewRun, updateTerrain, shiftTerrain, groundHeightAt, isWalkable } from './terrain.js';
 import { initEffects, updateEffects, resetEffects, onCollect, onGrowthMilestone, shiftActiveParticles } from './effects.js';
 import { keys, keyboardVector, onKeyDown, onKeyUp, setupTouchControls } from './input.js';
-import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension, resetIndicators, showGoFlourish, initModePicker, updateModePicker } from './ui.js';
+import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension, resetIndicators, showGoFlourish, initModePicker, updateModePicker, updateDistanceDisplay, resetDistanceDisplay } from './ui.js';
 import { resetCollectClock, tickCollectClock, tickComboClock } from './timers.js';
 import { loadWorldMode, saveWorldMode } from './hiscores.js';
 import { unlockAudio, sfx, music } from './audio.js';
@@ -115,6 +116,10 @@ function setupNewGame() {
     state.score = 0;
     state.runTime = 0; // Fresh run clock (see state.js — the tests' timing base)
     state.playerScale = 1.0; // Player's initial scale (acts as height for 1x1x1 geometry)
+    state.furthestDistance = 0; // Endless progress + difficulty ramp reset BEFORE the
+    state.endlessRampLevel = 0; // speed recompute below (ramp feeds enemy speed)
+    resetEnemyStreaming(); // A fresh run's first bubble top-up owes no cooldown
+    resetDistanceDisplay(); // Zero the HUD and show/hide it per the current mode
     applySpeedMultiplier(); // playerScale reset → drop any size speed bonus from the last run
     resetCombo(); // A mid-run restart must not carry a live combo into the new run
     resetTension(); // Nor a pulsing panic timer, red vignette, or racing heartbeat
@@ -180,11 +185,14 @@ function setupNewGame() {
     // starts scaling in on the first unpaused frame, right as the run begins.
     beginMaterialize(firstEnemy);
 
-    // Calculate initial food count based on density
-    const initialFoodCount = Math.floor((worldSize * worldSize) / initialFoodDensityArea);
-
-    for (let i = 0; i < initialFoodCount; i++) {
-        spawnAnywhere(); // Use new function for initial even distribution
+    // Initial food: classic scatters evenly across the arena; endless food
+    // is chunk-seeded — resetTerrainForNewRun above already grew the spawn
+    // neighborhood's food, and streaming grows the rest.
+    if (state.worldMode !== 'endless') {
+        const initialFoodCount = Math.floor((worldSize * worldSize) / initialFoodDensityArea);
+        for (let i = 0; i < initialFoodCount; i++) {
+            spawnAnywhere(); // Use new function for initial even distribution
+        }
     }
 
     for (const key in keys) {
@@ -255,6 +263,25 @@ function update(dt) {
         if (MOVEMENT_MODE === 'continuous') {
             // Plan 014 spike: cursor-steered constant motion + boost.
             updateContinuousMovement(dt);
+        } else if (state.worldMode === 'endless') {
+        // Endless movement: same keyboard+touch input, but water and rocks
+        // are impassable — resolve by axis-separated slide (try x and z
+        // independently; a blocked axis is simply zeroed), which turns a
+        // blocked diagonal into a natural slide along the shoreline.
+        const kv = keyboardVector();
+        let moveX = kv.x * state.actualPlayerSpeed * dt;
+        let moveZ = kv.z * state.actualPlayerSpeed * dt;
+        if (state.touchActive) {
+            moveX += state.movementVector.x * state.actualPlayerSpeed * dt;
+            moveZ += state.movementVector.y * state.actualPlayerSpeed * dt;
+        }
+        const playerRadius = state.playerScale * COLLIDER_RADIUS_FACTOR;
+        if (moveX !== 0 && isWalkable(state.player.position.x + moveX, state.player.position.z, playerRadius)) {
+            state.player.position.x += moveX;
+        }
+        if (moveZ !== 0 && isWalkable(state.player.position.x, state.player.position.z + moveZ, playerRadius)) {
+            state.player.position.z += moveZ;
+        }
         } else {
         // Keyboard movement: arrows or WASD, as a normalized vector — a
         // diagonal is exactly actualPlayerSpeed, not the old 1.41x per-axis
@@ -272,9 +299,12 @@ function update(dt) {
 
         if (state.worldMode === 'endless') {
             // Endless: no wrap, no re-imaging — the world is truly flat and
-            // infinite. Ground the player on the terrain under him and keep
-            // the floating origin within float-precision range.
+            // infinite. Ground the player on the terrain under him, stream
+            // the monster bubble, advance the distance/difficulty ramp, and
+            // keep the floating origin within float-precision range.
             state.player.position.y = groundHeightAt(state.player.position.x, state.player.position.z);
+            updateEnemyStreaming(dt);
+            updateEndlessProgress();
             rebaseWorldIfNeeded();
         } else {
         // Player Wrapping Logic (preserves overshoot across the seam)
@@ -340,6 +370,25 @@ function update(dt) {
                 sfx.collect();
             }
         }
+    }
+}
+
+// --- Endless progress: DISTANCE HUD + difficulty ramp ---
+// furthestDistance is the run's high-water mark of TRUE distance from the
+// start (origin-aware, so a rebase never dents it). It only grows — the
+// ramp never relaxes on the walk home. Crossing a RAMP_DISTANCE boundary
+// bumps the level, which feeds enemy target height and population
+// (enemies.js) and enemy speed (applySpeedMultiplier below).
+function updateEndlessProgress() {
+    const p = state.player.position;
+    const dist = Math.hypot(p.x + state.worldOrigin.x, p.z + state.worldOrigin.z);
+    if (dist <= state.furthestDistance) return;
+    state.furthestDistance = dist;
+    updateDistanceDisplay();
+    const level = Math.floor(dist / RAMP_DISTANCE);
+    if (level !== state.endlessRampLevel) {
+        state.endlessRampLevel = level;
+        applySpeedMultiplier(); // Enemy speed carries the ramp factor
     }
 }
 
@@ -484,6 +533,12 @@ export function applySpeedMultiplier() {
     const sizeFactor = Math.min(1 + (state.playerScale - 1) * SPEED_GROWTH_FACTOR, SPEED_GROWTH_CAP);
     state.actualPlayerSpeed = baseSpeedForDevice * speedMultipliers[state.currentSpeedMultiplierIndex] * sizeFactor;
     state.actualEnemySpeed = (baseSpeedForDevice * 0.5) * speedMultipliers[state.currentSpeedMultiplierIndex]; // Enemy is 50% of player's base, then multiplied
+    if (state.worldMode === 'endless') {
+        // Distance difficulty ramp: +RAMP_SPEED_STEP per level, capped so a
+        // ramped enemy (0.5x base * RAMP_SPEED_MAX) can never outrun the
+        // player's base speed. Classic never reads the ramp.
+        state.actualEnemySpeed *= Math.min(1 + state.endlessRampLevel * RAMP_SPEED_STEP, RAMP_SPEED_MAX);
+    }
 
     if (el.speedButton) {
         el.speedButton.textContent = `Speed: ${speedMultipliers[state.currentSpeedMultiplierIndex]}x`;

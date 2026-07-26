@@ -10,6 +10,10 @@ import { onPlayerDeath, onNewBest } from './effects.js';
 // must never call getElementById. game.js calls initUI() before any UI write.
 export const el = {
     score: null,
+    distanceDisplay: null,
+    distance: null,
+    finalDistanceLine: null,
+    finalDistance: null,
     collectTime: null,
     collectTimerDisplay: null,
     killIndicator: null,
@@ -31,6 +35,10 @@ export const el = {
 
 export function initUI() {
     el.score = document.getElementById('score');
+    el.distanceDisplay = document.getElementById('distance-display');
+    el.distance = document.getElementById('distance');
+    el.finalDistanceLine = document.getElementById('final-distance-line');
+    el.finalDistance = document.getElementById('final-distance');
     el.collectTime = document.getElementById('collect-time');
     el.collectTimerDisplay = document.getElementById('collect-timer-display');
     el.dangerVignette = document.getElementById('danger-vignette');
@@ -131,13 +139,44 @@ export function hideStartOverlay() {
     state.onStartScreen = false;
 }
 
+// --- Distance HUD (endless) ---
+// "Distance: <n>" beside the score — the run's furthest true distance from
+// the start, integer, written only when it changes. Hidden in classic.
+let lastDistanceShown = -1;
+
+export function updateDistanceDisplay() {
+    if (!el.distance) return;
+    const shown = Math.floor(state.furthestDistance);
+    if (shown === lastDistanceShown) return;
+    lastDistanceShown = shown;
+    el.distance.textContent = shown;
+}
+
+// New game: zero the readout and show/hide the element per the mode.
+export function resetDistanceDisplay() {
+    lastDistanceShown = -1;
+    updateDistanceDisplay(); // furthestDistance was just reset — writes "0"
+    if (el.distanceDisplay) {
+        el.distanceDisplay.style.display = state.worldMode === 'endless' ? '' : 'none';
+    }
+}
+
 // --- Death Screen Functions ---
 // Fills the structured death screen (title is static "GAME OVER" markup);
 // #hiscore-slot hosts the local top-5 leaderboard (plan 009). A rank-0
 // NEW BEST earns confetti bursts behind the box + a victory fanfare.
+// Endless deaths also show how far the run pushed.
 export function showDeathScreen(reason, hiscores = [], rank = -1) {
     el.deathReason.textContent = reason;
     el.finalScore.textContent = state.score;
+    if (el.finalDistanceLine) {
+        if (state.worldMode === 'endless') {
+            el.finalDistance.textContent = Math.floor(state.furthestDistance);
+            el.finalDistanceLine.style.display = '';
+        } else {
+            el.finalDistanceLine.style.display = 'none';
+        }
+    }
     renderHiscores(hiscores, rank);
     el.messageBox.style.display = 'block'; // Make the death screen visible
     if (rank === 0) {
@@ -167,7 +206,10 @@ function renderHiscores(list, rank) {
     ol.className = 'hiscore-list';
     list.forEach((entry, i) => {
         const li = document.createElement('li');
-        li.textContent = `${entry.score} — ${entry.date}`;
+        // Endless rows carry the run's distance; classic rows are untouched.
+        li.textContent = entry.distance !== undefined
+            ? `${entry.score} — ${entry.distance}u — ${entry.date}`
+            : `${entry.score} — ${entry.date}`;
         if (i === rank) li.classList.add('is-new');
         ol.appendChild(li);
     });
@@ -228,7 +270,7 @@ export function endGame(reason) {
     onPlayerDeath(); // Squash flat + orange-red burst (pool), behind the beat
     // Per-mode boards: the death screen shows the ladder of the mode that
     // just ended, and endless runs never pollute the classic top-5.
-    const { list, rank } = recordScore(state.score, state.worldMode);
+    const { list, rank } = recordScore(state.score, state.worldMode, state.furthestDistance);
     deathScreenTimer = setTimeout(() => {
         deathScreenTimer = null;
         if (state.gameActive || state.onStartScreen) return; // A restart beat us to it

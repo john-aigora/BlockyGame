@@ -26,9 +26,12 @@ export function loadHiscores(mode = 'classic') {
 // Returns { list, rank } — rank is the 0-based position of the new entry
 // in the trimmed top-5 list, or -1 if it didn't place. Each mode has its
 // own board: a monster endless run must not bury the classic ladder.
-export function recordScore(score, mode = 'classic') {
+// Endless entries carry the run's furthest distance (shown per row); the
+// board stays SCORE-ranked — distance is the story, score is the ladder.
+export function recordScore(score, mode = 'classic', distance = 0) {
     const list = loadHiscores(mode);
     const entry = { score, date: new Date().toISOString().slice(0, 10) };
+    if (mode === 'endless') entry.distance = Math.max(0, Math.floor(distance));
     list.push(entry);
     list.sort((a, b) => b.score - a.score);
     const trimmed = list.slice(0, MAX);

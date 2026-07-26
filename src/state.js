@@ -12,6 +12,12 @@ export const state = {
   // coordinate frame. trueX = position.x + worldOrigin.x. Rebase shifts it
   // by CHUNK_SIZE multiples so chunk keys never change.
   worldOrigin: { x: 0, z: 0 },
+  // Endless progress: the furthest TRUE distance from the run start reached
+  // this run (the DISTANCE HUD + death-screen stat), and the difficulty
+  // ramp level it implies (floor(furthest / RAMP_DISTANCE); drives enemy
+  // height/speed/population — see enemies.js + applySpeedMultiplier).
+  furthestDistance: 0,
+  endlessRampLevel: 0,
   // Scene, camera, and renderer are fundamental to Three.js
   scene: null,
   camera: null,

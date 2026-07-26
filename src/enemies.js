@@ -4,11 +4,14 @@ import {
     enemyRandomDriftFactor, AVOID_SPEED_FACTOR, BASE_ENEMY_SPAWN_DISTANCE, SPAWN_DISTANCE_SCALE_FACTOR,
     KILL_POINTS, MAX_ENEMIES, ENEMIES_PER_KILL, ENEMY_HEIGHT_FACTOR,
     SIZE_BOUNTY_PER_UNIT, COMBO_WINDOW, COMBO_MAX,
-    SPAWN_MATERIALIZE_TIME, SPAWN_MATERIALIZE_START_SCALE
+    SPAWN_MATERIALIZE_TIME, SPAWN_MATERIALIZE_START_SCALE,
+    COLLIDER_RADIUS_FACTOR, ENEMY_WEDGE_TIME, ENEMY_DETOUR_TIME,
+    ENDLESS_ENEMY_TARGET, ENDLESS_ENEMY_CAP, ENEMY_DESPAWN_RADIUS,
+    ENDLESS_SPAWN_MIN, ENDLESS_SPAWN_MAX, ENDLESS_SPAWN_INTERVAL, RAMP_HEIGHT_STEP
 } from './constants.js';
 import { state } from './state.js';
 import { createCharacter, disposeCharacter, shadeColor, CAP_LIGHTEN } from './characters.js';
-import { groundHeightAt } from './terrain.js';
+import { groundHeightAt, isWalkable } from './terrain.js';
 import { spawnAtPosition } from './collectibles.js';
 import { endGame, updateScoreDisplay, showComboChip } from './ui.js';
 import { wrapPosition, torusDelta, torusDistance } from './worldmath.js';
@@ -207,12 +210,15 @@ export function updateEnemies(dt) {
             combinedMovement.normalize().multiplyScalar(maxSpeed);
         }
 
-        enemyGroup.position.addScaledVector(combinedMovement, dt);
-
-        // Endless: walk the terrain — grounded BEFORE the collision test so
-        // the AABB height matches the player's grounded one on slopes.
         if (state.worldMode === 'endless') {
+            // Endless: water and boulders are impassable — resolve by
+            // axis-separated slide (with the anti-wedge detour), then walk
+            // the terrain — grounded BEFORE the collision test so the AABB
+            // height matches the player's grounded one on slopes.
+            moveEnemyWithCollision(enemyGroup, combinedMovement, dt);
             enemyGroup.position.y = groundHeightAt(enemyGroup.position.x, enemyGroup.position.z);
+        } else {
+            enemyGroup.position.addScaledVector(combinedMovement, dt);
         }
 
         // NO canonical wrap here (seamless torus rendering): after the player
@@ -283,44 +289,159 @@ export function killEnemy(enemyGroup, index) {
     spawnNewEnemies();
 }
 
+// The ramped enemy scale factor: the classic height rule, times the endless
+// distance ramp (+RAMP_HEIGHT_STEP per level — foes visibly tower the
+// further out you push). Classic reads the ramp as level 0, factor 1.
+function currentEnemyScaleFactor() {
+    let targetHeight = state.playerScale * 1.0 * ENEMY_HEIGHT_FACTOR;
+    if (state.worldMode === 'endless') {
+        targetHeight *= 1 + state.endlessRampLevel * RAMP_HEIGHT_STEP;
+    }
+    return targetHeight / enemyBaseHeight;
+}
+
 export function spawnNewEnemies() {
-    // Population cap (plan 011): only spawn into free slots under
-    // MAX_ENEMIES. Zero is valid — a full horde means the kill still paid
-    // points and food, which is the difficulty curve's relief valve.
-    const slots = Math.max(0, MAX_ENEMIES - state.enemies.length);
+    // Population cap (plan 011): only spawn into free slots under the cap
+    // (endless runs a higher one — its bubble target ramps up). Zero is
+    // valid — a full horde means the kill still paid points and food,
+    // which is the difficulty curve's relief valve.
+    const endless = state.worldMode === 'endless';
+    const cap = endless ? ENDLESS_ENEMY_CAP : MAX_ENEMIES;
+    const slots = Math.max(0, cap - state.enemies.length);
     const count = Math.min(ENEMIES_PER_KILL, slots);
     if (count === 0) return;
 
-    const currentPlayerActualHeight = state.playerScale * 1.0;
-    const newEnemyTargetHeight = currentPlayerActualHeight * ENEMY_HEIGHT_FACTOR;
-    const newEnemyScaleFactor = newEnemyTargetHeight / enemyBaseHeight;
+    const newEnemyScaleFactor = currentEnemyScaleFactor();
 
     // Calculate dynamic spawn distance based on playerScale, capped so spawns
-    // always land inside the world even for a huge player (plan 005).
+    // always land inside the world even for a huge player (plan 005). In
+    // endless the cap is the bubble's far edge instead — kill-spawned foes
+    // must land inside the streaming bubble, never beyond the despawn ring.
     const spawnDistance = Math.min(
         BASE_ENEMY_SPAWN_DISTANCE + (state.playerScale * SPAWN_DISTANCE_SCALE_FACTOR),
-        worldBoundary * 0.8
+        endless ? ENDLESS_SPAWN_MAX : worldBoundary * 0.8
     );
 
     // First enemy at a random angle; second on the opposite side (angle1 + PI)
     // with a random deviation of +/- 45 degrees (PI/4 radians).
     const angle1 = Math.random() * Math.PI * 2;
     for (let n = 0; n < count; n++) {
-        const angle = n === 0
+        let angle = n === 0
             ? angle1
             : angle1 + Math.PI + (Math.random() - 0.5) * (Math.PI / 2);
+        let spawnX = state.player.position.x + Math.cos(angle) * spawnDistance;
+        let spawnZ = state.player.position.z + Math.sin(angle) * spawnDistance;
+        if (endless) {
+            // Land placement: keep the angle intent for the first try, then
+            // re-roll around the circle. All-water rings are practically
+            // impossible at this world's lake coverage; if it happens the
+            // bubble spawner (updateEnemyStreaming) tops the count back up.
+            const radius = enemyBaseHeight * newEnemyScaleFactor * COLLIDER_RADIUS_FACTOR;
+            let placed = isWalkable(spawnX, spawnZ, radius);
+            for (let attempt = 0; !placed && attempt < 8; attempt++) {
+                angle = Math.random() * Math.PI * 2;
+                spawnX = state.player.position.x + Math.cos(angle) * spawnDistance;
+                spawnZ = state.player.position.z + Math.sin(angle) * spawnDistance;
+                placed = isWalkable(spawnX, spawnZ, radius);
+            }
+            if (!placed) continue;
+        }
         const enemy = createEnemy();
         enemy.scale.set(newEnemyScaleFactor, newEnemyScaleFactor, newEnemyScaleFactor);
         enemy.position.y = 0;
-        enemy.position.x = state.player.position.x + Math.cos(angle) * spawnDistance;
-        enemy.position.z = state.player.position.z + Math.sin(angle) * spawnDistance;
+        enemy.position.x = spawnX;
+        enemy.position.z = spawnZ;
         wrapPosition(enemy.position); // A capped distance can still cross the seam near an edge
-        if (state.worldMode === 'endless') {
+        if (endless) {
             // Grounded from frame one: the materialize telegraph must grow
             // out of the hillside, not hover at y=0 inside it.
             enemy.position.y = groundHeightAt(enemy.position.x, enemy.position.z);
         }
         beginMaterialize(enemy); // Scale-in telegraph: no pop-in, no instant threat
+    }
+}
+
+// --- Endless collision movement (axis-separated slide + anti-wedge) ---
+// Blocked axes are zeroed independently, so a chase line that hits water
+// naturally becomes a slide along the shore. A CHASING enemy that stays
+// fully blocked accumulates wedge time and earns a 45-degree detour heading
+// for a moment — it feels like the monster looking for a way around. A
+// FLEEING (killable) enemy never detours: cornering prey against a lake is
+// the hunt's intended reward.
+function moveEnemyWithCollision(enemyGroup, movement, dt) {
+    const ud = enemyGroup.userData;
+    if (ud.detourTime > 0) {
+        ud.detourTime -= dt;
+        const a = (Math.PI / 4) * ud.detourSign;
+        const cos = Math.cos(a), sin = Math.sin(a);
+        const mx0 = movement.x, mz0 = movement.z;
+        movement.x = mx0 * cos - mz0 * sin;
+        movement.z = mx0 * sin + mz0 * cos;
+    }
+    const mx = movement.x * dt;
+    const mz = movement.z * dt;
+    const radius = enemyBaseHeight * enemyGroup.scale.y * COLLIDER_RADIUS_FACTOR;
+    const p = enemyGroup.position;
+    let appliedX = 0, appliedZ = 0;
+    if (mx !== 0 && isWalkable(p.x + mx, p.z, radius)) { p.x += mx; appliedX = mx; }
+    if (mz !== 0 && isWalkable(p.x, p.z + mz, radius)) { p.z += mz; appliedZ = mz; }
+
+    const desired = Math.hypot(mx, mz);
+    const applied = Math.hypot(appliedX, appliedZ);
+    if (!ud.killable && desired > 1e-6 && applied < desired * 0.25) {
+        // Damp the shore jitter: a blocked enemy drops its random drift so
+        // it stands (or slides) cleanly instead of vibrating at the edge.
+        enemyGroup.randomVelocity.set(0, 0, 0);
+        ud.wedgeTime = (ud.wedgeTime || 0) + dt;
+        if (ud.wedgeTime >= ENEMY_WEDGE_TIME) {
+            ud.wedgeTime = 0;
+            ud.detourTime = ENEMY_DETOUR_TIME;
+            ud.detourSign = Math.random() < 0.5 ? -1 : 1;
+        }
+    } else if (ud.wedgeTime) {
+        ud.wedgeTime = 0;
+    }
+}
+
+// --- Endless monster bubble (streaming) ---
+// Maintains the ramped population target inside the bubble around the
+// player: despawn AND DISPOSE beyond ENEMY_DESPAWN_RADIUS (walking away
+// must release resources, not leak a trail of frozen hunters), top up one
+// throttled materialize at a time on land, ENDLESS_SPAWN_MIN..MAX out.
+let bubbleSpawnCooldown = 0;
+
+export function resetEnemyStreaming() {
+    bubbleSpawnCooldown = 0;
+}
+
+export function updateEnemyStreaming(dt) {
+    for (let i = state.enemies.length - 1; i >= 0; i--) {
+        const enemy = state.enemies[i];
+        if (torusDistance(enemy.position, state.player.position) > ENEMY_DESPAWN_RADIUS) {
+            state.scene.remove(enemy);
+            disposeCharacter(enemy); // Per-instance body/cap materials released
+            state.enemies.splice(i, 1);
+        }
+    }
+
+    const target = Math.min(ENDLESS_ENEMY_TARGET + state.endlessRampLevel, ENDLESS_ENEMY_CAP);
+    bubbleSpawnCooldown -= dt;
+    if (bubbleSpawnCooldown > 0 || state.enemies.length >= target) return;
+    bubbleSpawnCooldown = ENDLESS_SPAWN_INTERVAL;
+
+    const scaleFactor = currentEnemyScaleFactor();
+    const radius = enemyBaseHeight * scaleFactor * COLLIDER_RADIUS_FACTOR;
+    for (let attempt = 0; attempt < 10; attempt++) {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = ENDLESS_SPAWN_MIN + Math.random() * (ENDLESS_SPAWN_MAX - ENDLESS_SPAWN_MIN);
+        const spawnX = state.player.position.x + Math.cos(angle) * dist;
+        const spawnZ = state.player.position.z + Math.sin(angle) * dist;
+        if (!isWalkable(spawnX, spawnZ, radius)) continue;
+        const enemy = createEnemy();
+        enemy.scale.setScalar(scaleFactor);
+        enemy.position.set(spawnX, groundHeightAt(spawnX, spawnZ), spawnZ);
+        beginMaterialize(enemy); // Same telegraph as every other spawn
+        return;
     }
 }
 

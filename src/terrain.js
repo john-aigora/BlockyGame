@@ -3,10 +3,14 @@ import {
     CHUNK_SIZE, CHUNK_SEGMENTS, CHUNK_WINDOW_RADIUS, CHUNK_RELEASE_RADIUS,
     CHUNK_BUILDS_PER_FRAME, TERRAIN_AMPLITUDE, TERRAIN_WAVELENGTH, TERRAIN_SEED,
     WATER_LEVEL, CURVE_STRENGTH, SPAWN_MESA_RADIUS,
-    ROCKS_PER_CHUNK_MAX, ROCK_SPAWN_CLEARANCE
+    ROCKS_PER_CHUNK_MAX, ROCK_SPAWN_CLEARANCE,
+    WATER_WALK_MARGIN, ROCK_COLLIDER_FACTOR,
+    FOOD_PER_CHUNK_MIN, FOOD_PER_CHUNK_MAX, FOOD_WATER_CLEARANCE,
+    minSpawnDistanceFromPlayer
 } from './constants.js';
 import { state } from './state.js';
 import { makeGroundTexture, GROUND_TILE } from './world.js';
+import { spawnChunkFood, releaseFoodForChunk } from './collectibles.js';
 
 // --- Endless World Terrain Engine ---
 // Everything here is ENDLESS-MODE ONLY: classic mode never calls in (its
@@ -314,8 +318,9 @@ function buildChunk(key, cx, cz) {
     mesh.geometry.computeVertexNormals();
     mesh.position.set(centerTrueX - state.worldOrigin.x, 0, centerTrueZ - state.worldOrigin.z);
 
-    const chunk = { key, cx, cz, mesh, rocks: [] };
+    const chunk = { key, cx, cz, mesh, rocks: [], colliders: [] };
     scatterRocks(chunk, centerTrueX, centerTrueZ);
+    scatterFood(chunk, centerTrueX, centerTrueZ);
     active.set(key, chunk);
 }
 
@@ -327,6 +332,12 @@ function releaseChunk(chunk) {
         rockPool.push(rock);
     }
     chunk.rocks.length = 0;
+    chunk.colliders.length = 0;
+    // Food streams with its chunk: this run "forgets the past" here — a
+    // released chunk takes its collectibles with it (shared GPU resources,
+    // scene.remove is the whole cleanup). Rebuilding the chunk later regrows
+    // the same seeded spots — the world regenerates behind you, by design.
+    releaseFoodForChunk(chunk.key);
 }
 
 // --- Seeded voxel boulders (visual only this stage; collision is stage 2) ---
@@ -386,7 +397,93 @@ function scatterRocks(chunk, centerTrueX, centerTrueZ) {
         rock.rotation.y = yawRoll * Math.PI * 2;
         rock.position.set(tx - state.worldOrigin.x, h - size * 0.18, tz - state.worldOrigin.z);
         chunk.rocks.push(rock);
+        // Collision circle in TRUE coordinates (rebase-invariant); isWalkable
+        // resolves boulders as impassable via these.
+        chunk.colliders.push({ x: tx, z: tz, r: size * ROCK_COLLIDER_FACTOR });
     }
+}
+
+// --- Seeded per-chunk food (streams with the chunk) ---
+// Same deterministic pattern as the rocks, on an independent seed stream:
+// the same chunk always grows the same food spots — land only, clear of
+// boulders and the run-start point. Collected food regrows only after the
+// chunk is released AND rebuilt (the world regenerating behind you).
+function scatterFood(chunk, centerTrueX, centerTrueZ) {
+    let s = (Math.imul(chunk.cx, 2246822519) ^ Math.imul(chunk.cz, 3266489917) ^ (TERRAIN_SEED + 977)) >>> 0;
+    const next = () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
+    const count = FOOD_PER_CHUNK_MIN + Math.floor(next() * (FOOD_PER_CHUNK_MAX - FOOD_PER_CHUNK_MIN + 1));
+    for (let n = 0; n < count; n++) {
+        // Roll ALL randoms before any rejection — the stream stays aligned,
+        // so every rebuild reproduces the identical layout.
+        const tx = centerTrueX - HALF + 1.5 + next() * (CHUNK_SIZE - 3);
+        const tz = centerTrueZ - HALF + 1.5 + next() * (CHUNK_SIZE - 3);
+        if (!isFoodSpotTrue(tx, tz, chunk)) continue;
+        if (Math.hypot(tx, tz) < minSpawnDistanceFromPlayer) continue; // Run-start clearance (classic rule)
+        spawnChunkFood(tx - state.worldOrigin.x, tz - state.worldOrigin.z, chunk.key);
+    }
+}
+
+// --- Walkability / placement queries (endless collision core) ---
+// Water and boulders are IMPASSABLE. Both movement resolution (player and
+// enemies, axis-separated slide) and spawn placement route through here.
+// Water is pure math (terrainHeight), so it works even where no chunk is
+// built yet; rock circles live on ACTIVE chunks — during the 1-2 frames a
+// freshly entered chunk spends in the build queue its rocks don't block,
+// which no ordinary movement can reach (the window builds nearest-first,
+// well ahead of walking speed).
+export function chunkKeyForTrue(tx, tz) {
+    return Math.floor(tx / CHUNK_SIZE) + ',' + Math.floor(tz / CHUNK_SIZE);
+}
+
+function blockedByRock(tx, tz, radius) {
+    const cx = Math.floor(tx / CHUNK_SIZE);
+    const cz = Math.floor(tz / CHUNK_SIZE);
+    // 3x3 chunk neighborhood: max rock radius + max entity radius stays far
+    // below CHUNK_SIZE, so a circle can never span past adjacent chunks.
+    for (let dz = -1; dz <= 1; dz++) {
+        for (let dx = -1; dx <= 1; dx++) {
+            const chunk = active.get((cx + dx) + ',' + (cz + dz));
+            if (!chunk) continue;
+            for (const c of chunk.colliders) {
+                const ddx = tx - c.x;
+                const ddz = tz - c.z;
+                const rr = c.r + radius;
+                if (ddx * ddx + ddz * ddz < rr * rr) return true;
+            }
+        }
+    }
+    return false;
+}
+
+// Can an entity of the given collision radius stand at this LOCAL position?
+export function isWalkable(localX, localZ, radius) {
+    const tx = localX + state.worldOrigin.x;
+    const tz = localZ + state.worldOrigin.z;
+    if (terrainHeight(tx, tz) < WATER_LEVEL + WATER_WALK_MARGIN) return false;
+    return !blockedByRock(tx, tz, radius);
+}
+
+// Food placement check in TRUE coordinates: dry land with real clearance
+// above the waterline, not inside a boulder. `nearChunk` (optional) is a
+// fast path for the chunk's own scatter; dynamic spawns pass nothing and
+// use the neighborhood query.
+function isFoodSpotTrue(tx, tz, nearChunk) {
+    if (terrainHeight(tx, tz) < WATER_LEVEL + FOOD_WATER_CLEARANCE) return false;
+    if (nearChunk) {
+        for (const c of nearChunk.colliders) {
+            const ddx = tx - c.x;
+            const ddz = tz - c.z;
+            const rr = c.r + 0.6;
+            if (ddx * ddx + ddz * ddz < rr * rr) return false;
+        }
+        return true;
+    }
+    return !blockedByRock(tx, tz, 0.6);
+}
+
+// LOCAL-coordinate wrapper for the dynamic spawners (collectibles.js).
+export function isFoodSpot(localX, localZ) {
+    return isFoodSpotTrue(localX + state.worldOrigin.x, localZ + state.worldOrigin.z, null);
 }
 
 // --- Floating-origin rebase ---

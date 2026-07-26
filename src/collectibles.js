@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { worldSize, worldBoundary, collectibleSpawnRadius, minSpawnDistanceFromPlayer } from './constants.js';
 import { state } from './state.js';
 import { wrapPosition } from './worldmath.js';
-import { groundHeightAt } from './terrain.js';
+import { groundHeightAt, isFoodSpot, chunkKeyForTrue } from './terrain.js';
 
 // Shared GPU resources for ALL collectibles — allocated once for the app's
 // lifetime and never disposed (plan 007). Per-spawn allocation would leak
@@ -24,18 +24,63 @@ function buildCollectible() {
 }
 
 // Single spawner: the caller supplies the placement strategy via pickPosition.
+// ENDLESS: food never spawns in water or inside a boulder — the picker is
+// retried a few times against isFoodSpot, and a spawn with no dry option
+// (e.g. an enemy killed at the water's very edge) is simply skipped: food is
+// plentiful by design, a missing crumb is invisible.
+const FOOD_PLACE_ATTEMPTS = 12;
+
 export function spawnCollectible(pickPosition) {
+    let x, z;
+    if (state.worldMode === 'endless') {
+        let placed = false;
+        for (let attempt = 0; attempt < FOOD_PLACE_ATTEMPTS; attempt++) {
+            ({ x, z } = pickPosition());
+            if (isFoodSpot(x, z)) { placed = true; break; }
+        }
+        if (!placed) return;
+    } else {
+        ({ x, z } = pickPosition());
+    }
     const collectible = buildCollectible();
-    const { x, z } = pickPosition();
     collectible.position.set(x, 0.35, z); // Position on the ground
     wrapPosition(collectible.position); // Never place food outside the world — it would be uncollectable
     if (state.worldMode === 'endless') {
         // Grounded at spawn so food sits on the hills even on the paused
         // title screen (the per-frame bob in effects.js re-grounds it live).
         collectible.position.y = groundHeightAt(collectible.position.x, collectible.position.z) + 0.45;
+        // Streaming ownership: every endless collectible belongs to the
+        // chunk under it and despawns when that chunk releases (terrain.js).
+        collectible.userData.chunkKey = chunkKeyForTrue(
+            collectible.position.x + state.worldOrigin.x,
+            collectible.position.z + state.worldOrigin.z
+        );
     }
     state.collectibles.push(collectible);
     state.scene.add(collectible);
+}
+
+// --- Per-chunk seeded food (endless streaming; called by terrain.js) ---
+// The chunk scatter already validated the spot (land, rock clearance), so
+// this places directly — no picker, no retry, deterministic layout.
+export function spawnChunkFood(localX, localZ, chunkKey) {
+    const collectible = buildCollectible();
+    collectible.position.set(localX, groundHeightAt(localX, localZ) + 0.45, localZ);
+    collectible.userData.chunkKey = chunkKey;
+    state.collectibles.push(collectible);
+    state.scene.add(collectible);
+}
+
+// Removes every collectible owned by a released chunk (seeded AND dynamic —
+// dynamic spawns are tagged with their containing chunk at creation).
+// Shared resources: scene.remove is the entire cleanup.
+export function releaseFoodForChunk(chunkKey) {
+    for (let i = state.collectibles.length - 1; i >= 0; i--) {
+        if (state.collectibles[i].userData.chunkKey === chunkKey) {
+            state.scene.remove(state.collectibles[i]);
+            state.collectibles.splice(i, 1);
+        }
+    }
 }
 
 // Spawn a collectible in a random box around the player.

@@ -99,6 +99,28 @@ export const SPAWN_MESA_RADIUS = 48; // Terrain within this radius of the run st
 export const ROCKS_PER_CHUNK_MAX = 3; // Seeded voxel boulders per chunk (1..this), never in water
 export const ROCK_SPAWN_CLEARANCE = 8; // No rocks within this distance of the run-start point
 
+// --- ENDLESS WORLD (gameplay streaming — stage 2) ---
+// Collision, food/monster streaming, and the distance difficulty ramp.
+// Endless-mode only; classic never reads these.
+export const WATER_WALK_MARGIN = 0.05; // Terrain must clear WATER_LEVEL by this much to be walkable
+export const COLLIDER_RADIUS_FACTOR = 0.45; // Entity collision radius as a fraction of its body height
+export const ROCK_COLLIDER_FACTOR = 0.7; // Rock collision-circle radius as a fraction of the boulder's base size
+export const ENEMY_WEDGE_TIME = 2; // Seconds a chasing enemy may be fully blocked before detouring
+export const ENEMY_DETOUR_TIME = 1; // Seconds the 45-degree detour heading is held
+export const ENDLESS_ENEMY_TARGET = 7; // Enemies maintained in the bubble at ramp level 0 (+1 per level)
+export const ENDLESS_ENEMY_CAP = 12; // Hard endless population cap (ramp target never exceeds it)
+export const ENEMY_DESPAWN_RADIUS = 80; // Enemies beyond this distance are removed AND disposed
+export const ENDLESS_SPAWN_MIN = 35; // Bubble spawns land between MIN and MAX units from the player...
+export const ENDLESS_SPAWN_MAX = 50; // ...far enough to materialize unseen, near enough to matter
+export const ENDLESS_SPAWN_INTERVAL = 0.45; // Seconds between bubble top-up spawns (no spawn walls)
+export const RAMP_DISTANCE = 150; // Every this many units of furthest distance = +1 difficulty level
+export const RAMP_HEIGHT_STEP = 0.2; // Extra enemy target-height factor per ramp level (+20%)
+export const RAMP_SPEED_STEP = 0.05; // Extra enemy speed factor per ramp level (+5%)
+export const RAMP_SPEED_MAX = 1.6; // Speed ramp cap: 0.5x base * 1.6 = 0.8x — always outrunnable
+export const FOOD_PER_CHUNK_MIN = 3; // Seeded food per streamed chunk (land only)...
+export const FOOD_PER_CHUNK_MAX = 5; // ...plentiful on purpose: the pressure is routing, not scarcity
+export const FOOD_WATER_CLEARANCE = 0.2; // Food needs terrain this far above WATER_LEVEL (not at the brink)
+
 // --- Movement mode flag (plan 014 design spike) ---
 // `?move=continuous` opts into the Little Big Snake-style prototype
 // (src/movement-continuous.js). Any other value — including no param at all —
