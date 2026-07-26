@@ -3,7 +3,8 @@ import {
     worldSize, collectibleSpawnRadius,
     ZOOM_STEP, ZOOM_MIN, ZOOM_MAX, GROWTH_FRAME_FACTOR,
     INITIAL_CAMERA_Y_OFFSET, INITIAL_CAMERA_Z_OFFSET,
-    SHAKE_DURATION, SHAKE_AMPLITUDE
+    SHAKE_DURATION, SHAKE_AMPLITUDE,
+    ATTRACT_ORBIT_PERIOD, ATTRACT_EASE_TIME
 } from './constants.js';
 import { state } from './state.js';
 
@@ -198,6 +199,19 @@ function cameraTargets() {
     };
 }
 
+// --- Attract mode (spectacle pass) ---
+// While the start overlay is up the camera slowly orbits the player
+// (ATTRACT_ORBIT_PERIOD s/revolution, gentle height bob) instead of the
+// static behind-view — the title scene feels alive. The blend ramps
+// linearly over ATTRACT_EASE_TIME (smoothstepped on use), so startRun eases
+// back into gameplay framing rather than cutting. Camera orbit is
+// SCREEN-SPACE motion, so under prefers-reduced-motion (shakeEnabled=false,
+// resolved in createWorld) the orbit never runs and framing changes snap.
+// attractAngle 0 IS the behind-view, so the boot blend-in has no seam.
+let attractAngle = 0; // Orbit phase (radians)
+let attractBob = 0; // Height-bob clock (seconds)
+let attractBlend = 0; // 0 = gameplay framing, 1 = full orbit view
+
 // Updates camera position to follow the player, easing the offset toward the
 // zoom/growth target, and keeps the fog scaled to the camera distance.
 // dt is the frame delta in seconds; callers outside the frame loop (e.g.
@@ -208,11 +222,32 @@ export function updateCameraPosition(dt) {
     const smoothing = 1 - Math.exp(-6 * dt);
     state.camY += (target.y - state.camY) * smoothing;
     state.camZ += (target.z - state.camZ) * smoothing;
-    state.camera.position.set(
-        state.player.position.x,
-        state.player.position.y + state.camY,
-        state.player.position.z + state.camZ
-    );
+
+    const wantAttract = state.onStartScreen && shakeEnabled;
+    const blendStep = shakeEnabled ? dt / ATTRACT_EASE_TIME : 1; // Reduced motion: snap
+    attractBlend = Math.max(0, Math.min(1, attractBlend + (wantAttract ? blendStep : -blendStep)));
+    if (wantAttract) {
+        attractAngle += dt * (Math.PI * 2 / ATTRACT_ORBIT_PERIOD);
+        attractBob += dt;
+    } else if (attractBlend === 0 && attractAngle !== 0) {
+        attractAngle = 0; // The next overlay always starts from the behind-view
+        attractBob = 0;
+    }
+
+    const p = state.player.position;
+    let camX = p.x; // Gameplay framing: the behind-view
+    let camYpos = p.y + state.camY;
+    let camZpos = p.z + state.camZ;
+    if (attractBlend > 0) {
+        // Orbit at the CURRENT framing distance (camY/camZ keep easing above,
+        // so zoom and player growth still frame correctly mid-orbit).
+        const k = attractBlend * attractBlend * (3 - 2 * attractBlend); // Smoothstep
+        const bob = 1 + 0.06 * Math.sin(attractBob * 0.7); // Gentle height breath
+        camX += (p.x + Math.sin(attractAngle) * state.camZ - camX) * k;
+        camYpos += (p.y + state.camY * bob - camYpos) * k;
+        camZpos += (p.z + Math.cos(attractAngle) * state.camZ - camZpos) * k;
+    }
+    state.camera.position.set(camX, camYpos, camZpos);
     state.camera.lookAt(state.player.position);
     // Kill micro-shake: additive offset AFTER lookAt, so the camera jitters
     // in place without re-aiming — a punchy 0.12s thump, not a swing. The

@@ -41,6 +41,28 @@ test('the death screen renders once, structured, and stays stable', async ({ pag
   await expect(page.locator('#final-score')).toHaveText(score);
 });
 
+test('the death screen waits out the cinematic death beat (~0.9s)', async ({ page }) => {
+  await startGame(page);
+  // ONE in-page poll measures the gap from gameActive flipping false to
+  // #message-box turning visible — no protocol round-trips can shrink or
+  // stretch the measurement. 16ms sampling on both edges vs a 900ms delay
+  // leaves a comfortable margin over the 850ms floor.
+  const delayMs = await page.evaluate(() => new Promise((resolve) => {
+    const box = document.getElementById('message-box');
+    let deathAt = null;
+    const timer = setInterval(() => {
+      if (deathAt === null) {
+        if (!window.__game.state.gameActive) deathAt = performance.now();
+      } else if (getComputedStyle(box).display !== 'none') {
+        clearInterval(timer);
+        resolve(performance.now() - deathAt);
+      }
+    }, 16);
+  }));
+  expect(delayMs).toBeGreaterThan(850); // The beat really played...
+  expect(delayMs).toBeLessThan(5000); // ...and the screen still arrived promptly
+});
+
 test('restart still works after the post-death freeze', async ({ page }) => {
   await reachGameOver(page);
   await page.locator('#restart-button').click();

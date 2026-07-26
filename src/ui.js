@@ -1,9 +1,10 @@
-import { MAX_ENEMY_INDICATORS, DANGER_RADIUS, DANGER_VIGNETTE_MAX, HEARTBEAT_BPM } from './constants.js';
+import { MAX_ENEMY_INDICATORS, DANGER_RADIUS, DANGER_VIGNETTE_MAX, HEARTBEAT_BPM, DEATH_SCREEN_DELAY } from './constants.js';
 import { state } from './state.js';
 import { canKillSpecificEnemy } from './enemies.js';
 import { recordScore } from './hiscores.js';
 import { torusDistance } from './worldmath.js';
 import { unlockAudio, sfx, music, isMuted, setMuted } from './audio.js';
+import { onPlayerDeath, onNewBest } from './effects.js';
 
 // Cached DOM references, resolved once at init (plan 007) — the hot loop
 // must never call getElementById. game.js calls initUI() before any UI write.
@@ -22,7 +23,8 @@ export const el = {
     pauseButton: null,
     speedButton: null,
     hiscoreSlot: null,
-    muteButton: null
+    muteButton: null,
+    goFlourish: null
 };
 
 export function initUI() {
@@ -42,7 +44,21 @@ export function initUI() {
     el.speedButton = document.getElementById('speed-cycle-button');
     el.hiscoreSlot = document.getElementById('hiscore-slot');
     el.muteButton = document.getElementById('mute-button');
+    el.goFlourish = document.getElementById('go-flourish');
     initMuteToggle();
+}
+
+// --- GO! flourish (spectacle pass) ---
+// One big center-screen "GO!" flash when a run begins: a single 0.6s
+// scale+fade play (simple fade under reduced motion, via CSS) — one flash,
+// nowhere near the 3/sec photosensitivity limit. The element idles at
+// opacity 0, so no display bookkeeping is needed; the remove/reflow/add
+// dance restarts the animation on rapid restarts.
+export function showGoFlourish() {
+    if (!el.goFlourish) return;
+    el.goFlourish.classList.remove('go-play');
+    void el.goFlourish.offsetWidth; // Forces a reflow so the animation restarts
+    el.goFlourish.classList.add('go-play');
 }
 
 // --- Mute Toggle (plan 010) ---
@@ -83,12 +99,17 @@ export function hideStartOverlay() {
 
 // --- Death Screen Functions ---
 // Fills the structured death screen (title is static "GAME OVER" markup);
-// #hiscore-slot hosts the local top-5 leaderboard (plan 009).
+// #hiscore-slot hosts the local top-5 leaderboard (plan 009). A rank-0
+// NEW BEST earns confetti bursts behind the box + a victory fanfare.
 export function showDeathScreen(reason, hiscores = [], rank = -1) {
     el.deathReason.textContent = reason;
     el.finalScore.textContent = state.score;
     renderHiscores(hiscores, rank);
     el.messageBox.style.display = 'block'; // Make the death screen visible
+    if (rank === 0) {
+        onNewBest(); // Staggered palette bursts, visible around the box
+        sfx.fanfare();
+    }
 }
 
 // Renders the BEST RUNS list into #hiscore-slot. The new run's row (by
@@ -152,6 +173,16 @@ export function resetCombo() {
 // Ends the current run. This is the ONLY legal way to end a game — every
 // death cause (enemy collision, collect-clock expiry, future hazards) must
 // call it. Idempotent: safe against double triggers within one frame.
+//
+// Cinematic beat (spectacle pass): the player squashes flat and bursts
+// (effects.js — the world is already frozen by the gameActive gate, but
+// updateEffects keeps running), and the death screen arrives only after
+// DEATH_SCREEN_DELAY. setTimeout is legal here — UI sequencing, not
+// simulation. A restart during the delay is guarded twice: hideMessage()
+// (via setupNewGame) clears the timer, and the callback re-checks that the
+// game is still sitting on THIS dead run before showing anything.
+let deathScreenTimer = null;
+
 export function endGame(reason) {
     if (!state.gameActive) return;
     state.gameActive = false;
@@ -159,8 +190,13 @@ export function endGame(reason) {
     resetTension(); // Panic pulse and danger vignette must not haunt the death screen
     music.stop(); // 0.3s fadeout — the death jingle plays over it
     sfx.death();
+    onPlayerDeath(); // Squash flat + orange-red burst (pool), behind the beat
     const { list, rank } = recordScore(state.score);
-    showDeathScreen(reason, list, rank);
+    deathScreenTimer = setTimeout(() => {
+        deathScreenTimer = null;
+        if (state.gameActive || state.onStartScreen) return; // A restart beat us to it
+        showDeathScreen(reason, list, rank);
+    }, DEATH_SCREEN_DELAY * 1000);
 }
 
 // --- Tension systems (awesome pass) ---
@@ -241,8 +277,13 @@ export function resetTension() {
     if (el.dangerVignette) el.dangerVignette.style.opacity = '0';
 }
 
-// Hides the message box.
+// Hides the message box — and cancels a death screen still waiting out the
+// cinematic beat, so a fast restart can never have it pop over the overlay.
 export function hideMessage() {
+    if (deathScreenTimer !== null) {
+        clearTimeout(deathScreenTimer);
+        deathScreenTimer = null;
+    }
     el.messageBox.style.display = 'none'; // Make the message box invisible
 }
 

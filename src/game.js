@@ -16,7 +16,7 @@ import { spawnNearPlayer, spawnAnywhere } from './collectibles.js';
 import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoomIn, zoomOut, updateGroundScroll } from './world.js';
 import { initEffects, updateEffects, resetEffects, onCollect, onGrowthMilestone } from './effects.js';
 import { keys, keyboardVector, onKeyDown, onKeyUp, setupTouchControls } from './input.js';
-import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension } from './ui.js';
+import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension, showGoFlourish } from './ui.js';
 import { resetCollectClock, tickCollectClock, tickComboClock } from './timers.js';
 import { unlockAudio, sfx, music } from './audio.js';
 
@@ -195,6 +195,7 @@ export function startRun() {
     sfx.start();
     music.start();
     hideStartOverlay();
+    showGoFlourish(); // Big lime "GO!" — one 0.6s flash as the run begins
     if (state.isPaused) togglePause(); // Starts the clock and sets button text
 }
 

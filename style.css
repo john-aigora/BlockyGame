@@ -33,10 +33,26 @@ body {
     /* Dark gray border */
     border-radius: 10px;
     /* Rounded corners */
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-    /* Shadow for depth */
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5), 0 0 26px rgba(0, 137, 123, 0.35);
+    /* Depth shadow + a faint teal halo matching the world (spectacle pass) */
     position: relative;
     /* For positioning UI elements like the message box inside */
+}
+
+/* Always-on screen vignette (spectacle pass): a whisper of corner darkening
+   that focuses the eye center-frame, arcade-cabinet style. Deliberately far
+   too faint to cost readability; the red danger vignette (z-index 40) and
+   all UI sit above it. */
+#game-container::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    pointer-events: none;
+    border-radius: 5px;
+    background: radial-gradient(ellipse at center,
+            rgba(0, 0, 0, 0) 58%,
+            rgba(0, 0, 0, 0.16) 100%);
 }
 
 /* Touch hardening (plan 012): `manipulation` kills double-tap zoom on the
@@ -504,6 +520,66 @@ canvas {
     animation: combo-pop 0.25s ease-out;
 }
 
+/* GO! flourish (spectacle pass): one big lime "GO!" flash center-screen as
+   a run begins. A single 0.6s scale+fade play retriggered from JS — one
+   flash per start, nowhere near the 3/sec photosensitivity limit. Idles at
+   opacity 0 so it needs no display bookkeeping. */
+#go-flourish {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 60;
+    /* Above the canvas and vignettes, below #top-controls (100) */
+    pointer-events: none;
+    color: #76FF03;
+    /* Food lime — the "go get it" color */
+    font-size: 4em;
+    text-shadow: 4px 4px 0 rgba(0, 0, 0, 0.8), 0 0 18px rgba(118, 255, 3, 0.6);
+    opacity: 0;
+}
+
+@keyframes go-flourish {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.3);
+    }
+
+    30% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1.15);
+    }
+
+    60% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(1.5);
+    }
+}
+
+#go-flourish.go-play {
+    animation: go-flourish 0.6s ease-out;
+}
+
+/* Reduced motion: the GO! beat survives as a simple fade (no scale) */
+@keyframes go-fade {
+    0% {
+        opacity: 0;
+    }
+
+    30% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0;
+    }
+}
+
 /* Off-Screen Enemy Indicator Styling */
 #offscreen-indicator-container {
     position: fixed;
@@ -550,6 +626,11 @@ canvas {
     .game-button:hover,
     .game-button:active {
         transform: none;
+    }
+
+    /* GO! still lands — as a plain fade, no scale motion */
+    #go-flourish.go-play {
+        animation: go-fade 0.6s ease-out;
     }
 
     /* Panic still reads — as a static urgency color, not a pulse. The

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {
     worldSize,
     DUST_PARTICLES_PER_STEP, DUST_LIFE, DUST_SPEED, DUST_COLOR_FROM, DUST_COLOR_TO,
-    POPUP_RISE, POPUP_LIFE, GROWTH_FRAME_FACTOR, PANIC_TIME
+    POPUP_RISE, POPUP_LIFE, GROWTH_FRAME_FACTOR, PANIC_TIME, DEATH_SQUASH_TIME
 } from './constants.js';
 import { state } from './state.js';
 import { torusDelta, torusDistance } from './worldmath.js';
@@ -291,6 +291,106 @@ export function onEnemyKilled(position, bodyColorHex, enemyScale) {
     });
 }
 
+// --- Cinematic death (spectacle pass) ---
+// On endGame the player squashes flat over DEATH_SQUASH_TIME, then bursts
+// into orange-red pooled particles and vanishes; the death screen arrives
+// after the beat (ui.js owns that delay). The squash is screen-space motion
+// on the object you stare at — skipped under prefers-reduced-motion, where
+// the block simply bursts. setupNewGame → resetEffects restores the mesh.
+const deathOrigin = { x: 0, y: 0, z: 0 }; // Scratch — never allocated per death
+let deathSquashTime = 0; // Seconds remaining in the squash; 0 = inactive
+
+export function onPlayerDeath() {
+    if (!state.player) return;
+    // The death sequence owns the player's scale from here — a collect
+    // squash or milestone pulse mid-flight must not fight it.
+    squashTime = 0;
+    pulseTime = 0;
+    if (reducedMotion) {
+        spawnDeathBurst();
+        state.player.visible = false;
+        return;
+    }
+    deathSquashTime = DEATH_SQUASH_TIME;
+}
+
+function spawnDeathBurst() {
+    deathOrigin.x = state.player.position.x;
+    deathOrigin.y = Math.max(0.3, state.playerScale * 0.5); // Body center
+    deathOrigin.z = state.player.position.z;
+    spawnBurst(deathOrigin, {
+        count: 64,
+        colorFrom: 0xFF8A50, // Hot orange flash...
+        colorTo: 0xFF4500, // ...settling into the player's own orange-red
+        speed: 6.5 + state.playerScale * 0.5,
+        upBias: 4,
+        life: 0.8,
+        gravity: 7
+    });
+}
+
+function updateDeathFx(dt) {
+    if (deathSquashTime <= 0 || !state.player || !state.player.visible) return;
+    deathSquashTime -= dt;
+    const base = state.playerScale;
+    if (deathSquashTime <= 0) {
+        // Fully flat — the block bursts into sparks and is gone.
+        spawnDeathBurst();
+        state.player.visible = false;
+        return;
+    }
+    const t = 1 - deathSquashTime / DEATH_SQUASH_TIME;
+    const eased = t * t; // Accelerates into the floor
+    state.player.scale.set(
+        base * (1 + 0.7 * eased),
+        base * Math.max(0.04, 1 - 0.96 * eased), // Pancaked, never inverted
+        base * (1 + 0.7 * eased)
+    );
+}
+
+// --- New-best celebration (spectacle pass) ---
+// When the death screen announces a rank-0 NEW BEST, three staggered
+// multicolor bursts (palette colors only) pop around the player's spot —
+// visible behind the translucent death box. Driven by the effects clock:
+// updateEffects keeps running after death, so the stagger needs no timers.
+const CELEBRATION_COLORS = [0x76FF03, 0xFFEB3B, 0x03A9F4]; // Food lime, kill yellow, enemy blue
+const CELEBRATION_STAGGER = 0.28; // Seconds between bursts
+const celebrationOrigin = { x: 0, y: 0, z: 0 }; // Scratch
+let celebrationSteps = 0; // Bursts remaining
+let celebrationClock = 0; // Seconds until the next one
+
+export function onNewBest() {
+    celebrationSteps = CELEBRATION_COLORS.length;
+    celebrationClock = 0; // First burst on the next effects frame
+}
+
+function updateCelebration(dt) {
+    if (celebrationSteps <= 0 || !state.player) return;
+    celebrationClock -= dt;
+    if (celebrationClock > 0) return;
+    celebrationClock = CELEBRATION_STAGGER;
+    celebrationSteps--;
+    const color = CELEBRATION_COLORS[celebrationSteps];
+    // The bursts alternate LEFT and RIGHT of the player, pushed far enough
+    // out to fountain past the edges of the centered death box (which is
+    // nearly opaque). Offsets scale with the camera's growth pull-back so
+    // the confetti clears the box at every player size.
+    const frame = 1 + (state.playerScale - 1) * GROWTH_FRAME_FACTOR;
+    const side = celebrationSteps % 2 === 0 ? 1 : -1;
+    celebrationOrigin.x = state.player.position.x + side * (8 + Math.random() * 4) * frame;
+    celebrationOrigin.y = (1 + Math.random() * 2) * frame;
+    celebrationOrigin.z = state.player.position.z + (Math.random() - 0.5) * 5 * frame;
+    spawnBurst(celebrationOrigin, {
+        count: 36,
+        colorFrom: 0xFFFFFF, // White flash...
+        colorTo: color, // ...raining down in a palette color
+        speed: 5,
+        upBias: 6,
+        life: 1.0,
+        gravity: 6
+    });
+}
+
 // Growth milestone (score-juice pass): a lime floor shockwave ring sized to
 // the player, plus a brief celebratory scale pulse. The pulse is screen-
 // space-adjacent motion on the object you stare at — skipped under
@@ -316,6 +416,11 @@ export function resetEffects() {
     activeParticles = 0;
     squashTime = 0;
     pulseTime = 0;
+    // Cinematic-death cleanup: un-burst the player for the new run
+    // (setupNewGame restores the scale right before calling this).
+    deathSquashTime = 0;
+    celebrationSteps = 0;
+    if (state.player) state.player.visible = true;
     if (foodArrow) foodArrow.visible = false;
     for (const p of popups) {
         p.life = 0;
@@ -330,6 +435,8 @@ export function updateEffects(dt) {
     clock += dt;
     updateParticles(dt);
     updatePopups(dt);
+    updateDeathFx(dt); // Death squash owns the scale once it starts (squash/pulse zeroed)
+    updateCelebration(dt);
     updatePlayerScaleFx(dt);
     updateFoodGlow();
     updateFoodArrow();

@@ -23,6 +23,12 @@ export const HEARTBEAT_BPM = 72; // Danger heartbeat tempo (one low lub-dub per 
 export const SPAWN_MATERIALIZE_TIME = 0.5; // Seconds a newly spawned enemy takes to scale in (no move/collide while forming)
 export const SPAWN_MATERIALIZE_START_SCALE = 0.05; // Fraction of full size a materializing enemy starts at
 
+// Spectacle systems (awesome pass): title, death, and finish.
+export const DEATH_SQUASH_TIME = 0.32; // Seconds the player takes to squash flat before bursting (skipped under reduced motion)
+export const DEATH_SCREEN_DELAY = 0.9; // Seconds between the death and the death screen — the cinematic beat
+export const ATTRACT_ORBIT_PERIOD = 12; // Seconds per full attract-mode camera revolution on the start overlay
+export const ATTRACT_EASE_TIME = 0.6; // Seconds the camera takes to swing between attract orbit and gameplay framing
+
 // Speed Multiplier Variables
 export const speedMultipliers = [1.0, 1.5, 2.0, 3.0, 5.0, 0.5]; // ADDED 5.0x, re-ordered
 
