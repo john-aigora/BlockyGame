@@ -139,6 +139,7 @@ This file tracks potential future enhancements and features for the game.
 - [x] **Shaking/Immobile Bug:** Investigate and fix issue where characters might shake or player becomes unable to move.
 - [x] **Teleporting Enemy Glitch:** Fix instances where enemies might appear to teleport unfairly (distinct from world wrapping).
 - [ ] **General Glitch Prioritization:** Ongoing effort to identify and fix gameplay bugs.
+- [ ] (Minor, from 2026 final review) If the collect clock expires on the exact frame the player touches a killable enemy, the HUD can show +25 more than the recorded high score for that run. One-frame coincidence; fix = skip the enemy update once endGame fires within the same frame.
 
 ## Code & Technical Refinements
 - [ ] **Performance Optimization:**

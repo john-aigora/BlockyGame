@@ -304,11 +304,15 @@ export function togglePause() {
     if (state.isPaused) {
         el.pauseButton.textContent = 'Resume';
         el.pauseButton.classList.add('paused');
+        // Music follows the pause state — also prevents throttled background
+        // tabs (auto-pause) from playing a stuttering scheduler.
+        music.stop();
     } else {
         el.pauseButton.textContent = 'Pause';
         el.pauseButton.classList.remove('paused');
         // Don't integrate the paused gap into the next frame's dt
         lastFrameTime = null;
+        if (state.gameActive && !state.onStartScreen) music.start();
     }
     // The collect countdown runs on the game clock, so pausing inherently
     // freezes it and resuming does NOT reset it.

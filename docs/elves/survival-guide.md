@@ -81,8 +81,8 @@ also verified DENIED for this machine's account (`RBrownHOPE` has read-only acce
 ## Stop Gate
 
 - **Planned batches remaining:** 0
-- **Stop allowed right now:** no — run launched via /goal; Stop hook enforces completion of all 11 batches.
-- **Why:** batches remain.
+- **Stop allowed right now:** yes — all 11 batches complete; Final Readiness Review GREEN.
+- **Why:** run complete. Reactivation handoff: branch feat/best-version holds everything; to resume work later, read plans/README.md (all DONE) and todo.md; session docs live in branch history (removed from tip by cleanup commit).
 - **Next required action:** Final Completion: readiness review → Elves Report → artifact cleanup → closeout.
 
 ### RESOLVED — Node.js toolchain (was a launch blocker)
