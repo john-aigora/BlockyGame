@@ -8,6 +8,7 @@ import {
 } from './constants.js';
 import { state } from './state.js';
 import { createCharacter, disposeCharacter, shadeColor, CAP_LIGHTEN } from './characters.js';
+import { groundHeightAt } from './terrain.js';
 import { spawnAtPosition } from './collectibles.js';
 import { endGame, updateScoreDisplay, showComboChip } from './ui.js';
 import { wrapPosition, torusDelta, torusDistance } from './worldmath.js';
@@ -124,7 +125,9 @@ export function updateEnemies(dt) {
                 // (post-re-image, so it is visible even across the seam).
                 ud.materializeBurstPending = false;
                 materializeOrigin.x = enemyGroup.position.x;
-                materializeOrigin.y = (ud.bodyBaseY ?? 0.9) * ud.materializeTarget;
+                // Endless: the burst rides the terrain-grounded enemy (y = 0 classic)
+                materializeOrigin.y = (ud.bodyBaseY ?? 0.9) * ud.materializeTarget +
+                    (state.worldMode === 'endless' ? enemyGroup.position.y : 0);
                 materializeOrigin.z = enemyGroup.position.z;
                 spawnBurst(materializeOrigin, {
                     count: 18,
@@ -206,6 +209,12 @@ export function updateEnemies(dt) {
 
         enemyGroup.position.addScaledVector(combinedMovement, dt);
 
+        // Endless: walk the terrain — grounded BEFORE the collision test so
+        // the AABB height matches the player's grounded one on slopes.
+        if (state.worldMode === 'endless') {
+            enemyGroup.position.y = groundHeightAt(enemyGroup.position.x, enemyGroup.position.z);
+        }
+
         // NO canonical wrap here (seamless torus rendering): after the player
         // moves, game.js re-images every entity to its player-nearest torus
         // image, so an enemy may legitimately sit outside ±worldBoundary.
@@ -247,7 +256,9 @@ export function killEnemy(enemyGroup, index) {
     // visual sentence "enemy becomes food". Origin at the body's center.
     const bodyMesh = enemyGroup.getObjectByName('body');
     const burstColor = bodyMesh ? bodyMesh.material.color.getHex() : 0xFFEB3B;
-    enemyDeathPosition.y = (enemyGroup.userData.bodyBaseY ?? 0.9) * enemyGroup.scale.y;
+    // Body center — plus the terrain under the enemy in endless (y = 0 classic)
+    enemyDeathPosition.y = (enemyGroup.userData.bodyBaseY ?? 0.9) * enemyGroup.scale.y +
+        (state.worldMode === 'endless' ? enemyGroup.position.y : 0);
     onEnemyKilled(enemyDeathPosition, burstColor, enemyGroup.scale.y);
     spawnScorePopup(enemyDeathPosition, payout); // "+N" rises from the body center
     triggerKillShake(); // 0.12s camera thump (no-op under reduced motion)
@@ -304,6 +315,11 @@ export function spawnNewEnemies() {
         enemy.position.x = state.player.position.x + Math.cos(angle) * spawnDistance;
         enemy.position.z = state.player.position.z + Math.sin(angle) * spawnDistance;
         wrapPosition(enemy.position); // A capped distance can still cross the seam near an edge
+        if (state.worldMode === 'endless') {
+            // Grounded from frame one: the materialize telegraph must grow
+            // out of the hillside, not hover at y=0 inside it.
+            enemy.position.y = groundHeightAt(enemy.position.x, enemy.position.z);
+        }
         beginMaterialize(enemy); // Scale-in telegraph: no pop-in, no instant threat
     }
 }

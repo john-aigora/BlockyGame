@@ -5,7 +5,8 @@ import {
     SPEED_GROWTH_FACTOR, SPEED_GROWTH_CAP,
     BASE_PLAYER_SPEED, MOBILE_SPEED_MULTIPLIER,
     worldSize, initialFoodDensityArea,
-    enemyStartOffset, MOVEMENT_MODE
+    enemyStartOffset, MOVEMENT_MODE,
+    CHUNK_SIZE, REBASE_DISTANCE
 } from './constants.js';
 import { initContinuousMovement, resetContinuousMovement, updateContinuousMovement } from './movement-continuous.js';
 import { wrapPosition, torusDeltaComponent } from './worldmath.js';
@@ -14,10 +15,12 @@ import { createPlayer, disposeCharacter } from './characters.js';
 import { createEnemy, updateEnemies, playerBox, scratchBox, beginMaterialize } from './enemies.js';
 import { spawnNearPlayer, spawnAnywhere } from './collectibles.js';
 import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoomIn, zoomOut, updateGroundScroll } from './world.js';
-import { initEffects, updateEffects, resetEffects, onCollect, onGrowthMilestone } from './effects.js';
+import { initTerrain, setTerrainActive, resetTerrainForNewRun, updateTerrain, shiftTerrain, groundHeightAt } from './terrain.js';
+import { initEffects, updateEffects, resetEffects, onCollect, onGrowthMilestone, shiftActiveParticles } from './effects.js';
 import { keys, keyboardVector, onKeyDown, onKeyUp, setupTouchControls } from './input.js';
-import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension, resetIndicators, showGoFlourish } from './ui.js';
+import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension, resetIndicators, showGoFlourish, initModePicker, updateModePicker } from './ui.js';
 import { resetCollectClock, tickCollectClock, tickComboClock } from './timers.js';
+import { loadWorldMode, saveWorldMode } from './hiscores.js';
 import { unlockAudio, sfx, music } from './audio.js';
 
 // --- Simulation Clock ---
@@ -38,6 +41,12 @@ function init() {
 
     initUI(); // Resolve all UI DOM refs once — everything after this uses el.*
 
+    // World mode is chosen on the start overlay and persisted; it must be
+    // resolved BEFORE any world math or spawning runs (worldmath.js
+    // dispatches on it). Default (and any unrecognized value) is classic.
+    state.worldMode = loadWorldMode();
+    initModePicker(setWorldMode);
+
     // Mobile detection and speed adjustment (plan 012): capability +
     // form-factor, not UA sniffing. A touch-laptop with a mouse reports
     // `pointer: fine` and correctly gets desktop speed; the boost is only
@@ -50,6 +59,7 @@ function init() {
     applySpeedMultiplier(); // Apply initial speed multiplier
 
     const directionalLight = createWorld();
+    applyWorldEnvironment(); // Terrain root / classic ground per the saved mode
     initEffects(); // Particle pool + food glow (plan 015) — needs the scene
 
     // 6. Player and Enemy Objects
@@ -152,6 +162,20 @@ function setupNewGame() {
         state.enemies[0].position.x = state.player.position.x + enemyStartOffset;
         state.enemies[0].position.z = state.player.position.z + enemyStartOffset;
     }
+
+    // Endless world: fresh floating origin, fresh terrain window around the
+    // spawn, and the player/boot enemy grounded on it (the spawn mesa in
+    // terrain.js guarantees dry land at true (0,0)).
+    state.worldOrigin.x = 0;
+    state.worldOrigin.z = 0;
+    if (state.worldMode === 'endless') {
+        resetTerrainForNewRun();
+        state.player.position.y = groundHeightAt(0, 0);
+        if (state.enemies.length > 0) {
+            const firstFoe = state.enemies[0];
+            firstFoe.position.y = groundHeightAt(firstFoe.position.x, firstFoe.position.z);
+        }
+    }
     // Spawn telegraph (tension pass): the boot enemy materializes too — it
     // starts scaling in on the first unpaused frame, right as the run begins.
     beginMaterialize(firstEnemy);
@@ -246,6 +270,13 @@ function update(dt) {
         }
         }
 
+        if (state.worldMode === 'endless') {
+            // Endless: no wrap, no re-imaging — the world is truly flat and
+            // infinite. Ground the player on the terrain under him and keep
+            // the floating origin within float-precision range.
+            state.player.position.y = groundHeightAt(state.player.position.x, state.player.position.z);
+            rebaseWorldIfNeeded();
+        } else {
         // Player Wrapping Logic (preserves overshoot across the seam)
         wrapPosition(state.player.position);
 
@@ -265,6 +296,7 @@ function update(dt) {
             // The plane moved with the player — slide the grid texture the
             // other way so the pattern stays fixed in the world (plan 015).
             updateGroundScroll();
+        }
         }
 
         // Update directional light to follow player
@@ -290,7 +322,9 @@ function update(dt) {
                 const prevScale = state.playerScale;
                 state.playerScale += growthFactor;
                 state.player.scale.set(state.playerScale, state.playerScale, state.playerScale);
-                state.player.position.y = 0; // MODIFIED: Group origin at feet, scaling handles height
+                // Group origin at feet, scaling handles height. Endless keeps
+                // the terrain-grounded y set earlier this frame.
+                if (state.worldMode !== 'endless') state.player.position.y = 0;
                 applySpeedMultiplier(); // playerScale changed → refresh the size speed bonus
                 // Growth milestone (score-juice pass): crossing a whole
                 // MILESTONE_STEP of scale earns a shockwave ring, a rising
@@ -307,6 +341,68 @@ function update(dt) {
             }
         }
     }
+}
+
+// --- Floating-origin rebase (endless) ---
+// Once |player x/z| passes REBASE_DISTANCE, shift the WHOLE local frame by
+// the nearest CHUNK_SIZE multiple of the player's position in one frame:
+// player, enemies, food, live particles/popups, terrain chunks, and water
+// all move together, and worldOrigin absorbs the offset. Chunk keys derive
+// from TRUE coordinates, so no chunk rebuilds — nothing visibly moves. The
+// camera recomputes absolutely from the player every frame, so it needs no
+// shift. CHUNK_SIZE granularity keeps chunk-local math exact.
+function rebaseWorldIfNeeded() {
+    const p = state.player.position;
+    if (Math.abs(p.x) < REBASE_DISTANCE && Math.abs(p.z) < REBASE_DISTANCE) return;
+    const dx = Math.round(p.x / CHUNK_SIZE) * CHUNK_SIZE;
+    const dz = Math.round(p.z / CHUNK_SIZE) * CHUNK_SIZE;
+    if (dx === 0 && dz === 0) return;
+    state.worldOrigin.x += dx;
+    state.worldOrigin.z += dz;
+    shiftEntityForRebase(state.player, dx, dz);
+    for (const enemy of state.enemies) shiftEntityForRebase(enemy, dx, dz);
+    for (const collectible of state.collectibles) {
+        collectible.position.x -= dx;
+        collectible.position.z -= dz;
+    }
+    shiftActiveParticles(-dx, -dz);
+    shiftTerrain(dx, dz);
+}
+
+// Shifts a character group AND its walk-cycle anchors — without the anchor
+// shift the stride phase would read the rebase as a 2000-unit sprint.
+function shiftEntityForRebase(group, dx, dz) {
+    group.position.x -= dx;
+    group.position.z -= dz;
+    const w = group.userData.walk;
+    if (w) {
+        w.lastX -= dx;
+        w.lastZ -= dz;
+    }
+}
+
+// --- World mode switch (start-overlay picker) ---
+// Persists the choice, swaps the environment (classic plane vs terrain
+// root), and rebuilds the whole session layout under the new rules via
+// setupNewGame — the picker only exists on the overlay, where a reset is
+// invisible.
+export function setWorldMode(mode) {
+    if (mode === state.worldMode || !state.onStartScreen) return;
+    state.worldMode = mode;
+    saveWorldMode(mode);
+    applyWorldEnvironment();
+    updateModePicker();
+    setupNewGame();
+}
+
+// Shows exactly one world per mode: the classic flat plane, or the endless
+// terrain root (lazily initialized — a classic-only player never pays for
+// terrain resources).
+function applyWorldEnvironment() {
+    const endless = state.worldMode === 'endless';
+    if (endless) initTerrain();
+    setTerrainActive(endless);
+    if (state.ground) state.ground.visible = !endless;
 }
 
 // Moves every enemy and collectible to its player-relative nearest torus
@@ -339,6 +435,9 @@ function animate(now) {
         // gate: a death explosion must finish behind the death screen.
         updateEffects(dt);
     }
+    // Endless terrain streams every frame — including on the paused title
+    // screen, where the attract camera is watching the world build in.
+    if (state.worldMode === 'endless') updateTerrain(dt);
     // Camera follow and rendering run every frame regardless of pause or
     // game over — the frozen scene must stay visible behind the message box.
     updateCameraPosition(dt);

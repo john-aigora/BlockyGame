@@ -6,6 +6,7 @@ import {
 } from './constants.js';
 import { state } from './state.js';
 import { torusDelta, torusDistance } from './worldmath.js';
+import { groundHeightAt } from './terrain.js';
 import { COLLECTIBLE_MATERIAL } from './collectibles.js';
 import { HERO_GLOW_MATERIAL, ENEMY_PUPIL_HUNT_MATERIAL, ENEMY_PUPIL_SCARED_MATERIAL } from './characters.js';
 
@@ -30,6 +31,10 @@ const colorTo = new Float32Array(MAX_PARTICLES * 3);
 const life = new Float32Array(MAX_PARTICLES); // seconds remaining; <=0 = dead
 const maxLife = new Float32Array(MAX_PARTICLES);
 const gravity = new Float32Array(MAX_PARTICLES);
+// Per-particle ground plane: classic is always 0.05 (the original constant);
+// endless samples the terrain under the burst so sparks bounce on hills
+// instead of raining through them into the lakebed.
+const floors = new Float32Array(MAX_PARTICLES).fill(0.05);
 let cursor = 0; // Ring allocator — oldest particles are overwritten first
 let activeParticles = 0;
 
@@ -150,6 +155,11 @@ export function spawnBurst(origin, opts = {}) {
     const grav = opts.gravity ?? 9;
     scratchColorA.setHex(opts.colorFrom ?? 0x76FF03);
     scratchColorB.setHex(opts.colorTo ?? opts.colorFrom ?? 0x76FF03);
+    // One terrain sample per burst (not per particle) — the slope within a
+    // burst radius is negligible at this world's gentle amplitudes.
+    const floor = state.worldMode === 'endless'
+        ? groundHeightAt(origin.x, origin.z) + 0.05
+        : 0.05;
 
     for (let n = 0; n < count; n++) {
         const i = cursor;
@@ -176,6 +186,7 @@ export function spawnBurst(origin, opts = {}) {
         life[i] = lifeSpan * (0.7 + Math.random() * 0.3);
         maxLife[i] = life[i];
         gravity[i] = grav;
+        floors[i] = floor;
     }
 }
 
@@ -197,8 +208,11 @@ export function spawnRing(origin, opts = {}) {
         const angle = (n / count) * Math.PI * 2;
         const cos = Math.cos(angle);
         const sin = Math.sin(angle);
+        // Hugs the ground — a floor shockwave. origin.y is 0 in classic
+        // (the player's y never leaves 0 there); endless passes the
+        // terrain-grounded player position, so the ring rides the hill.
         positions[i3] = origin.x + cos * radius;
-        positions[i3 + 1] = 0.15; // Hugs the ground — a floor shockwave
+        positions[i3 + 1] = origin.y + 0.15;
         positions[i3 + 2] = origin.z + sin * radius;
         velocities[i3] = cos * speed;
         velocities[i3 + 1] = 0.3; // The faintest lift so the ring stays visible
@@ -215,6 +229,7 @@ export function spawnRing(origin, opts = {}) {
         life[i] = lifeSpan;
         maxLife[i] = lifeSpan;
         gravity[i] = 0; // Rings expand flat; they don't rain down
+        floors[i] = origin.y + 0.05; // Same plane the ring rides (origin.y = 0 in classic)
     }
 }
 
@@ -315,8 +330,11 @@ export function onPlayerDeath() {
 }
 
 function spawnDeathBurst() {
+    // Body center; endless lifts it by the terrain under the player
+    // (player y is always 0 in classic).
+    const baseY = state.worldMode === 'endless' ? state.player.position.y : 0;
     deathOrigin.x = state.player.position.x;
-    deathOrigin.y = Math.max(0.3, state.playerScale * 0.5); // Body center
+    deathOrigin.y = baseY + Math.max(0.3, state.playerScale * 0.5);
     deathOrigin.z = state.player.position.z;
     spawnBurst(deathOrigin, {
         count: 64,
@@ -377,8 +395,9 @@ function updateCelebration(dt) {
     // the confetti clears the box at every player size.
     const frame = 1 + (state.playerScale - 1) * GROWTH_FRAME_FACTOR;
     const side = celebrationSteps % 2 === 0 ? 1 : -1;
+    const baseY = state.worldMode === 'endless' ? state.player.position.y : 0;
     celebrationOrigin.x = state.player.position.x + side * (8 + Math.random() * 4) * frame;
-    celebrationOrigin.y = (1 + Math.random() * 2) * frame;
+    celebrationOrigin.y = baseY + (1 + Math.random() * 2) * frame;
     celebrationOrigin.z = state.player.position.z + (Math.random() - 0.5) * 5 * frame;
     spawnBurst(celebrationOrigin, {
         count: 36,
@@ -469,8 +488,8 @@ function updateParticles(dt) {
             positions[i3] += velocities[i3] * dt;
             positions[i3 + 1] += velocities[i3 + 1] * dt;
             positions[i3 + 2] += velocities[i3 + 2] * dt;
-            if (positions[i3 + 1] < 0.05) { // Sparks bounce softly off the ground
-                positions[i3 + 1] = 0.05;
+            if (positions[i3 + 1] < floors[i]) { // Sparks bounce softly off the ground
+                positions[i3 + 1] = floors[i];
                 velocities[i3 + 1] *= -0.35;
             }
             // Color timeline: from → to over the first 55% of life, then
@@ -556,10 +575,11 @@ function updateFoodArrow() {
     }
     torusDelta(state.player.position, nearest.position, arrowDelta);
     const frame = 1 + (state.playerScale - 1) * GROWTH_FRAME_FACTOR;
+    const baseY = state.worldMode === 'endless' ? state.player.position.y : 0; // Above the head even on a hill
     foodArrow.visible = true;
     foodArrow.position.set(
         state.player.position.x,
-        state.playerScale * 1.5 + (0.4 + 0.12 * Math.sin(clock * 3)) * frame,
+        baseY + state.playerScale * 1.5 + (0.4 + 0.12 * Math.sin(clock * 3)) * frame,
         state.player.position.z
     );
     foodArrow.rotation.y = Math.atan2(arrowDelta.x, arrowDelta.z); // +Z tip → shortest path
@@ -568,11 +588,16 @@ function updateFoodArrow() {
 
 // All food pulses in sync via the ONE shared material — deliberate and cheap.
 function updateFoodGlow() {
+    const endless = state.worldMode === 'endless';
     COLLECTIBLE_MATERIAL.emissiveIntensity = 0.3 + 0.22 * Math.sin(clock * 3);
     for (const c of state.collectibles) {
         const phase = c.userData.phase ?? 0;
+        // Endless: the bob rides the terrain under the cube (a fresh sample
+        // each frame — food never moves in XZ, but rebases shift its local
+        // coords, and groundHeightAt is origin-aware either way).
+        const baseY = endless ? groundHeightAt(c.position.x, c.position.z) : 0;
         c.rotation.y = clock * 1.4 + phase;
-        c.position.y = 0.45 + Math.sin(clock * 2.5 + phase) * 0.08;
+        c.position.y = baseY + 0.45 + Math.sin(clock * 2.5 + phase) * 0.08;
     }
 }
 
@@ -676,8 +701,10 @@ function spawnFootstepDust(group, dx, dz, dist) {
     // Trail offset: opposite the movement heading, scaled to the character
     // so big stompers kick dust at their heels, not inside their block.
     const back = (dist > 0.0001) ? (0.62 * Math.max(group.scale.y, 0.5)) / dist : 0;
+    // Endless: feet are at the group's terrain-grounded y (0 in classic).
+    const baseY = state.worldMode === 'endless' ? group.position.y : 0;
     dustOrigin.x = group.position.x - dx * back;
-    dustOrigin.y = 0.06; // Just above the ground-bounce plane
+    dustOrigin.y = baseY + 0.06; // Just above the ground-bounce plane
     dustOrigin.z = group.position.z - dz * back;
     spawnBurst(dustOrigin, {
         count: DUST_PARTICLES_PER_STEP,
@@ -797,6 +824,26 @@ function updateEnemyAura(enemyGroup) {
             enemyGroup.rotation.z *= 0.8;
             if (Math.abs(enemyGroup.rotation.z) < 0.005) enemyGroup.rotation.z = 0;
         }
+    }
+}
+
+// --- Floating-origin rebase support (endless) ---
+// Shifts every LIVE particle and score popup by (dx, dz) in one frame so
+// the rebase is visually seamless. Parked particles stay parked; floors are
+// terrain HEIGHTS (true-coordinate derived), which a rebase never changes.
+export function shiftActiveParticles(dx, dz) {
+    let any = false;
+    for (let i = 0; i < MAX_PARTICLES; i++) {
+        if (life[i] <= 0) continue;
+        positions[i * 3] += dx;
+        positions[i * 3 + 2] += dz;
+        any = true;
+    }
+    if (any && posAttr) posAttr.needsUpdate = true;
+    for (const p of popups) {
+        if (p.life <= 0) continue;
+        p.sprite.position.x += dx;
+        p.sprite.position.z += dz;
     }
 }
 

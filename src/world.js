@@ -41,10 +41,12 @@ function makeSkyTexture() {
 // The grid stays FIXED IN THE WORLD even though the ground
 // plane follows the player — updateGroundScroll offsets the texture by the
 // player position, which is what makes movement visible on empty stretches.
-const GROUND_TILE = 20; // world units per canvas tile — must divide worldSize
+// Exported for terrain.js: endless chunks reuse the SAME canvas art,
+// world-UV-mapped per vertex (their own texture instance, repeat 1).
+export const GROUND_TILE = 20; // world units per canvas tile — must divide worldSize
 let groundTexture = null;
 
-function makeGroundTexture(renderer) {
+export function makeGroundTexture(renderer) {
     const size = 640; // 5x5 cells → 128px per 4-unit cell (same density as before)
     const cell = 128;
     const canvas = document.createElement('canvas');
@@ -212,6 +214,12 @@ let attractAngle = 0; // Orbit phase (radians)
 let attractBob = 0; // Height-bob clock (seconds)
 let attractBlend = 0; // 0 = gameplay framing, 1 = full orbit view
 
+// Endless-mode vertical smoothing: the camera follows a LERPED terrain
+// height under the player instead of the raw one, so hill crests read as
+// gentle rises, not camera jolts. Classic keeps the raw p.y (always 0).
+let camAnchorY = 0;
+const lookTarget = new THREE.Vector3(); // Scratch for the smoothed lookAt
+
 // Updates camera position to follow the player, easing the offset toward the
 // zoom/growth target, and keeps the fog scaled to the camera distance.
 // dt is the frame delta in seconds; callers outside the frame loop (e.g.
@@ -235,8 +243,15 @@ export function updateCameraPosition(dt) {
     }
 
     const p = state.player.position;
+    // Vertical follow base: classic is the raw player y (always 0); endless
+    // eases toward the terrain height under the player.
+    let followY = p.y;
+    if (state.worldMode === 'endless') {
+        camAnchorY += (p.y - camAnchorY) * (1 - Math.exp(-4 * dt));
+        followY = camAnchorY;
+    }
     let camX = p.x; // Gameplay framing: the behind-view
-    let camYpos = p.y + state.camY;
+    let camYpos = followY + state.camY;
     let camZpos = p.z + state.camZ;
     if (attractBlend > 0) {
         // Orbit at the CURRENT framing distance (camY/camZ keep easing above,
@@ -244,11 +259,17 @@ export function updateCameraPosition(dt) {
         const k = attractBlend * attractBlend * (3 - 2 * attractBlend); // Smoothstep
         const bob = 1 + 0.06 * Math.sin(attractBob * 0.7); // Gentle height breath
         camX += (p.x + Math.sin(attractAngle) * state.camZ - camX) * k;
-        camYpos += (p.y + state.camY * bob - camYpos) * k;
+        camYpos += (followY + state.camY * bob - camYpos) * k;
         camZpos += (p.z + Math.cos(attractAngle) * state.camZ - camZpos) * k;
     }
     state.camera.position.set(camX, camYpos, camZpos);
-    state.camera.lookAt(state.player.position);
+    if (state.worldMode === 'endless') {
+        // Aim at the smoothed height too — aiming at the raw p.y would put
+        // the crest jolt right back into the frame.
+        state.camera.lookAt(lookTarget.set(p.x, followY, p.z));
+    } else {
+        state.camera.lookAt(state.player.position);
+    }
     // Kill micro-shake: additive offset AFTER lookAt, so the camera jitters
     // in place without re-aiming — a punchy 0.12s thump, not a swing. The
     // amplitude decays linearly to zero; at ~7 frames total this is far from
@@ -277,6 +298,7 @@ function updateFog() {
 export function resetCameraZoom() {
     state.zoomLevel = 1.0;
     shakeTime = 0; // A new run never inherits the last kill's shake
+    camAnchorY = state.player ? state.player.position.y : 0; // Snap the vertical follow — no lerp-in from the last run's hill
     const target = cameraTargets();
     state.camY = target.y;
     state.camZ = target.z;

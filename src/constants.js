@@ -81,6 +81,24 @@ export const POPUP_LIFE = 0.8; // Seconds a score popup lives
 export const SHAKE_DURATION = 0.12; // Kill micro-shake length
 export const SHAKE_AMPLITUDE = 0.15; // Max camera offset at shake start (decays to 0)
 
+// --- ENDLESS WORLD (terrain engine) ---
+// Streaming, noise, water, and the curved horizon. Every value here is
+// endless-mode only: classic mode never reads them.
+export const CHUNK_SIZE = 32; // World units per terrain chunk (also the floating-origin rebase grain)
+export const CHUNK_SEGMENTS = 24; // PlaneGeometry segments per chunk side (625 verts)
+export const CHUNK_WINDOW_RADIUS = 3; // Chunks streamed around the player: (2r+1)^2 = 7x7 window
+export const CHUNK_RELEASE_RADIUS = 4; // Chunks released to the pool beyond this ring (hysteresis margin)
+export const CHUNK_BUILDS_PER_FRAME = 2; // Build-queue budget — nearest chunks first
+export const TERRAIN_AMPLITUDE = 3.75; // Height scale: typical rolling hills ~±2.5, rare tail extremes ~±3.4
+export const TERRAIN_WAVELENGTH = 24; // Feature wavelength of the hill octave (continents run 4x longer)
+export const TERRAIN_SEED = 20260726; // World seed — deterministic terrain, rocks, and food scatter
+export const WATER_LEVEL = -0.9; // Terrain below this is lake (~25% of the world at this amplitude)
+export const CURVE_STRENGTH = 0.0012; // Curved-horizon bend: y -= dist^2 * this (≈4.3u drop at 60u)
+export const REBASE_DISTANCE = 2048; // |player x/z| beyond this triggers a floating-origin rebase
+export const SPAWN_MESA_RADIUS = 48; // Terrain within this radius of the run start is lifted to dry land
+export const ROCKS_PER_CHUNK_MAX = 3; // Seeded voxel boulders per chunk (1..this), never in water
+export const ROCK_SPAWN_CLEARANCE = 8; // No rocks within this distance of the run-start point
+
 // --- Movement mode flag (plan 014 design spike) ---
 // `?move=continuous` opts into the Little Big Snake-style prototype
 // (src/movement-continuous.js). Any other value — including no param at all —

@@ -227,6 +227,44 @@ canvas {
     padding: 12px 24px;
 }
 
+/* World-mode picker (endless mode): two toggle buttons above START. The
+   selected mode wears the lime edge — same accent language as the button
+   hover glow. Unselected sits dimmed so the choice reads at a glance. */
+#mode-picker {
+    display: flex;
+    gap: 12px;
+    margin: 0 0 18px;
+}
+
+/* Scoped under #mode-picker: .game-button (defined later, equal
+   specificity) sets position: absolute for the corner buttons — these
+   selectors must outrank it to stay in the overlay's flex flow. */
+#mode-picker .mode-button {
+    position: static;
+    min-height: 44px;
+    font-size: 11px;
+    padding: 10px 14px;
+    background-color: #37474F;
+    /* Dimmed slate — not the action green; START keeps that */
+    opacity: 0.75;
+}
+
+#mode-picker .mode-button.mode-selected {
+    background-color: #00695C;
+    /* Deep Dive teal — the world you're choosing */
+    border-color: #76FF03;
+    box-shadow: 0 0 14px rgba(118, 255, 3, 0.55);
+    opacity: 1;
+}
+
+#mode-picker .mode-button:hover {
+    background-color: #455A64;
+}
+
+#mode-picker .mode-button.mode-selected:hover {
+    background-color: #00796B;
+}
+
 .start-hint {
     font-size: 0.6em;
     color: #B0BEC5;

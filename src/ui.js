@@ -20,6 +20,8 @@ export const el = {
     finalScore: null,
     startOverlay: null,
     startButton: null,
+    modeClassic: null,
+    modeEndless: null,
     pauseButton: null,
     speedButton: null,
     hiscoreSlot: null,
@@ -40,6 +42,8 @@ export function initUI() {
     el.finalScore = document.getElementById('final-score');
     el.startOverlay = document.getElementById('start-overlay');
     el.startButton = document.getElementById('start-button');
+    el.modeClassic = document.getElementById('mode-classic');
+    el.modeEndless = document.getElementById('mode-endless');
     el.pauseButton = document.getElementById('pause-button');
     el.speedButton = document.getElementById('speed-cycle-button');
     el.hiscoreSlot = document.getElementById('hiscore-slot');
@@ -59,6 +63,34 @@ export function showGoFlourish() {
     el.goFlourish.classList.remove('go-play');
     void el.goFlourish.offsetWidth; // Forces a reflow so the animation restarts
     el.goFlourish.classList.add('go-play');
+}
+
+// --- World-mode picker (endless mode) ---
+// Two buttons on the start overlay: CLASSIC ARENA and ENDLESS WORLD. The
+// overlay itself starts a run on ANY pointer press, so both buttons stop
+// propagation — picking a mode must never launch it. game.js supplies the
+// switch callback (it owns the environment swap + fresh setup).
+export function initModePicker(onPick) {
+    for (const [button, mode] of [[el.modeClassic, 'classic'], [el.modeEndless, 'endless']]) {
+        if (!button) continue;
+        button.addEventListener('pointerdown', (e) => e.stopPropagation());
+        button.addEventListener('click', (e) => {
+            e.stopPropagation();
+            sfx.click();
+            onPick(mode);
+        });
+    }
+    updateModePicker();
+}
+
+// Reflects state.worldMode on the buttons (highlight + aria-pressed).
+export function updateModePicker() {
+    if (!el.modeClassic || !el.modeEndless) return;
+    const endless = state.worldMode === 'endless';
+    el.modeClassic.classList.toggle('mode-selected', !endless);
+    el.modeEndless.classList.toggle('mode-selected', endless);
+    el.modeClassic.setAttribute('aria-pressed', String(!endless));
+    el.modeEndless.setAttribute('aria-pressed', String(endless));
 }
 
 // --- Mute Toggle (plan 010) ---
@@ -194,7 +226,9 @@ export function endGame(reason) {
     music.stop(); // 0.3s fadeout — the death jingle plays over it
     sfx.death();
     onPlayerDeath(); // Squash flat + orange-red burst (pool), behind the beat
-    const { list, rank } = recordScore(state.score);
+    // Per-mode boards: the death screen shows the ladder of the mode that
+    // just ended, and endless runs never pollute the classic top-5.
+    const { list, rank } = recordScore(state.score, state.worldMode);
     deathScreenTimer = setTimeout(() => {
         deathScreenTimer = null;
         if (state.gameActive || state.onStartScreen) return; // A restart beat us to it

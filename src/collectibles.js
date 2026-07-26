@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { worldSize, worldBoundary, collectibleSpawnRadius, minSpawnDistanceFromPlayer } from './constants.js';
 import { state } from './state.js';
 import { wrapPosition } from './worldmath.js';
+import { groundHeightAt } from './terrain.js';
 
 // Shared GPU resources for ALL collectibles — allocated once for the app's
 // lifetime and never disposed (plan 007). Per-spawn allocation would leak
@@ -28,6 +29,11 @@ export function spawnCollectible(pickPosition) {
     const { x, z } = pickPosition();
     collectible.position.set(x, 0.35, z); // Position on the ground
     wrapPosition(collectible.position); // Never place food outside the world — it would be uncollectable
+    if (state.worldMode === 'endless') {
+        // Grounded at spawn so food sits on the hills even on the paused
+        // title screen (the per-frame bob in effects.js re-grounds it live).
+        collectible.position.y = groundHeightAt(collectible.position.x, collectible.position.z) + 0.45;
+    }
     state.collectibles.push(collectible);
     state.scene.add(collectible);
 }

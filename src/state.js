@@ -3,6 +3,15 @@ import { INITIAL_CAMERA_Y_OFFSET, INITIAL_CAMERA_Z_OFFSET, initialCollectTime } 
 // Single mutable state object shared by all modules. This repo pattern is
 // deliberate — plain shared-state arcade game, not a framework.
 export const state = {
+  // World mode: 'classic' (the original 200x200 torus arena) or 'endless'
+  // (streamed infinite terrain). Chosen on the start overlay, persisted by
+  // hiscores.js (the storage owner). EVERY endless behavior branches on
+  // this — classic stays byte-equivalent.
+  worldMode: 'classic',
+  // Floating origin (endless): accumulated true-world offset of the local
+  // coordinate frame. trueX = position.x + worldOrigin.x. Rebase shifts it
+  // by CHUNK_SIZE multiples so chunk keys never change.
+  worldOrigin: { x: 0, z: 0 },
   // Scene, camera, and renderer are fundamental to Three.js
   scene: null,
   camera: null,
