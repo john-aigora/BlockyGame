@@ -6,9 +6,26 @@ yellow and flee — then hunt them down. Every kill pays points, spawns food, an
 summons two bigger foes. Survive the 15-second collect clock and set a new
 family best.
 
+## Game modes
+
+Pick a mode on the start screen (your choice is remembered):
+
+- **CLASSIC ARENA** — the original 200x200 wrap-around arena. Pure survival
+  scoring on the classic BEST RUNS board.
+- **ENDLESS WORLD** — an infinite, procedurally generated world that streams
+  in around you forever: rolling hills, impassable lakes and voxel boulders,
+  a horizon that visibly curves away, and regions with their own tint so far
+  places feel discovered. A **DISTANCE** counter tracks how far from the
+  start you've pushed — and the further you push, the taller, faster, and
+  more numerous the monsters get (every 250 units earns a milestone chime).
+  The world regenerates behind you, so there's no going back for leftovers.
+  Endless runs have their own BEST RUNS board (score-ranked, distance shown).
+
+Controls are identical in both modes.
+
 ## How to play
 
-- **Start**: click START (or press any key / tap the screen).
+- **Start**: pick a mode, then click START (or press any key / tap the screen).
 - **Move**: Arrow keys / WASD on desktop; touch-and-drag anywhere on mobile.
 - **Grow**: grab a LIME block at least every 15 seconds — food is worth 1 point
   and makes you taller.
@@ -29,7 +46,7 @@ Requires Node 20+.
 ```bash
 npm install
 npm run dev        # dev server at http://localhost:5173
-npm test           # Playwright test suite (48 tests)
+npm test           # Playwright test suite (61 tests)
 npm run lint       # ESLint
 npm run build      # production build into dist/
 npm run preview    # serve the production build locally
@@ -46,8 +63,10 @@ src/
   constants.js      all tuning values — GAME BALANCE block lives here
   state.js          the single shared mutable game state
   world.js          scene, camera+zoom, fog, lights, procedural ground
-  worldmath.js      toroidal (wrap-around) math — all world-space
-                    distances/directions go through here
+  worldmath.js      mode-aware world math — toroidal in classic, Euclidean
+                    in endless; all world-space distances go through here
+  terrain.js        the endless world: seeded noise terrain, chunk
+                    streaming/pooling, water, boulders, curved horizon
   characters.js     the shared player/enemy blocky-character factory
   enemies.js        enemy AI (chase/orbit/flee), spawning, kills
   collectibles.js   food spawning and resources
@@ -59,7 +78,7 @@ src/
   timers.js         the collect clock (game-time driven)
 tests/              Playwright specs (smoke, timing, game-over, world,
                     camera, resources, hiscores, audio, balance, touch,
-                    effects) + shared helpers
+                    effects, endless x3) + shared helpers
 plans/              the audit + implementation plans this overhaul followed
 ```
 

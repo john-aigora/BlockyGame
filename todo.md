@@ -52,13 +52,13 @@ This file tracks potential future enhancements and features for the game.
     - [ ] **Shield:** Temporary invulnerability to non-killable enemies.
     - [ ] General: Distinct orb appearance, timed duration, UI icon for active power-up.
     - [ ] _Existing ideas: Score multipliers, "Clear screen" power-up._
-- [ ] **Environmental Obstacles:**
-    *   [ ] Static blocks that impede movement.
+- [x] **Environmental Obstacles:** _(shipped in ENDLESS WORLD mode, 2026: impassable lakes and voxel boulders — movement slides along them)_
+    *   [x] Static blocks that impede movement. _(boulders + water, endless mode)_
     *   [ ] Moving obstacles.
     *   [ ] "Slow zones" or "hazard zones" on the ground.
-- [ ] **Difficulty Scaling:**
-    *   [ ] Increase enemy speed or spawn rate over time or based on score.
-    *   [ ] Introduce tougher enemy variants as the game progresses.
+- [x] **Difficulty Scaling:** _(shipped in ENDLESS WORLD mode, 2026: the distance ramp)_
+    *   [x] Increase enemy speed or spawn rate over time or based on score. _(endless: +speed, +population every 150u of distance)_
+    *   [x] Introduce tougher enemy variants as the game progresses. _(endless: enemies grow +20% height per ramp level)_
 
 ## Monetization & Platform Specifics (Roblox Focus - From Gemini Summary)
 - [ ] **Roblox Platform Integration:** (General task for deployment)
@@ -128,8 +128,8 @@ This file tracks potential future enhancements and features for the game.
     *   [ ] Unlock cosmetic skins (e.g., different player colors, face designs, Roblox avatar items if applicable) by reaching score milestones or using "Wins".
 - [ ] **Save Game State (More Advanced):**
     *   [ ] Allow pausing and resuming session later (e.g., via `localStorage`).
-- [ ] **More Levels or Game Modes (Advanced):**
-    *   [ ] Different arenas or layouts.
+- [x] **More Levels or Game Modes (Advanced):** _(shipped 2026: the ENDLESS WORLD mode — an infinite streamed world with hills, lakes, boulders, a curved horizon, biome regions, distance milestones, and its own BEST RUNS board)_
+    *   [x] Different arenas or layouts. _(mode picker on the start screen: CLASSIC ARENA / ENDLESS WORLD)_
     *   [ ] Challenge modes (e.g., time attack, survival against waves).
 - [ ] **Settings Menu:**
     *   [x] Toggle sound/music on/off.

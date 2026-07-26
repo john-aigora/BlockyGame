@@ -233,10 +233,21 @@ export function spawnRing(origin, opts = {}) {
     }
 }
 
-// Spawns a floating "+N" score popup at `position` (world space). Reuses the
-// pooled sprite/canvas ring — the only work is a 2D text redraw + upload.
+// Spawns a floating "+N" score popup at `position` (world space) — the
+// kill-bounty yellow. Delegates to the shared text-popup pool.
 export function spawnScorePopup(position, points_) {
+    spawnTextPopup(position, `+${points_}`, '#FFEB3B'); // Bright Yellow — the kill/bounty color
+}
+
+// The general pooled text popup (stage 3: distance milestones reuse the
+// SAME pool/ring — no new system). The only work is a 2D redraw + upload;
+// fillText's maxWidth squeezes long labels (e.g. "DISTANCE 1250!") into the
+// canvas instead of clipping them.
+let lastPopupText = null; // Test introspection (effectsInfo)
+
+export function spawnTextPopup(position, text, fillStyle) {
     if (popups.length === 0) return;
+    lastPopupText = text;
     const p = popups[popupCursor];
     popupCursor = (popupCursor + 1) % POPUP_POOL_SIZE;
     const ctx2d = p.ctx2d;
@@ -247,9 +258,9 @@ export function spawnScorePopup(position, points_) {
     ctx2d.lineWidth = 10;
     ctx2d.lineJoin = 'round';
     ctx2d.strokeStyle = 'rgba(0, 0, 0, 0.9)'; // Outline first — readable on any bg
-    ctx2d.strokeText(`+${points_}`, 128, 64);
-    ctx2d.fillStyle = '#FFEB3B'; // Bright Yellow — the kill/bounty color
-    ctx2d.fillText(`+${points_}`, 128, 64);
+    ctx2d.strokeText(text, 128, 64, 240);
+    ctx2d.fillStyle = fillStyle;
+    ctx2d.fillText(text, 128, 64, 240);
     p.texture.needsUpdate = true;
     // Popups scale with the camera's growth pull-back so they stay the same
     // size ON SCREEN as the player (and the framing) grows.
@@ -849,5 +860,5 @@ export function shiftActiveParticles(dx, dz) {
 
 // Debug/test introspection (read-only) — wired into window.__game by main.js.
 export function effectsInfo() {
-    return { reducedMotion, activeParticles, poolSize: MAX_PARTICLES };
+    return { reducedMotion, activeParticles, poolSize: MAX_PARTICLES, lastPopupText };
 }

@@ -84,6 +84,14 @@ export const sfx = {
     // Growth milestone: a quick 3-note rising jingle (E5 G5 B5) — brighter
     // and faster than the start fanfare, so it reads as "level up", not "boot".
     milestone: () => { [659, 784, 988].forEach((f, i) => blip({ freq: f, dur: 0.1, vol: 0.18, delay: i * 0.08 })); },
+    // Distance milestone (endless): a two-note "waypoint" chime — an open
+    // fifth (G5→D6) with a soft triangle shadow, deliberately rounder and
+    // shorter than the growth jingle so ears learn "that's distance".
+    distance: () => {
+        blip({ freq: 784, dur: 0.09, vol: 0.14 });
+        blip({ freq: 1175, dur: 0.16, vol: 0.12, delay: 0.1 });
+        blip({ freq: 587, type: 'triangle', dur: 0.2, vol: 0.1, delay: 0.1 });
+    },
     click: () => blip({ freq: 880, dur: 0.03, vol: 0.08 }),
     // Panic tick: one soft, short click per displayed second while the
     // collect countdown is in its last PANIC_TIME seconds (timers.js drives

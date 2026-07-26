@@ -6,7 +6,9 @@ import {
     ROCKS_PER_CHUNK_MAX, ROCK_SPAWN_CLEARANCE,
     WATER_WALK_MARGIN, ROCK_COLLIDER_FACTOR,
     FOOD_PER_CHUNK_MIN, FOOD_PER_CHUNK_MAX, FOOD_WATER_CLEARANCE,
-    minSpawnDistanceFromPlayer
+    minSpawnDistanceFromPlayer,
+    BIOME_WAVELENGTH, BIOME_TINT_STRENGTH, SHORE_BAND_HEIGHT, SHORE_BAND_BOOST,
+    WATER_DEPTH_RANGE, WATER_DEEP_TINT, WATER_SNAP
 } from './constants.js';
 import { state } from './state.js';
 import { makeGroundTexture, GROUND_TILE } from './world.js';
@@ -147,6 +149,40 @@ function heightTint(h) {
     return 1.0 + 0.5 * t;
 }
 
+// --- Full vertex color: height tint + shoreline band + biome shift ---
+// (stage 3 spectacle). The ground texture is pure teal (r≈0 everywhere), so
+// hue can only move along the green↔blue axis — which conveniently IS the
+// teal family, so the palette identity holds by construction:
+//   biome > 0 → greener, spring-teal region; biome < 0 → bluer, deep-cyan
+// region. One extra ultra-low-frequency noise octave per vertex, sampled in
+// TRUE coordinates: regions are world-fixed, deterministic, rebase-immune.
+// The shoreline band is a brightness bump feathered across the first
+// SHORE_BAND_HEIGHT above the waterline — a pale waterline ring around
+// every lake, strongest right at the water's edge.
+function computeTint(tx, tz, h, out) {
+    let tint = heightTint(h);
+    if (h > WATER_LEVEL && h < WATER_LEVEL + SHORE_BAND_HEIGHT) {
+        const band = 1 - (h - WATER_LEVEL) / SHORE_BAND_HEIGHT;
+        tint += SHORE_BAND_BOOST * band * band; // Feather: bright edge, soft fade
+    }
+    const biome = octave(tx, tz, BIOME_WAVELENGTH, 51.3, 27.9); // [-1, 1]
+    out.r = tint;
+    out.g = tint * (1 + BIOME_TINT_STRENGTH * biome);
+    out.b = tint * (1 - BIOME_TINT_STRENGTH * biome);
+    return out;
+}
+
+const tintScratch = { r: 0, g: 0, b: 0 }; // Reused by every vertex loop
+
+// Debug/test wrapper (main.js → window.__game.debug): the exact vertex
+// color the terrain would carry at TRUE (x, z). Pure math, allocation-free
+// callers aside — tests assert biome variation and the shoreline band here.
+export function terrainTint(x, z) {
+    const h = terrainHeight(x, z);
+    const t = computeTint(x, z, h, { r: 0, g: 0, b: 0 });
+    return { h, r: t.r, g: t.g, b: t.b };
+}
+
 // --- Init (idempotent; endless-mode entry) ---
 export function initTerrain() {
     if (terrainRoot) return;
@@ -171,12 +207,16 @@ export function initTerrain() {
 
     // Water: ONE translucent plane following the player at WATER_LEVEL.
     // Segmented so the horizon bend curves it smoothly (a single quad would
-    // only bend at its corners). Gentle emissive shimmer, ~0.18Hz — subtle
-    // and far from any photosensitivity limit.
-    const waterGeometry = new THREE.PlaneGeometry(560, 560, 40, 40);
+    // only bend at its corners) AND so the depth tint below has resolution:
+    // 80x80 segments = 7-unit sampling. Gentle emissive shimmer, ~0.18Hz —
+    // subtle and far from any photosensitivity limit.
+    const waterGeometry = new THREE.PlaneGeometry(560, 560, 80, 80);
     waterGeometry.rotateX(-Math.PI / 2);
+    const waterVerts = waterGeometry.attributes.position.count;
+    waterGeometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(waterVerts * 3).fill(1), 3));
     const waterMaterial = new THREE.MeshStandardMaterial({
         color: 0x006064, // Deep-dive teal-cyan — the world family, read as water
+        vertexColors: true, // Depth tint: the vertex color darkens with lakebed depth
         transparent: true,
         opacity: 0.78,
         roughness: 0.35,
@@ -190,6 +230,35 @@ export function initTerrain() {
     waterMesh.frustumCulled = false; // Follows the camera; culling buys nothing
     waterMesh.position.y = WATER_LEVEL;
     terrainRoot.add(waterMesh);
+}
+
+// --- Water depth tint (stage 3 spectacle) ---
+// Deeper water reads darker: each water vertex is tinted by the lakebed
+// depth beneath it (pure math — terrainHeight works everywhere, built chunk
+// or not). The plane follows the player in WATER_SNAP steps, and the tint
+// is recomputed ONLY on a step (~every 12 units of travel, one pass over
+// 81x81 verts), so the pattern stays world-fixed between steps and the
+// per-frame cost is zero. sqrt eases the shore→deep ramp: the first meter
+// of depth does most of the darkening, which is how shallows read.
+let waterSnapTrueX = null, waterSnapTrueZ = null;
+let waterRecolorCount = 0; // terrainInfo — tests pin the recolor cadence
+
+function recolorWater() {
+    waterRecolorCount++;
+    const posArr = waterMesh.geometry.attributes.position.array;
+    const colArr = waterMesh.geometry.attributes.color.array;
+    const count = waterMesh.geometry.attributes.position.count;
+    for (let i = 0; i < count; i++) {
+        const i3 = i * 3;
+        const h = terrainHeight(waterSnapTrueX + posArr[i3], waterSnapTrueZ + posArr[i3 + 2]);
+        const depth = WATER_LEVEL - h;
+        let tint = 1;
+        if (depth > 0) {
+            tint = 1 - (1 - WATER_DEEP_TINT) * Math.sqrt(Math.min(1, depth / WATER_DEPTH_RANGE));
+        }
+        colArr[i3] = colArr[i3 + 1] = colArr[i3 + 2] = tint;
+    }
+    waterMesh.geometry.attributes.color.needsUpdate = true;
 }
 
 // Enable/disable the endless environment (mode switch). Classic hides the
@@ -214,7 +283,16 @@ export function resetTerrainForNewRun() {
     scanWindow(0, 0);
     // Build the innermost ring immediately; the rest streams in.
     processQueue(0, 0, 9);
-    if (waterMesh) waterMesh.position.set(0, WATER_LEVEL, 0);
+    if (waterMesh) {
+        waterMesh.position.set(0, WATER_LEVEL, 0);
+        // Depth tint for the spawn neighborhood (the last run may have left
+        // the snap thousands of units away — or at null on first boot).
+        if (waterSnapTrueX !== 0 || waterSnapTrueZ !== 0) {
+            waterSnapTrueX = 0;
+            waterSnapTrueZ = 0;
+            recolorWater();
+        }
+    }
 }
 
 // --- Per-frame streaming (called from the animate loop, endless only) ---
@@ -226,9 +304,22 @@ export function updateTerrain(dt) {
     if (cx !== lastScanCx || cz !== lastScanCz) scanWindow(cx, cz);
     processQueue(cx, cz, CHUNK_BUILDS_PER_FRAME);
 
-    // Water follows the player; shimmer breathes on its own clock.
+    // Water follows the player in WATER_SNAP steps (true-coordinate grid, so
+    // a rebase changes nothing); crossing a step re-tints the depth colors
+    // for the new footprint. The plane is 560 wide and fog-faded long before
+    // its edge, so the 12-unit position step is invisible — what IS visible
+    // is the depth pattern, which stays world-fixed this way.
     waterClock += dt;
-    waterMesh.position.set(p.x, WATER_LEVEL, p.z);
+    const trueX = p.x + state.worldOrigin.x;
+    const trueZ = p.z + state.worldOrigin.z;
+    const snapX = Math.round(trueX / WATER_SNAP) * WATER_SNAP;
+    const snapZ = Math.round(trueZ / WATER_SNAP) * WATER_SNAP;
+    if (snapX !== waterSnapTrueX || snapZ !== waterSnapTrueZ) {
+        waterSnapTrueX = snapX;
+        waterSnapTrueZ = snapZ;
+        recolorWater();
+    }
+    waterMesh.position.set(snapX - state.worldOrigin.x, WATER_LEVEL, snapZ - state.worldOrigin.z);
     waterMesh.material.emissiveIntensity = 0.08 + 0.045 * Math.sin(waterClock * 1.1);
 }
 
@@ -305,8 +396,10 @@ function buildChunk(key, cx, cz) {
         const tz = centerTrueZ + posArr[i3 + 2];
         const h = terrainHeight(tx, tz);
         posArr[i3 + 1] = h;
-        const tint = heightTint(h);
-        colArr[i3] = colArr[i3 + 1] = colArr[i3 + 2] = tint;
+        computeTint(tx, tz, h, tintScratch);
+        colArr[i3] = tintScratch.r;
+        colArr[i3 + 1] = tintScratch.g;
+        colArr[i3 + 2] = tintScratch.b;
         // World-space UVs in tile units — the grid stays fixed in the world
         // (v tracks -z, matching the classic plane's orientation).
         uvArr[i * 2] = tx / GROUND_TILE;
@@ -517,6 +610,7 @@ export function terrainInfo() {
         meshAllocs: meshAllocCount,
         rockAllocs: rockAllocCount,
         hasWater: !!waterMesh,
+        waterRecolors: waterRecolorCount,
         streaming
     };
 }

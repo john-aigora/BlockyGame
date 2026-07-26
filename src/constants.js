@@ -107,12 +107,18 @@ export const COLLIDER_RADIUS_FACTOR = 0.45; // Entity collision radius as a frac
 export const ROCK_COLLIDER_FACTOR = 0.7; // Rock collision-circle radius as a fraction of the boulder's base size
 export const ENEMY_WEDGE_TIME = 2; // Seconds a chasing enemy may be fully blocked before detouring
 export const ENEMY_DETOUR_TIME = 1; // Seconds the 45-degree detour heading is held
-export const ENDLESS_ENEMY_TARGET = 7; // Enemies maintained in the bubble at ramp level 0 (+1 per level)
+// Playtest-tuned (stage 3): the run BUILDS pressure instead of opening at
+// max. At the old target 7 + 0.45s refill, all three scripted playtest
+// styles died inside 70 game-seconds (hunter 14s, sprinter 9s) with the
+// distance ramp never engaging — seven hunters converge on a scale-1 player
+// before the second collect. Target 4 (+1 per ramp level) passes through
+// the design's 6-9 band at 300-750u and hits the cap 12 at 1200u.
+export const ENDLESS_ENEMY_TARGET = 4; // Enemies maintained in the bubble at ramp level 0 (+1 per level)
 export const ENDLESS_ENEMY_CAP = 12; // Hard endless population cap (ramp target never exceeds it)
 export const ENEMY_DESPAWN_RADIUS = 80; // Enemies beyond this distance are removed AND disposed
 export const ENDLESS_SPAWN_MIN = 35; // Bubble spawns land between MIN and MAX units from the player...
 export const ENDLESS_SPAWN_MAX = 50; // ...far enough to materialize unseen, near enough to matter
-export const ENDLESS_SPAWN_INTERVAL = 0.45; // Seconds between bubble top-up spawns (no spawn walls)
+export const ENDLESS_SPAWN_INTERVAL = 1.25; // Seconds between bubble top-up spawns (was 0.45 — a cleared pocket stays clear for a breath; kill-spawns still land instantly)
 export const RAMP_DISTANCE = 150; // Every this many units of furthest distance = +1 difficulty level
 export const RAMP_HEIGHT_STEP = 0.2; // Extra enemy target-height factor per ramp level (+20%)
 export const RAMP_SPEED_STEP = 0.05; // Extra enemy speed factor per ramp level (+5%)
@@ -120,6 +126,19 @@ export const RAMP_SPEED_MAX = 1.6; // Speed ramp cap: 0.5x base * 1.6 = 0.8x —
 export const FOOD_PER_CHUNK_MIN = 3; // Seeded food per streamed chunk (land only)...
 export const FOOD_PER_CHUNK_MAX = 5; // ...plentiful on purpose: the pressure is routing, not scarcity
 export const FOOD_WATER_CLEARANCE = 0.2; // Food needs terrain this far above WATER_LEVEL (not at the brink)
+
+// --- ENDLESS WORLD (spectacle + tuning — stage 3) ---
+// Biome tint, shoreline band, water depth shading, distance milestones, and
+// the attract-camera terrain clearance. Endless-mode only.
+export const BIOME_WAVELENGTH = 300; // Ultra-low-frequency tint regions (~10 chunks across) — areas feel discovered
+export const BIOME_TINT_STRENGTH = 0.12; // Peak per-channel g/b shift of the biome tint (subtle, teal family only)
+export const SHORE_BAND_HEIGHT = 0.30; // Terrain within this height above WATER_LEVEL wears the waterline band
+export const SHORE_BAND_BOOST = 0.5; // Peak extra brightness of the waterline band (feathers to 0 at the band edge)
+export const WATER_DEPTH_RANGE = 2.4; // Lakebed depth below WATER_LEVEL over which the water darkens fully
+export const WATER_DEEP_TINT = 0.38; // Vertex tint at full depth (1.0 at the shore) — deeper reads darker
+export const WATER_SNAP = 12; // The water plane follows the player in steps of this (recolors per step, not per frame)
+export const DISTANCE_MILESTONE_STEP = 250; // Every this many units of furthest distance: chime + DISTANCE popup
+export const CAMERA_TERRAIN_CLEARANCE = 2.5; // The camera never dips closer than this to the terrain under it (endless)
 
 // --- Movement mode flag (plan 014 design spike) ---
 // `?move=continuous` opts into the Little Big Snake-style prototype

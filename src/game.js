@@ -7,7 +7,8 @@ import {
     worldSize, initialFoodDensityArea,
     enemyStartOffset, MOVEMENT_MODE,
     CHUNK_SIZE, REBASE_DISTANCE,
-    COLLIDER_RADIUS_FACTOR, RAMP_DISTANCE, RAMP_SPEED_STEP, RAMP_SPEED_MAX
+    COLLIDER_RADIUS_FACTOR, RAMP_DISTANCE, RAMP_SPEED_STEP, RAMP_SPEED_MAX,
+    DISTANCE_MILESTONE_STEP
 } from './constants.js';
 import { initContinuousMovement, resetContinuousMovement, updateContinuousMovement } from './movement-continuous.js';
 import { wrapPosition, torusDeltaComponent } from './worldmath.js';
@@ -17,7 +18,7 @@ import { createEnemy, updateEnemies, updateEnemyStreaming, resetEnemyStreaming, 
 import { spawnNearPlayer, spawnAnywhere } from './collectibles.js';
 import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoomIn, zoomOut, updateGroundScroll } from './world.js';
 import { initTerrain, setTerrainActive, resetTerrainForNewRun, updateTerrain, shiftTerrain, groundHeightAt, isWalkable } from './terrain.js';
-import { initEffects, updateEffects, resetEffects, onCollect, onGrowthMilestone, shiftActiveParticles } from './effects.js';
+import { initEffects, updateEffects, resetEffects, onCollect, onGrowthMilestone, shiftActiveParticles, spawnTextPopup } from './effects.js';
 import { keys, keyboardVector, onKeyDown, onKeyUp, setupTouchControls } from './input.js';
 import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension, resetIndicators, showGoFlourish, initModePicker, updateModePicker, updateDistanceDisplay, resetDistanceDisplay } from './ui.js';
 import { resetCollectClock, tickCollectClock, tickComboClock } from './timers.js';
@@ -379,10 +380,24 @@ function update(dt) {
 // ramp never relaxes on the walk home. Crossing a RAMP_DISTANCE boundary
 // bumps the level, which feeds enemy target height and population
 // (enemies.js) and enemy speed (applySpeedMultiplier below).
+const milestoneOrigin = { x: 0, y: 0, z: 0 }; // Scratch — never allocated per milestone
+
 function updateEndlessProgress() {
     const p = state.player.position;
     const dist = Math.hypot(p.x + state.worldOrigin.x, p.z + state.worldOrigin.z);
     if (dist <= state.furthestDistance) return;
+    // Distance milestone (stage 3): crossing a DISTANCE_MILESTONE_STEP
+    // boundary earns a waypoint chime and a lime "DISTANCE N!" popup over
+    // the player's head — the exploration counterpart to the growth
+    // milestone. Fires once per boundary (furthestDistance only grows).
+    const milestone = Math.floor(dist / DISTANCE_MILESTONE_STEP);
+    if (milestone > Math.floor(state.furthestDistance / DISTANCE_MILESTONE_STEP)) {
+        milestoneOrigin.x = p.x;
+        milestoneOrigin.y = p.y + state.playerScale + 0.6; // Above the head; popup pool adds its own rise
+        milestoneOrigin.z = p.z;
+        spawnTextPopup(milestoneOrigin, `DISTANCE ${milestone * DISTANCE_MILESTONE_STEP}!`, '#76FF03'); // Food lime — reward color
+        sfx.distance();
+    }
     state.furthestDistance = dist;
     updateDistanceDisplay();
     const level = Math.floor(dist / RAMP_DISTANCE);

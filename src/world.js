@@ -4,9 +4,13 @@ import {
     ZOOM_STEP, ZOOM_MIN, ZOOM_MAX, GROWTH_FRAME_FACTOR,
     INITIAL_CAMERA_Y_OFFSET, INITIAL_CAMERA_Z_OFFSET,
     SHAKE_DURATION, SHAKE_AMPLITUDE,
-    ATTRACT_ORBIT_PERIOD, ATTRACT_EASE_TIME
+    ATTRACT_ORBIT_PERIOD, ATTRACT_EASE_TIME, CAMERA_TERRAIN_CLEARANCE
 } from './constants.js';
 import { state } from './state.js';
+// Import cycle note: terrain.js imports makeGroundTexture from this module.
+// Both edges are function-references used at call time (never during module
+// evaluation), so the cycle is benign under ES modules.
+import { groundHeightAt } from './terrain.js';
 
 // --- World Creation ---
 // Builds the scene, camera, renderer, lights, and ground plane.
@@ -261,6 +265,18 @@ export function updateCameraPosition(dt) {
         camX += (p.x + Math.sin(attractAngle) * state.camZ - camX) * k;
         camYpos += (followY + state.camY * bob - camYpos) * k;
         camZpos += (p.z + Math.cos(attractAngle) * state.camZ - camZpos) * k;
+    }
+    if (state.worldMode === 'endless') {
+        // Terrain clearance (stage 3): the camera — attract orbit included —
+        // never dips below the hill under it. At default framing the offset
+        // clears every possible crest with room to spare, so this is a
+        // guard rail for the close-zoom + tall-hill corner, not a per-frame
+        // course correction; terrain is smooth, so when it does engage the
+        // lift is continuous (no pop).
+        const camGround = groundHeightAt(camX, camZpos);
+        if (camYpos < camGround + CAMERA_TERRAIN_CLEARANCE) {
+            camYpos = camGround + CAMERA_TERRAIN_CLEARANCE;
+        }
     }
     state.camera.position.set(camX, camYpos, camZpos);
     if (state.worldMode === 'endless') {
