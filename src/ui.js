@@ -26,6 +26,8 @@ export const el = {
     startButton: null,
     modeClassic: null,
     modeEndless: null,
+    endlessHint: null,
+    jumpButton: null,
     pauseButton: null,
     speedButton: null,
     hiscoreSlot: null,
@@ -52,6 +54,8 @@ export function initUI() {
     el.startButton = document.getElementById('start-button');
     el.modeClassic = document.getElementById('mode-classic');
     el.modeEndless = document.getElementById('mode-endless');
+    el.endlessHint = document.getElementById('endless-hint');
+    el.jumpButton = document.getElementById('jump-button');
     el.pauseButton = document.getElementById('pause-button');
     el.speedButton = document.getElementById('speed-cycle-button');
     el.hiscoreSlot = document.getElementById('hiscore-slot');
@@ -91,7 +95,9 @@ export function initModePicker(onPick) {
     updateModePicker();
 }
 
-// Reflects state.worldMode on the buttons (highlight + aria-pressed).
+// Reflects state.worldMode on the buttons (highlight + aria-pressed), and
+// swaps in the endless control hint ("Space: Jump — P: Pause") so the rule
+// change is taught before the run starts.
 export function updateModePicker() {
     if (!el.modeClassic || !el.modeEndless) return;
     const endless = state.worldMode === 'endless';
@@ -99,6 +105,20 @@ export function updateModePicker() {
     el.modeEndless.classList.toggle('mode-selected', endless);
     el.modeClassic.setAttribute('aria-pressed', String(!endless));
     el.modeEndless.setAttribute('aria-pressed', String(endless));
+    if (el.endlessHint) el.endlessHint.style.display = endless ? '' : 'none';
+}
+
+// --- On-screen JUMP button (endless + touch only) ---
+// Visible exactly while an endless run is live on a coarse-pointer device —
+// the touch counterpart of Space, following the continuous BOOST button
+// pattern (game.js wires its pointerdown to tryJump). Hidden everywhere
+// else so classic and desktop layouts are untouched.
+export function updateJumpButton() {
+    if (!el.jumpButton) return;
+    const show = state.isMobile && state.worldMode === 'endless' &&
+        state.gameActive && !state.onStartScreen;
+    const display = show ? 'block' : 'none';
+    if (el.jumpButton.style.display !== display) el.jumpButton.style.display = display;
 }
 
 // --- Mute Toggle (plan 010) ---
@@ -132,11 +152,13 @@ function initMuteToggle() {
 export function showStartOverlay() {
     el.startOverlay.style.display = 'flex';
     state.onStartScreen = true;
+    updateJumpButton(); // The menu never shows the touch JUMP control
 }
 
 export function hideStartOverlay() {
     el.startOverlay.style.display = 'none';
     state.onStartScreen = false;
+    updateJumpButton(); // A live endless run on touch gets its JUMP control
 }
 
 // --- Distance HUD (endless) ---
@@ -206,9 +228,11 @@ function renderHiscores(list, rank) {
     ol.className = 'hiscore-list';
     list.forEach((entry, i) => {
         const li = document.createElement('li');
-        // Endless rows carry the run's distance; classic rows are untouched.
+        // Endless rows lead with DISTANCE — the mode's real currency and now
+        // its ranking key (hiscores.js) — with the score alongside; classic
+        // rows are untouched (score-ranked, score-first).
         li.textContent = entry.distance !== undefined
-            ? `${entry.score} — ${entry.distance}u — ${entry.date}`
+            ? `${entry.distance}u — ${entry.score} pts — ${entry.date}`
             : `${entry.score} — ${entry.date}`;
         if (i === rank) li.classList.add('is-new');
         ol.appendChild(li);
@@ -265,6 +289,7 @@ export function endGame(reason) {
     resetCombo(); // Death breaks the chain (and clears the chip behind the box)
     resetTension(); // Panic pulse and danger vignette must not haunt the death screen
     resetIndicators(); // Nor stale enemy arrows / a frozen KILL! flash
+    updateJumpButton(); // The dead can't hop — hide the touch JUMP control
     music.stop(); // 0.3s fadeout — the death jingle plays over it
     sfx.death();
     onPlayerDeath(); // Squash flat + orange-red burst (pool), behind the beat

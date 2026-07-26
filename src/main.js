@@ -5,7 +5,8 @@ import { spawnNewEnemies } from './enemies.js';
 import { onTouchStart, onTouchMove, onTouchEndOrCancel } from './input.js';
 import { sfx, isMuted, audioState, music } from './audio.js';
 import { spawnBurst, spawnScorePopup, effectsInfo } from './effects.js';
-import { terrainHeight, groundHeightAt, terrainInfo, isWalkable, canMove, terrainTint } from './terrain.js';
+import { terrainHeight, groundHeightAt, terrainInfo, isWalkable, canMove, terrainTint, isRockFree } from './terrain.js';
+import { cloudInfo } from './clouds.js';
 import { movementDebug } from './movement-continuous.js';
 
 // Read-only debug/test handle; production code must never read it.
@@ -34,6 +35,8 @@ window.__game = {
         terrainTint, // { h, r, g, b } vertex color at TRUE coords — biome/shoreline checks
         isWalkable, // Endless collision query (water + rocks) — impassability checks
         canMove, // Honest directional movement probe — gap-width fairness checks
+        isRockFree, // Rock-circle-only query — the jump spec finds seeded rocks with it
+        cloudInfo, // { classicCount, activeEndless, pooled, allocs, minY, maxY } — sky pool checks
         movementDebug // Plan 014 spike introspection: { energy, boostHeld, heading, hasMouse }
     }
 };

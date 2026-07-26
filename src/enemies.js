@@ -98,6 +98,10 @@ export function updateEnemies(dt) {
     // Refresh the player's AABB ONCE for this whole collision pass —
     // setFromObject traverses all child meshes and is too heavy per enemy.
     playerBox.setFromObject(state.player);
+    // Jump (endless): flatten the collision test to XZ while airborne by
+    // stretching the box back down to the ground it left — hopping is for
+    // rocks, never an accidental enemy dodge (owner queue item 5).
+    if (state.jumpOffset > 0) playerBox.min.y -= state.jumpOffset;
     for (let i = state.enemies.length - 1; i >= 0; i--) {
         const enemyGroup = state.enemies[i];
         const bodyMesh = enemyGroup.getObjectByName('body'); // Get the body mesh

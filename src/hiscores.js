@@ -15,25 +15,49 @@ function keyForMode(mode) {
     return mode === 'endless' ? KEY_ENDLESS : KEY;
 }
 
+// Per-mode ranking (QA-flagged, coordinator-approved): the ENDLESS board
+// ranks by DISTANCE — the mode's real currency — with score breaking ties
+// (and still shown per row, ui.js). Classic stays score-ranked, untouched.
+// Sorting on READ migrates any board stored under the old score ordering;
+// the entry shape is unchanged (distance was always stored), so the key
+// stays v1 — no bump, no migration read.
+function sortBoard(list, mode) {
+    if (mode === 'endless') {
+        list.sort((a, b) => (b.distance ?? 0) - (a.distance ?? 0) || b.score - a.score);
+    } else {
+        list.sort((a, b) => b.score - a.score);
+    }
+    return list;
+}
+
 export function loadHiscores(mode = 'classic') {
     try {
         const raw = localStorage.getItem(keyForMode(mode));
         const arr = raw ? JSON.parse(raw) : [];
-        return Array.isArray(arr) ? arr.filter(e => Number.isFinite(e.score)) : [];
+        if (!Array.isArray(arr)) return [];
+        const list = arr.filter(e => Number.isFinite(e.score));
+        if (mode === 'endless') {
+            // Defensive normalize: every endless row renders (and ranks by)
+            // its distance — a malformed one reads as 0, never NaN.
+            for (const e of list) {
+                e.distance = Number.isFinite(e.distance) ? Math.floor(e.distance) : 0;
+            }
+        }
+        return sortBoard(list, mode);
     } catch { return []; /* private mode / corrupt JSON / disabled storage */ }
 }
 
 // Returns { list, rank } — rank is the 0-based position of the new entry
 // in the trimmed top-5 list, or -1 if it didn't place. Each mode has its
-// own board: a monster endless run must not bury the classic ladder.
-// Endless entries carry the run's furthest distance (shown per row); the
-// board stays SCORE-ranked — distance is the story, score is the ladder.
+// own board AND its own ladder rule (sortBoard): a monster endless run must
+// not bury the classic ladder, and endless NEW BEST means furthest, not
+// richest.
 export function recordScore(score, mode = 'classic', distance = 0) {
     const list = loadHiscores(mode);
     const entry = { score, date: new Date().toISOString().slice(0, 10) };
     if (mode === 'endless') entry.distance = Math.max(0, Math.floor(distance));
     list.push(entry);
-    list.sort((a, b) => b.score - a.score);
+    sortBoard(list, mode);
     const trimmed = list.slice(0, MAX);
     const rank = trimmed.indexOf(entry);
     try { localStorage.setItem(keyForMode(mode), JSON.stringify(trimmed)); }

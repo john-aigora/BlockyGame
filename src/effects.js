@@ -422,6 +422,43 @@ function updateCelebration(dt) {
     });
 }
 
+// --- Jump juice (endless; owner queue item 5) ---
+// Takeoff: a dust kick at the feet + the crouch-anticipation squash (the
+// same squash machinery as the collect — screen-space motion on the block
+// you stare at, so reduced motion skips it; the dust is object motion and
+// stays). Landing: a wider, flatter dust ring where the feet touch down.
+// Both ride the ONE pooled burst engine — zero new resources.
+const jumpDustOrigin = { x: 0, y: 0, z: 0 }; // Scratch — never allocated per hop
+
+function spawnJumpDust(count, speed) {
+    const p = state.player.position;
+    jumpDustOrigin.x = p.x;
+    // Feet height: in endless p.y is terrain + jumpOffset; at takeoff and
+    // landing the offset is 0, so p.y IS the ground under the feet.
+    jumpDustOrigin.y = p.y + 0.06;
+    jumpDustOrigin.z = p.z;
+    spawnBurst(jumpDustOrigin, {
+        count,
+        colorFrom: DUST_COLOR_FROM,
+        colorTo: DUST_COLOR_TO,
+        speed,
+        upBias: 0.6,
+        life: DUST_LIFE,
+        gravity: 2.5
+    });
+}
+
+export function onJumpTakeoff() {
+    if (!state.player) return;
+    spawnJumpDust(10, 1.4);
+    if (!reducedMotion) squashTime = SQUASH_DURATION; // Crouch-anticipation squash
+}
+
+export function onJumpLand() {
+    if (!state.player) return;
+    spawnJumpDust(14, 2.0); // Wider ring — the touchdown reads bigger than the hop
+}
+
 // Growth milestone (score-juice pass): a lime floor shockwave ring sized to
 // the player, plus a brief celebratory scale pulse. The pulse is screen-
 // space-adjacent motion on the object you stare at — skipped under
@@ -670,6 +707,7 @@ function updateFoodGlow() {
 // stride exactly as fast as the character moves and settle when idle.
 // Legs are tagged at build time (characters.js → group.userData.legs).
 const LEG_SIGNS = [1, -1, -1, 1]; // Diagonal pairs: FL+BR vs FR+BL
+const JUMP_LEG_TUCK = 0.85; // Radians all four legs sweep back mid-air (a look, not balance)
 const walkScratch = { dx: 0, dz: 0 };
 
 function seamDelta(a, b) {
@@ -685,14 +723,22 @@ function updateWalk(group, dt) {
     if (!legs) return;
     let w = group.userData.walk;
     if (!w) {
-        w = group.userData.walk = { phase: 0, swing: 0, step: 0, lastX: group.position.x, lastZ: group.position.z };
+        w = group.userData.walk = { phase: 0, swing: 0, step: 0, tuck: 0, lastX: group.position.x, lastZ: group.position.z };
     }
     walkScratch.dx = seamDelta(group.position.x, w.lastX);
     walkScratch.dz = seamDelta(group.position.z, w.lastZ);
     w.lastX = group.position.x;
     w.lastZ = group.position.z;
     const dist = Math.hypot(walkScratch.dx, walkScratch.dz);
-    const moving = dist > 0.0005;
+    // Jump tuck (endless): mid-air the player's legs fold back instead of
+    // striding on nothing — the tuck blend eases in fast and back out on
+    // landing, and the stride phase (and its footstep dust) holds still
+    // until the feet are back on the ground.
+    const airborne = group === state.player && state.jumpAirborne;
+    w.tuck = w.tuck ?? 0;
+    w.tuck += ((airborne ? 1 : 0) - w.tuck) * (1 - Math.exp(-14 * dt));
+    if (!airborne && w.tuck < 0.005) w.tuck = 0;
+    const moving = dist > 0.0005 && !airborne;
     if (moving) {
         // Stride length scales with character size: big blocks lumber, small ones scurry
         w.phase += (dist / Math.max(group.scale.y, 0.001)) * 7;
@@ -710,7 +756,7 @@ function updateWalk(group, dt) {
     const target = moving ? 1 : 0;
     const ease = 1 - Math.exp(-12 * dt);
     w.swing += (target - w.swing) * ease;
-    if (w.swing < 0.01 && !moving) {
+    if (w.swing < 0.01 && !moving && w.tuck === 0) {
         if (w.swing !== 0) {
             w.swing = 0;
             for (const leg of legs) leg.rotation.x = 0;
@@ -726,7 +772,9 @@ function updateWalk(group, dt) {
     }
     const amp = 0.55 * w.swing;
     for (let i = 0; i < legs.length; i++) {
-        legs[i].rotation.x = Math.sin(w.phase) * amp * LEG_SIGNS[i];
+        // The stride swing blends out as the tuck blends in (and back).
+        legs[i].rotation.x = Math.sin(w.phase) * amp * LEG_SIGNS[i] * (1 - w.tuck)
+            + JUMP_LEG_TUCK * w.tuck;
     }
     // A tiny body bounce on each stride — pure charm, barely-there amplitude
     const body = group.userData.bodyMesh;
@@ -787,6 +835,7 @@ function resetWalk(group) {
     w.phase = 0;
     w.swing = 0;
     w.step = 0;
+    w.tuck = 0;
     w.lastX = group.position.x;
     w.lastZ = group.position.z;
     if (group.userData.legs) for (const leg of group.userData.legs) leg.rotation.x = 0;

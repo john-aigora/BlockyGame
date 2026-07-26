@@ -18,6 +18,12 @@ export const state = {
   // height/speed/population — see enemies.js + applySpeedMultiplier).
   furthestDistance: 0,
   endlessRampLevel: 0,
+  // Jump (endless only; game.js owns the physics on the game clock).
+  // jumpOffset is the height ABOVE the terrain — player y = ground + offset.
+  // Classic never jumps: all three stay at rest there.
+  jumpOffset: 0,
+  jumpVelocity: 0,
+  jumpAirborne: false,
   // Scene, camera, and renderer are fundamental to Three.js
   scene: null,
   camera: null,

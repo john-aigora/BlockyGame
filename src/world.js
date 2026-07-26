@@ -251,7 +251,10 @@ export function updateCameraPosition(dt) {
     // eases toward the terrain height under the player.
     let followY = p.y;
     if (state.worldMode === 'endless') {
-        camAnchorY += (p.y - camAnchorY) * (1 - Math.exp(-4 * dt));
+        // Follow the TERRAIN under the player, not the jump arc: subtracting
+        // jumpOffset keeps the camera glued to the ground line so a hop
+        // reads through the player, not as a camera bounce.
+        camAnchorY += ((p.y - state.jumpOffset) - camAnchorY) * (1 - Math.exp(-4 * dt));
         followY = camAnchorY;
     }
     let camX = p.x; // Gameplay framing: the behind-view

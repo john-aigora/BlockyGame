@@ -162,6 +162,35 @@ export const WATER_SNAP = 12; // The water plane follows the player in steps of 
 export const DISTANCE_MILESTONE_STEP = 250; // Every this many units of furthest distance: chime + DISTANCE popup
 export const CAMERA_TERRAIN_CLEARANCE = 2.5; // The camera never dips closer than this to the terrain under it (endless)
 
+// --- TOYS (owner queue items 4-5): fluffy clouds + the jump ---
+// Clouds are pure scenery in BOTH modes; the jump is ENDLESS-ONLY (Space —
+// classic keeps Space = pause). All tunables live here per the balance law.
+export const CLOUD_ALTITUDE_MIN = 12; // Clouds float between these heights —
+export const CLOUD_ALTITUDE_MAX = 18; // high above every hill crest (~3.4 max)
+export const CLOUD_WIND_X = 0.32; // Shared wind drift, units/s — every cloud
+export const CLOUD_WIND_Z = 0.14; // rides the same slow breeze
+export const CLOUD_BOB_AMPLITUDE = 0.35; // Gentle per-cloud vertical bob...
+export const CLOUD_BOB_SPEED = 0.45; // ...at ~0.07Hz (nowhere near a strobe)
+export const CLOUD_OPACITY = 0.85; // Soft translucency on the ONE shared material
+export const CLASSIC_CLOUD_COUNT = 8; // Fixed pool drifting over the arena
+export const CLOUD_CHUNK_CHANCE = 0.4; // Seeded per endless chunk ≈ 1 cloud per 2.5 chunks
+export const CLOUD_APPEAR_TIME = 2.5; // Seconds a fresh endless cloud scales in
+// (streamed clouds are born at the fog-swallowed window edge; the slow
+// grow-in makes the residual pop invisible even at max zoom-out)
+export const CLOUD_CLEAR_NEAR = 6; // A cloud nearly OVERHEAD (this XZ distance of the player) shrinks away...
+export const CLOUD_CLEAR_FAR = 16; // ...easing back to full size out here. Screenshot-tuned: the top-down-ish
+// camera only ever frames NEAR clouds (far ones sit above the frame top), so
+// off-center neighbors must render — only the one that would park over the
+// player's own head fades out.
+
+// Jump (endless only): a fixed ballistic arc on the game clock. Apex height
+// and airtime are the FEEL numbers; gravity and takeoff velocity are derived
+// (h = g·T²/8, v0 = g·T/2) so tuning either keeps the arc consistent.
+export const JUMP_APEX_HEIGHT = 1.8; // World units at the top of the arc — clears every boulder stack
+export const JUMP_AIRTIME = 0.55; // Seconds of air per jump (~3.3u of travel at base speed)
+export const JUMP_GRAVITY = (8 * JUMP_APEX_HEIGHT) / (JUMP_AIRTIME * JUMP_AIRTIME); // ≈47.6 u/s²
+export const JUMP_VELOCITY = (JUMP_GRAVITY * JUMP_AIRTIME) / 2; // Takeoff speed ≈13.1 u/s
+
 // --- Movement mode flag (plan 014 design spike) ---
 // `?move=continuous` opts into the Little Big Snake-style prototype
 // (src/movement-continuous.js). Any other value — including no param at all —

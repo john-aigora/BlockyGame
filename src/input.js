@@ -1,6 +1,6 @@
 import { MAX_DRAG_DISTANCE, DEAD_ZONE_RADIUS, MOVEMENT_MODE } from './constants.js';
 import { state } from './state.js';
-import { togglePause, startRun, resetGame, cycleSpeed } from './game.js';
+import { togglePause, startRun, resetGame, cycleSpeed, tryJump } from './game.js';
 import { sfx } from './audio.js';
 
 export const keys = {}; // Object to keep track of currently pressed keys
@@ -60,15 +60,20 @@ export function onKeyDown(event) {
 
     // Handle space bar for pause.
     // Plan 014 spike: in continuous mode Space is BOOST (held — handled by
-    // movement-continuous.js's own listeners), so pause moves to P. Classic
-    // mode keeps Space = pause exactly as before.
+    // movement-continuous.js's own listeners), so pause moves to P.
+    // ENDLESS (owner queue item 5): Space is JUMP — pause moves to P, the
+    // exact same pattern as the spike. Classic keeps Space = pause.
     if (key === ' ' || key === 'space') {
         event.preventDefault(); // Prevent page scroll
         if (MOVEMENT_MODE === 'continuous') return; // Boost, not pause
+        if (state.worldMode === 'endless') {
+            if (!isRepeat) tryJump(); // Fresh presses only — no held-key hop strobe
+            return;
+        }
         if (!isRepeat) togglePause();
         return;
     }
-    if (MOVEMENT_MODE === 'continuous' && key === 'p') {
+    if ((MOVEMENT_MODE === 'continuous' || state.worldMode === 'endless') && key === 'p') {
         if (!isRepeat) togglePause();
         return;
     }

@@ -13,6 +13,7 @@ import {
 import { state } from './state.js';
 import { makeGroundTexture, GROUND_TILE } from './world.js';
 import { spawnChunkFood, releaseFoodForChunk } from './collectibles.js';
+import { spawnChunkCloud, releaseChunkCloud } from './clouds.js';
 
 // --- Endless World Terrain Engine ---
 // Everything here is ENDLESS-MODE ONLY: classic mode never calls in (its
@@ -414,6 +415,7 @@ function buildChunk(key, cx, cz) {
     const chunk = { key, cx, cz, mesh, rocks: [], colliders: [] };
     scatterRocks(chunk, centerTrueX, centerTrueZ);
     scatterFood(chunk, centerTrueX, centerTrueZ);
+    spawnChunkCloud(key, cx, cz); // Seeded sky: ~1 cloud per 2-3 chunks (clouds.js pool)
     active.set(key, chunk);
 }
 
@@ -426,6 +428,7 @@ function releaseChunk(chunk) {
     }
     chunk.rocks.length = 0;
     chunk.colliders.length = 0;
+    releaseChunkCloud(chunk.key); // The chunk's cloud streams out with it (pooled)
     // Food streams with its chunk: this run "forgets the past" here — a
     // released chunk takes its collectibles with it (shared GPU resources,
     // scene.remove is the whole cleanup). Rebuilding the chunk later regrows
@@ -560,10 +563,19 @@ export function isWalkable(localX, localZ, radius) {
 }
 
 // One honest sample point: dry land (above the visible shoreline plus the
-// hair margin) and not inside a rock's collision circle.
-function probeOk(tx, tz) {
+// hair margin) and not inside a rock's collision circle. `ignoreRocks`
+// (the jump, endless only) drops ONLY the rock clause — water stays law.
+function probeOk(tx, tz, ignoreRocks) {
     if (terrainHeight(tx, tz) < WATER_LEVEL + WATER_WALK_MARGIN) return false;
-    return !blockedByRock(tx, tz, 0);
+    return ignoreRocks || !blockedByRock(tx, tz, 0);
+}
+
+// Is this LOCAL position clear of every rock collision circle for a body of
+// the given radius? The jump's landing grace (game.js) uses it: airborne
+// movement ignores rocks, so an arc may legally END inside a circle — rocks
+// stay ignored until the body walks clear, so a landing can never wedge.
+export function isRockFree(localX, localZ, radius) {
+    return !blockedByRock(localX + state.worldOrigin.x, localZ + state.worldOrigin.z, radius);
 }
 
 // --- Honest movement probe (owner escalation: "respect the size of the gap
@@ -581,17 +593,17 @@ function probeOk(tx, tz) {
 //     the block wade edge-deep — measured south edge at h=-0.906 < WL);
 //   - at a corner the blocked axis fails while the open axis's own probes
 //     still pass, so the axis-separated slide creeps instead of freezing.
-export function canMove(localX, localZ, mx, mz, radius) {
+export function canMove(localX, localZ, mx, mz, radius, ignoreRocks = false) {
     const len = Math.hypot(mx, mz);
     if (len === 0) return true;
     const nx = localX + state.worldOrigin.x + mx;
     const nz = localZ + state.worldOrigin.z + mz;
     const ux = (mx / len) * radius; // Travel direction scaled to the collider edge
     const uz = (mz / len) * radius;
-    return probeOk(nx, nz) && // Center
-        probeOk(nx + ux, nz + uz) && // Leading edge
-        probeOk(nx - uz, nz + ux) && // Lateral extreme (left of travel)
-        probeOk(nx + uz, nz - ux); // Lateral extreme (right of travel)
+    return probeOk(nx, nz, ignoreRocks) && // Center
+        probeOk(nx + ux, nz + uz, ignoreRocks) && // Leading edge
+        probeOk(nx - uz, nz + ux, ignoreRocks) && // Lateral extreme (left of travel)
+        probeOk(nx + uz, nz - ux, ignoreRocks); // Lateral extreme (right of travel)
 }
 
 // --- The slide (shared by the player and enemies) ---
@@ -606,18 +618,18 @@ export function canMove(localX, localZ, mx, mz, radius) {
 // move) frees the open axis without ever letting the body overlap water.
 export const slideResult = { x: 0, z: 0 };
 
-export function slideMove(px, pz, mx, mz, radius) {
+export function slideMove(px, pz, mx, mz, radius, ignoreRocks = false) {
     slideResult.x = 0;
     slideResult.z = 0;
     if (mx === 0 && mz === 0) return slideResult;
-    if (canMove(px, pz, mx, mz, radius)) {
+    if (canMove(px, pz, mx, mz, radius, ignoreRocks)) {
         slideResult.x = mx;
         slideResult.z = mz;
         return slideResult;
     }
     let ax = 0;
-    if (mx !== 0 && canMove(px, pz, mx, 0, radius)) ax = mx;
-    if (mz !== 0 && canMove(px + ax, pz, 0, mz, radius)) {
+    if (mx !== 0 && canMove(px, pz, mx, 0, radius, ignoreRocks)) ax = mx;
+    if (mz !== 0 && canMove(px + ax, pz, 0, mz, radius, ignoreRocks)) {
         slideResult.x = ax;
         slideResult.z = mz;
         return slideResult;
@@ -628,10 +640,10 @@ export function slideMove(px, pz, mx, mz, radius) {
     }
     if (mx !== 0 && mz !== 0) {
         // Corner wedge: advance the open axis, retreat the pressed one.
-        if (canMove(px, pz, mx, -mz, radius)) {
+        if (canMove(px, pz, mx, -mz, radius, ignoreRocks)) {
             slideResult.x = mx;
             slideResult.z = -mz;
-        } else if (canMove(px, pz, -mx, mz, radius)) {
+        } else if (canMove(px, pz, -mx, mz, radius, ignoreRocks)) {
             slideResult.x = -mx;
             slideResult.z = mz;
         }

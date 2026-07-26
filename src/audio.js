@@ -92,6 +92,13 @@ export const sfx = {
         blip({ freq: 1175, dur: 0.16, vol: 0.12, delay: 0.1 });
         blip({ freq: 587, type: 'triangle', dur: 0.2, vol: 0.1, delay: 0.1 });
     },
+    // Jump (endless): a rising "boing" — one quick sine sweep up with a
+    // square glint on top; landing answers with a soft low thump.
+    jump: () => {
+        blip({ freq: 240, endFreq: 660, type: 'sine', dur: 0.16, vol: 0.16 });
+        blip({ freq: 480, endFreq: 990, dur: 0.08, vol: 0.06, delay: 0.02 });
+    },
+    land: () => blip({ freq: 130, endFreq: 55, type: 'triangle', dur: 0.11, vol: 0.16 }),
     click: () => blip({ freq: 880, dur: 0.03, vol: 0.08 }),
     // Panic tick: one soft, short click per displayed second while the
     // collect countdown is in its last PANIC_TIME seconds (timers.js drives

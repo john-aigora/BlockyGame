@@ -8,7 +8,8 @@ import {
     enemyStartOffset, MOVEMENT_MODE,
     CHUNK_SIZE, REBASE_DISTANCE,
     PLAYER_COLLIDER_HALF_WIDTH, RAMP_DISTANCE, RAMP_SPEED_STEP, RAMP_SPEED_MAX,
-    DISTANCE_MILESTONE_STEP
+    DISTANCE_MILESTONE_STEP,
+    JUMP_GRAVITY, JUMP_VELOCITY
 } from './constants.js';
 import { initContinuousMovement, resetContinuousMovement, updateContinuousMovement } from './movement-continuous.js';
 import { wrapPosition, torusDeltaComponent } from './worldmath.js';
@@ -17,8 +18,9 @@ import { createPlayer, disposeCharacter } from './characters.js';
 import { createEnemy, updateEnemies, updateEnemyStreaming, resetEnemyStreaming, playerBox, scratchBox, beginMaterialize } from './enemies.js';
 import { spawnNearPlayer, spawnAnywhere } from './collectibles.js';
 import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoomIn, zoomOut, updateGroundScroll } from './world.js';
-import { initTerrain, setTerrainActive, resetTerrainForNewRun, updateTerrain, shiftTerrain, groundHeightAt, slideMove } from './terrain.js';
-import { initEffects, updateEffects, resetEffects, onCollect, onGrowthMilestone, shiftActiveParticles, spawnTextPopup } from './effects.js';
+import { initTerrain, setTerrainActive, resetTerrainForNewRun, updateTerrain, shiftTerrain, groundHeightAt, slideMove, isRockFree } from './terrain.js';
+import { initClouds, setCloudMode, updateClouds, shiftClouds } from './clouds.js';
+import { initEffects, updateEffects, resetEffects, onCollect, onGrowthMilestone, shiftActiveParticles, spawnTextPopup, onJumpTakeoff, onJumpLand } from './effects.js';
 import { keys, keyboardVector, onKeyDown, onKeyUp, setupTouchControls } from './input.js';
 import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension, resetIndicators, showGoFlourish, initModePicker, updateModePicker, updateDistanceDisplay, resetDistanceDisplay } from './ui.js';
 import { resetCollectClock, tickCollectClock, tickComboClock } from './timers.js';
@@ -61,6 +63,7 @@ function init() {
     applySpeedMultiplier(); // Apply initial speed multiplier
 
     const directionalLight = createWorld();
+    initClouds(); // Voxel sky (shared geometry/material) — needs the scene
     applyWorldEnvironment(); // Terrain root / classic ground per the saved mode
     initEffects(); // Particle pool + food glow (plan 015) — needs the scene
 
@@ -85,6 +88,14 @@ function init() {
     document.getElementById('speed-cycle-button').addEventListener('click', () => { sfx.click(); cycleSpeed(); });
     document.getElementById('zoom-in-button').addEventListener('click', () => { sfx.click(); zoomIn(); });
     document.getElementById('zoom-out-button').addEventListener('click', () => { sfx.click(); zoomOut(); });
+    // On-screen JUMP button (endless runs on coarse pointers only — ui.js
+    // owns its visibility). pointerdown, like the continuous BOOST button,
+    // so the hop lands on the press, not the release; input.js already
+    // excludes <button> touches from the movement drag.
+    document.getElementById('jump-button').addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        tryJump();
+    });
 
     // NEW Touch Anywhere Event Listeners
     setupTouchControls();
@@ -119,6 +130,9 @@ function setupNewGame() {
     state.playerScale = 1.0; // Player's initial scale (acts as height for 1x1x1 geometry)
     state.furthestDistance = 0; // Endless progress + difficulty ramp reset BEFORE the
     state.endlessRampLevel = 0; // speed recompute below (ramp feeds enemy speed)
+    state.jumpOffset = 0; // A restart mid-arc lands instantly:
+    state.jumpVelocity = 0; // fresh runs always start grounded
+    state.jumpAirborne = false;
     resetEnemyStreaming(); // A fresh run's first bubble top-up owes no cooldown
     resetDistanceDisplay(); // Zero the HUD and show/hide it per the current mode
     applySpeedMultiplier(); // playerScale reset → drop any size speed bonus from the last run
@@ -270,6 +284,7 @@ function update(dt) {
         // slideMove: the collider is the body's true visual half-width,
         // sampled at the leading edge + lateral extremes of travel; a
         // blocked diagonal creeps along the shoreline instead of freezing).
+        updateJumpPhysics(dt); // Advance the arc BEFORE the slide reads jumpAirborne
         const kv = keyboardVector();
         let moveX = kv.x * state.actualPlayerSpeed * dt;
         let moveZ = kv.z * state.actualPlayerSpeed * dt;
@@ -278,7 +293,16 @@ function update(dt) {
             moveZ += state.movementVector.y * state.actualPlayerSpeed * dt;
         }
         const p = state.player.position;
-        const applied = slideMove(p.x, p.z, moveX, moveZ, state.playerScale * PLAYER_COLLIDER_HALF_WIDTH);
+        const radius = state.playerScale * PLAYER_COLLIDER_HALF_WIDTH;
+        // JUMP RULES (owner queue item 5): airborne ignores ROCK circles
+        // only — WATER stays impassable even mid-air, so an arc aimed at a
+        // lake stops at the shoreline exactly like a blocked step and the
+        // landing is always dry. The second clause is the landing grace: an
+        // arc may legally END inside a rock circle (rocks were ignored on
+        // the way), so rocks stay ignored until the body walks clear —
+        // landing can never wedge the player inside a boulder.
+        const ignoreRocks = state.jumpAirborne || !isRockFree(p.x, p.z, radius);
+        const applied = slideMove(p.x, p.z, moveX, moveZ, radius, ignoreRocks);
         p.x += applied.x;
         p.z += applied.z;
         } else {
@@ -298,10 +322,12 @@ function update(dt) {
 
         if (state.worldMode === 'endless') {
             // Endless: no wrap, no re-imaging — the world is truly flat and
-            // infinite. Ground the player on the terrain under him, stream
-            // the monster bubble, advance the distance/difficulty ramp, and
-            // keep the floating origin within float-precision range.
-            state.player.position.y = groundHeightAt(state.player.position.x, state.player.position.z);
+            // infinite. Ground the player on the terrain under him (plus the
+            // jump arc's height above it), stream the monster bubble, advance
+            // the distance/difficulty ramp, and keep the floating origin
+            // within float-precision range.
+            state.player.position.y = groundHeightAt(state.player.position.x, state.player.position.z)
+                + state.jumpOffset;
             updateEnemyStreaming(dt);
             updateEndlessProgress();
             rebaseWorldIfNeeded();
@@ -372,6 +398,38 @@ function update(dt) {
     }
 }
 
+// --- Jump (endless only; owner queue item 5) ---
+// A fixed ballistic arc on the GAME clock: tryJump is the single entry
+// point (Space in input.js + the touch JUMP button), updateJumpPhysics
+// integrates it inside update()'s endless branch. No double-jump: airborne
+// presses are ignored. XZ momentum carries because movement input keeps
+// applying mid-air (the slide just ignores rocks — see the movement block).
+export function tryJump() {
+    if (state.worldMode !== 'endless') return; // Classic Space = pause, untouched
+    if (MOVEMENT_MODE === 'continuous') return; // The spike owns Space (boost) — no jump there
+    if (!state.gameActive || state.isPaused || state.onStartScreen) return;
+    if (state.jumpAirborne) return; // No double-jump
+    state.jumpAirborne = true;
+    state.jumpVelocity = JUMP_VELOCITY;
+    sfx.jump(); // Rising boing
+    onJumpTakeoff(); // Dust kick + crouch squash (squash skipped under reduced motion)
+}
+
+function updateJumpPhysics(dt) {
+    if (!state.jumpAirborne) return;
+    state.jumpVelocity -= JUMP_GRAVITY * dt;
+    state.jumpOffset += state.jumpVelocity * dt;
+    if (state.jumpOffset <= 0) {
+        // Touchdown: the offset rides ON TOP of the terrain height, so the
+        // landing spot is wherever the (water-legal) XZ slide ended up.
+        state.jumpOffset = 0;
+        state.jumpVelocity = 0;
+        state.jumpAirborne = false;
+        sfx.land(); // Soft thump
+        onJumpLand(); // Landing dust burst
+    }
+}
+
 // --- Endless progress: DISTANCE HUD + difficulty ramp ---
 // furthestDistance is the run's high-water mark of TRUE distance from the
 // start (origin-aware, so a rebase never dents it). It only grows — the
@@ -429,6 +487,7 @@ function rebaseWorldIfNeeded() {
     }
     shiftActiveParticles(-dx, -dz);
     shiftTerrain(dx, dz);
+    shiftClouds(dx, dz); // Endless cloud anchors are local coords too
 }
 
 // Shifts a character group AND its walk-cycle anchors — without the anchor
@@ -464,6 +523,7 @@ function applyWorldEnvironment() {
     const endless = state.worldMode === 'endless';
     if (endless) initTerrain();
     setTerrainActive(endless);
+    setCloudMode(endless); // Exactly one sky: classic pool or streamed clouds
     if (state.ground) state.ground.visible = !endless;
 }
 
@@ -500,6 +560,10 @@ function animate(now) {
     // Endless terrain streams every frame — including on the paused title
     // screen, where the attract camera is watching the world build in.
     if (state.worldMode === 'endless') updateTerrain(dt);
+    // Clouds are scenery on the same footing: they drift and bob through
+    // pause and the title screen (a breathing sky sells the attract scene),
+    // in both modes. Object motion — kept under reduced motion.
+    updateClouds(dt);
     // Camera follow and rendering run every frame regardless of pause or
     // game over — the frozen scene must stay visible behind the message box.
     updateCameraPosition(dt);

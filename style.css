@@ -481,6 +481,22 @@ canvas {
     min-height: 40px;
 }
 
+/* Touch JUMP control (endless runs on coarse pointers only — ui.js owns
+   visibility). Sits above the zoom stack (bottom 10 + 40, 52 + 40) with a
+   clear gap; ≥48px per the touch-target floor, round like a thumb pad. */
+#jump-button {
+    display: none;
+    bottom: 104px;
+    right: 10px;
+    min-width: 56px;
+    min-height: 56px;
+    border-radius: 50%;
+    font-size: 10px;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
 /* Mute toggle (plan 010): lives inline in the #ui-container panel — every
    canvas corner is already occupied. .game-button is position: absolute
    for the corner buttons, so opt back into the flow here. */

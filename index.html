@@ -31,6 +31,8 @@
                 <button id="mode-classic" class="game-button mode-button" aria-pressed="true">CLASSIC ARENA</button>
                 <button id="mode-endless" class="game-button mode-button" aria-pressed="false">ENDLESS WORLD</button>
             </div>
+            <!-- Endless-only control hint; ui.js shows it while ENDLESS WORLD is selected -->
+            <p class="tagline" id="endless-hint" style="display: none">Space: Jump &mdash; P: Pause &mdash; hop the rocks, not the lakes!</p>
             <button id="start-button" class="game-button">&#9654; START</button>
             <p class="start-hint">or press any key</p>
         </div>
@@ -49,6 +51,7 @@
             <button id="speed-cycle-button" class="game-button">Speed: 1x</button>
             <button id="zoom-in-button" class="game-button">+</button>
             <button id="zoom-out-button" class="game-button">&minus;</button>
+            <button id="jump-button" class="game-button">JUMP</button>
         </div>
     </div>
 
@@ -64,6 +67,7 @@
         <div id="instructions">
             Arrows / WASD: Move <br>
             Spacebar: Pause / Resume <br>
+            Endless: Space = Jump, P = Pause <br>
             F: Change speed <br>
             Collect LIME blocks every 15s to grow! <br>
             If TALLER than an enemy, they turn YELLOW. <br>
