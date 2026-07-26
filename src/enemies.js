@@ -31,7 +31,7 @@ const NORMAL_CAP_COLOR = shadeColor(0x03A9F4, CAP_LIGHTEN);
 export function createEnemy() {
     // perInstanceBodyMaterial: each enemy's body color flips independently
     // between killable-yellow and blue, so the material cannot be shared.
-    // menacing: pointed ears, tail, fangs, angry brows (characters.js).
+    // menacing: pointed ears, tail, back spikes, underbite jaw (characters.js).
     const enemyGroup = createCharacter({ baseSize: enemyBaseHeight, bodyColor: 0x03A9F4, faceColor: 0x222222, perInstanceBodyMaterial: true, menacing: true }); // Electric Blue body, dark grey face
 
     // --- Enemy AI Properties ---

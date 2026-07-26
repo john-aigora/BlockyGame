@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { worldSize } from './constants.js';
 import { state } from './state.js';
 import { COLLECTIBLE_MATERIAL } from './collectibles.js';
+import { HERO_GLOW_MATERIAL, ENEMY_PUPIL_HUNT_MATERIAL, ENEMY_PUPIL_SCARED_MATERIAL } from './characters.js';
 
 // --- Visual "juice" (plan 015) ---
 // All effects here are procedural and pooled: ONE THREE.Points + ONE
@@ -166,10 +167,17 @@ export function updateEffects(dt) {
     updateParticles(dt);
     updateSquash(dt);
     updateFoodGlow();
-    if (state.player) updateWalk(state.player, dt);
+    // Hero glow accents (antenna tip + scarf) breathe at a gentle 0.5Hz —
+    // one shared material, one uniform write per frame.
+    HERO_GLOW_MATERIAL.emissiveIntensity = 0.6 + 0.25 * Math.sin(clock * Math.PI);
+    if (state.player) {
+        updateWalk(state.player, dt);
+        updateBlink(state.player, dt);
+    }
     for (const enemy of state.enemies) {
         updateWalk(enemy, dt);
-        updateEnemyAura(enemy);
+        updateEnemyAura(enemy); // Sets the scared flag updateBlink reads
+        updateBlink(enemy, dt);
     }
 }
 
@@ -288,6 +296,9 @@ function updateWalk(group, dt) {
             if (group.userData.earMeshes) {
                 for (const ear of group.userData.earMeshes) ear.position.y = ear.userData.baseY;
             }
+            if (group.userData.scarfSegs) {
+                for (const seg of group.userData.scarfSegs) seg.rotation.x = seg.userData.restRotX;
+            }
         }
         return;
     }
@@ -310,6 +321,17 @@ function updateWalk(group, dt) {
         const bounce = Math.abs(Math.sin(w.phase + Math.PI / 2)) * 0.06 * w.swing;
         for (const ear of ears) ear.position.y = ear.userData.baseY + bounce;
     }
+    // The hero scarf streams back (slightly up) and flutters on the stride
+    // phase, easing back to its rest droop as the player settles. Segments
+    // are chained, so each rotation compounds down the tail.
+    const scarf = group.userData.scarfSegs;
+    if (scarf) {
+        for (let i = 0; i < scarf.length; i++) {
+            const seg = scarf[i];
+            const flutter = Math.sin(w.phase * 1.6 + i * 1.1) * 0.16;
+            seg.rotation.x = seg.userData.restRotX * (1 - w.swing) + (0.3 + flutter) * w.swing;
+        }
+    }
 }
 
 function resetWalk(group) {
@@ -326,6 +348,50 @@ function resetWalk(group) {
     if (group.userData.earMeshes) {
         for (const ear of group.userData.earMeshes) ear.position.y = ear.userData.baseY;
     }
+    if (group.userData.scarfSegs) {
+        for (const seg of group.userData.scarfSegs) seg.rotation.x = seg.userData.restRotX;
+    }
+}
+
+// --- Blinks + scared eyes ---
+// Every character blinks on its own randomized timer (object motion —
+// allowed under reduced motion; at ~1 blink per 3-6s it is nowhere near a
+// strobe). A killable enemy is too scared to blink: eyes locked wide open,
+// pupils huge and white (updateEnemyAura swaps the materials; the SCALE
+// lives here so blink and scare can never fight over it).
+const BLINK_DURATION = 0.14;
+
+function updateBlink(group, dt) {
+    const eyes = group.userData.eyeWhites;
+    if (!eyes) return;
+    let f = group.userData.face;
+    if (!f) {
+        // Random first blink = per-character phase; nobody blinks in lockstep
+        f = group.userData.face = { nextBlink: 1 + Math.random() * 4, blinkT: 0 };
+    }
+    const scared = group.userData.scared === true;
+    if (scared) {
+        f.blinkT = 0;
+    } else {
+        f.nextBlink -= dt;
+        if (f.nextBlink <= 0) {
+            f.blinkT = BLINK_DURATION;
+            f.nextBlink = 3 + Math.random() * 3;
+        }
+    }
+    let lid = 1;
+    if (f.blinkT > 0) {
+        f.blinkT = Math.max(0, f.blinkT - dt);
+        // Half-sine lid profile: open → nearly shut → open over one blink
+        lid = 1 - 0.85 * Math.sin((1 - f.blinkT / BLINK_DURATION) * Math.PI);
+    }
+    const eyeWide = scared ? 1.3 : 1;
+    const pupilWide = scared ? 1.9 : 1;
+    for (const eye of eyes) eye.scale.set(eyeWide, eyeWide * lid, 1);
+    const pupils = group.userData.pupils;
+    if (pupils) {
+        for (const pupil of pupils) pupil.scale.set(pupilWide, pupilWide * lid, 1);
+    }
 }
 
 // --- Kill-mode aura + panic wobble ---
@@ -336,6 +402,27 @@ function resetWalk(group) {
 function updateEnemyAura(enemyGroup) {
     const body = enemyGroup.userData.bodyMesh;
     if (!body) return;
+    // Role-reversal face: glowing-red hunter pupils become huge white scared
+    // ones (and the heavy brows flip to worried) the moment the enemy turns
+    // killable — the flip is by REFERENCE to shared materials, nothing owned.
+    // updateBlink handles the pupil/eye scale off the same scared flag.
+    const scared = enemyGroup.userData.killable === true;
+    if (scared !== enemyGroup.userData.scared) {
+        enemyGroup.userData.scared = scared;
+        const pupils = enemyGroup.userData.pupils;
+        if (pupils) {
+            for (const pupil of pupils) {
+                pupil.material = scared ? ENEMY_PUPIL_SCARED_MATERIAL : ENEMY_PUPIL_HUNT_MATERIAL;
+            }
+        }
+        const brows = enemyGroup.userData.brows;
+        if (brows) {
+            for (const brow of brows) {
+                brow.rotation.z = scared ? brow.userData.scaredRotZ : brow.userData.baseRotZ;
+                brow.position.y = scared ? brow.userData.scaredY : brow.userData.baseY;
+            }
+        }
+    }
     if (enemyGroup.userData.killable) {
         body.material.emissive.setHex(0xFFEB3B);
         body.material.emissiveIntensity = 0.35 + 0.25 * Math.sin(clock * 4);
