@@ -290,7 +290,6 @@ export function spawnNewEnemies() {
         BASE_ENEMY_SPAWN_DISTANCE + (state.playerScale * SPAWN_DISTANCE_SCALE_FACTOR),
         worldBoundary * 0.8
     );
-    console.log(`Player scale: ${state.playerScale}, New enemy spawn distance: ${spawnDistance}`); // For debugging
 
     // First enemy at a random angle; second on the opposite side (angle1 + PI)
     // with a random deviation of +/- 45 degrees (PI/4 radians).

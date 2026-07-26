@@ -150,7 +150,6 @@ export function setupTouchControls() {
             state.gameCanvasRect = rect; // Store the whole rect
             state.gameCanvasCenterX = rect.left + rect.width / 2;
             state.gameCanvasCenterY = rect.top + rect.height / 2;
-            console.log("Game canvas bounds updated:", state.gameCanvasRect);
         };
         updateGameCanvasBounds(); // Initial calculation
         window.addEventListener('resize', updateGameCanvasBounds); // Update on window resize

@@ -9,12 +9,13 @@ family best.
 ## How to play
 
 - **Start**: click START (or press any key / tap the screen).
-- **Move**: Arrow keys on desktop; touch-and-drag anywhere on mobile.
+- **Move**: Arrow keys / WASD on desktop; touch-and-drag anywhere on mobile.
 - **Grow**: grab a LIME block at least every 15 seconds — food is worth 1 point
   and makes you taller.
 - **Hunt**: when you're taller than an enemy it turns YELLOW and runs. Touch it
-  to defeat it: **+25 points**, a burst of food… and two larger enemies appear
-  (up to a cap of 8 on the field).
+  to defeat it: **+25 points or more** (bigger enemies pay a size bounty), a
+  burst of food… and two larger enemies appear (up to a cap of 8 on the
+  field). Chain kills within 4 seconds for a COMBO multiplier.
 - **Die**: get caught by a blue enemy or let the collect clock hit zero. Your
   score joins the local **BEST RUNS** top-5 (saved in your browser).
 - **Extras**: pause (Spacebar or button), game-speed cycle, two-way zoom,
@@ -23,12 +24,12 @@ family best.
 
 ## Running it locally
 
-Requires Node 18+.
+Requires Node 20+.
 
 ```bash
 npm install
 npm run dev        # dev server at http://localhost:5173
-npm test           # Playwright test suite (47 tests)
+npm test           # Playwright test suite (48 tests)
 npm run lint       # ESLint
 npm run build      # production build into dist/
 npm run preview    # serve the production build locally

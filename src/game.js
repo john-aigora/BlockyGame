@@ -16,7 +16,7 @@ import { spawnNearPlayer, spawnAnywhere } from './collectibles.js';
 import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoomIn, zoomOut, updateGroundScroll } from './world.js';
 import { initEffects, updateEffects, resetEffects, onCollect, onGrowthMilestone } from './effects.js';
 import { keys, keyboardVector, onKeyDown, onKeyUp, setupTouchControls } from './input.js';
-import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension, showGoFlourish } from './ui.js';
+import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension, resetIndicators, showGoFlourish } from './ui.js';
 import { resetCollectClock, tickCollectClock, tickComboClock } from './timers.js';
 import { unlockAudio, sfx, music } from './audio.js';
 
@@ -43,13 +43,9 @@ function init() {
     // `pointer: fine` and correctly gets desktop speed; the boost is only
     // for touch-primary (coarse-pointer) devices.
     state.isMobile = window.matchMedia('(pointer: coarse)').matches;
-    if (state.isMobile) {
-        state.playerSpeed = BASE_PLAYER_SPEED * MOBILE_SPEED_MULTIPLIER;
-        console.log("Mobile device detected. Player speed adjusted to:", state.playerSpeed);
-    } else {
-        state.playerSpeed = BASE_PLAYER_SPEED;
-        console.log("Desktop device detected. Player speed base:", state.playerSpeed);
-    }
+    state.playerSpeed = state.isMobile
+        ? BASE_PLAYER_SPEED * MOBILE_SPEED_MULTIPLIER
+        : BASE_PLAYER_SPEED;
 
     applySpeedMultiplier(); // Apply initial speed multiplier
 
@@ -98,8 +94,6 @@ function init() {
     // This function will be called repeatedly to update and render the game.
     state.animationFrameId = requestAnimationFrame(animate);
 
-    console.log('Game initialized successfully');
-
     createEnemyIndicators();
 }
 
@@ -114,6 +108,7 @@ function setupNewGame() {
     applySpeedMultiplier(); // playerScale reset → drop any size speed bonus from the last run
     resetCombo(); // A mid-run restart must not carry a live combo into the new run
     resetTension(); // Nor a pulsing panic timer, red vignette, or racing heartbeat
+    resetIndicators(); // Nor last run's enemy arrows / KILL! flash over the overlay
     resetCameraZoom(); // New runs always start at the default framing
     updateScoreDisplay();
 
@@ -400,8 +395,6 @@ export function applySpeedMultiplier() {
 function cycleSpeed() {
     state.currentSpeedMultiplierIndex = (state.currentSpeedMultiplierIndex + 1) % speedMultipliers.length;
     applySpeedMultiplier();
-    console.log(`Current Speed Multiplier: ${speedMultipliers[state.currentSpeedMultiplierIndex]}x`);
-    console.log(`Actual Player Speed: ${state.actualPlayerSpeed}, Actual Enemy Speed: ${state.actualEnemySpeed}`);
 }
 
 // --- Start the game ---

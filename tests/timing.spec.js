@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { startGame } from './helpers.js';
+import { startGame, waitGameSeconds } from './helpers.js';
 
 // Movement/timer specs measure against the GAME clock (state.runTime, the
 // same dt the movement integrates), never performance.now(): under
@@ -23,6 +23,58 @@ test('pausing and resuming does not refill the collect countdown', async ({ page
   // Regression for the old exploit: resuming must NOT reset the timer to 15
   const shown = Number(await page.locator('#collect-time').textContent());
   expect(shown).toBeLessThanOrEqual(12);
+});
+
+test('collecting food resets the collect clock and grows the player', async ({ page }) => {
+  // The core survival loop, through the REAL collision path: let the
+  // countdown burn down a few GAME seconds, teleport the player onto an
+  // existing food block, and assert the clock refilled toward 15 while the
+  // player got taller.
+  await startGame(page);
+  await waitGameSeconds(page, 3);
+  const before = await page.evaluate(() => ({
+    timeLeft: window.__game.state.collectTimeLeft,
+    scale: window.__game.state.playerScale,
+  }));
+  expect(before.timeLeft).toBeLessThan(13); // The countdown really ran
+  expect(before.scale).toBe(1);
+  // Teleport onto the food block FARTHEST from the boot enemy (torus
+  // distance — entity images are player-relative, so raw deltas can hide a
+  // seam neighbor): the collect must land before any enemy-contact death.
+  await page.evaluate(() => {
+    const s = window.__game.state;
+    const axis = (a, b) => {
+      const d = Math.abs(a - b) % 200; // worldSize
+      return Math.min(d, 200 - d);
+    };
+    const enemy = s.enemies[0];
+    let best = s.collectibles[0];
+    let bestD = -1;
+    for (const c of s.collectibles) {
+      const d = Math.hypot(axis(c.position.x, enemy.position.x), axis(c.position.z, enemy.position.z));
+      if (d > bestD) { bestD = d; best = c; }
+    }
+    s.player.position.set(best.position.x, 0, best.position.z);
+  });
+  // Frame-driven: the collect lands on the first running frame. State and
+  // DOM are captured inside the first poll that observes the growth, so the
+  // refilled clock is read before it can tick meaningfully back down.
+  const handle = await page.waitForFunction(
+    () => {
+      const s = window.__game.state;
+      return s.playerScale > 1
+        ? { scale: s.playerScale, timeLeft: s.collectTimeLeft, shown: document.getElementById('collect-time').textContent }
+        : false;
+    },
+    null,
+    { timeout: 10000 }
+  );
+  const after = await handle.jsonValue();
+  expect(after.scale).toBeGreaterThanOrEqual(1.099); // += growthFactor (0.1), minus float drift
+  expect(after.timeLeft).toBeGreaterThan(12); // Refilled toward initialCollectTime (15)
+  expect(after.timeLeft).toBeGreaterThan(before.timeLeft);
+  // Same-JS-turn snapshot: the HUD number must agree with the reset state.
+  expect(Number(after.shown)).toBe(Math.ceil(after.timeLeft));
 });
 
 test('hiding the tab auto-pauses a running game', async ({ page }) => {

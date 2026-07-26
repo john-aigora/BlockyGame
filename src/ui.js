@@ -78,8 +78,10 @@ function initMuteToggle() {
         updateMuteButtonLabel();
         if (!isMuted()) {
             sfx.click();
-            // Unmuting mid-run brings the music back immediately.
-            if (state.gameActive && !state.onStartScreen) music.start();
+            // Unmuting mid-run brings the music back immediately — but only
+            // while the run is actually live: music follows the pause state
+            // (togglePause), so unmuting while paused must stay silent.
+            if (state.gameActive && !state.isPaused && !state.onStartScreen) music.start();
         }
     });
 }
@@ -188,6 +190,7 @@ export function endGame(reason) {
     state.gameActive = false;
     resetCombo(); // Death breaks the chain (and clears the chip behind the box)
     resetTension(); // Panic pulse and danger vignette must not haunt the death screen
+    resetIndicators(); // Nor stale enemy arrows / a frozen KILL! flash
     music.stop(); // 0.3s fadeout — the death jingle plays over it
     sfx.death();
     onPlayerDeath(); // Squash flat + orange-red burst (pool), behind the beat
@@ -275,6 +278,24 @@ export function resetTension() {
     dangerBreathClock = 0;
     lastVignetteCss = null;
     if (el.dangerVignette) el.dangerVignette.style.opacity = '0';
+}
+
+// Hides every enemy indicator — the off-screen arrow pool and the KILL!
+// flash — and rewinds the flash clock so the next appearance starts fully
+// visible. The per-frame updaters only run while the game is live, so
+// without this reset the last frame's indicators would freeze in place and
+// haunt the death screen / start overlay, pointing at enemies that no
+// longer exist. Same single-reset-path pattern as resetTension: called by
+// endGame and by setupNewGame.
+export function resetIndicators() {
+    for (const indicator of state.enemyIndicators) {
+        if (indicator.style.display !== 'none') indicator.style.display = 'none';
+    }
+    state.killFlashClock = 0;
+    state.killIndicatorVisible = true;
+    if (el.killIndicator && el.killIndicator.style.display !== 'none') {
+        el.killIndicator.style.display = 'none';
+    }
 }
 
 // Hides the message box — and cancels a death screen still waiting out the
