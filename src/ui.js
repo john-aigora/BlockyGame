@@ -27,6 +27,7 @@ export const el = {
     modeClassic: null,
     modeEndless: null,
     endlessHint: null,
+    controlsHint: null,
     jumpButton: null,
     pauseButton: null,
     speedButton: null,
@@ -55,6 +56,7 @@ export function initUI() {
     el.modeClassic = document.getElementById('mode-classic');
     el.modeEndless = document.getElementById('mode-endless');
     el.endlessHint = document.getElementById('endless-hint');
+    el.controlsHint = document.getElementById('controls-hint');
     el.jumpButton = document.getElementById('jump-button');
     el.pauseButton = document.getElementById('pause-button');
     el.speedButton = document.getElementById('speed-cycle-button');
@@ -106,6 +108,14 @@ export function updateModePicker() {
     el.modeClassic.setAttribute('aria-pressed', String(!endless));
     el.modeEndless.setAttribute('aria-pressed', String(endless));
     if (el.endlessHint) el.endlessHint.style.display = endless ? '' : 'none';
+    // The controls line under the game tells the truth for the SELECTED mode
+    // (Space means pause in classic but jump in endless) — one line, no
+    // both-modes wall of text.
+    if (el.controlsHint) {
+        el.controlsHint.textContent = endless
+            ? 'Move: Arrows / WASD · Jump: Space · Pause: P or Enter · Speed: F'
+            : 'Move: Arrows / WASD · Pause: Space or Enter · Speed: F';
+    }
 }
 
 // --- On-screen JUMP button (endless + touch only) ---
