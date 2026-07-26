@@ -261,14 +261,22 @@ export const CodeDiff: React.FC<{ duration: number }> = ({ duration }) => {
   );
 };
 
-// ------------------------------------------------------------ Outro (6s)
-export const Outro: React.FC<{ duration: number }> = ({ duration }) => {
+// ------------------------------------------------------------ Outro
+// Owner's recut (July 2026): the stats beat is unwired by default — the outro
+// is the closing line only. Pass showStats to bring the "UNDER THE HOOD"
+// card back (kept in code on purpose; the owner may want it again).
+export const Outro: React.FC<{ duration: number; showStats?: boolean }> = ({
+  duration,
+  showStats = false,
+}) => {
   const frame = useCurrentFrame();
-  const statsEnd = Math.round(duration * 0.53); // ~3.2s of stats
-  const oStats = interpolate(frame, [0, 10, statsEnd - 8, statsEnd], [0, 1, 1, 0], {
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-  });
+  const statsEnd = showStats ? Math.round(duration * 0.53) : 0; // ~3.2s of stats when shown
+  const oStats = showStats
+    ? interpolate(frame, [0, 10, statsEnd - 8, statsEnd], [0, 1, 1, 0], {
+        extrapolateLeft: 'clamp',
+        extrapolateRight: 'clamp',
+      })
+    : 0;
   const oClose = interpolate(frame, [statsEnd, statsEnd + 10, duration - 4, duration], [0, 1, 1, 1], {
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
@@ -292,7 +300,8 @@ export const Outro: React.FC<{ duration: number }> = ({ duration }) => {
         textAlign: 'center',
       }}
     >
-      {/* Stats card */}
+      {/* Stats card (unwired unless showStats) */}
+      {showStats && (
       <div
         style={{
           position: 'absolute',
@@ -341,6 +350,7 @@ export const Outro: React.FC<{ duration: number }> = ({ duration }) => {
           );
         })}
       </div>
+      )}
       {/* Closing line */}
       <div style={{ position: 'absolute', opacity: oClose, transform: `scale(${closeZoom})` }}>
         <div style={{ color: COLORS.teal, fontSize: 22, letterSpacing: 2, lineHeight: 1.9 }}>

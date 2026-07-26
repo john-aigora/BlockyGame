@@ -403,10 +403,10 @@ async function recordEndless(browser) {
     const px = s.player.position.x, pz = s.player.position.z;
     const D = window.__game.debug;
     let best = null, bd = 1e9;
-    for (let a = -60; a <= 60; a += 15) {
+    for (let a = -75; a <= 75; a += 15) {
       const r = (a * Math.PI) / 180;
       const hx = Math.sin(r), hz = -Math.cos(r);
-      for (let L = 2; L <= 9; L += 1) {
+      for (let L = 2; L <= 12; L += 1) {
         const x = px + hx * L, z = pz + hz * L;
         if (!D.isRockFree(x, z, 0.3)) {
           if (L < bd) { bd = L; best = { x, z, d: L }; }
@@ -417,21 +417,58 @@ async function recordEndless(browser) {
     return best;
   });
 
+  // Water probe for the shoreline beat: nearest point that is rock-free but
+  // NOT walkable = open water. Fanned search out to 44 units.
+  const findWater = () => page.evaluate(() => {
+    const s = window.__game.state;
+    const px = s.player.position.x, pz = s.player.position.z;
+    const D = window.__game.debug;
+    let best = null, bd = 1e9;
+    for (let a = 0; a < 360; a += 20) {
+      const r = (a * Math.PI) / 180;
+      const hx = Math.sin(r), hz = -Math.cos(r);
+      for (let L = 5; L <= 44; L += 2) {
+        const x = px + hx * L, z = pz + hz * L;
+        if (!D.isWalkable(x, z, 0.55) && D.isRockFree(x, z, 0.3)) {
+          if (L < bd) { bd = L; best = { x, z, d: L }; }
+          break;
+        }
+      }
+    }
+    return best;
+  });
+
+  // Staged take (owner's brief, honest staging): vista -> rock jump -> chase
+  // and KILL a fleeing yellow prey (center-frame burst + "+N" popup + score
+  // pop) -> keep moving with the lake/shoreline in frame. The only state
+  // touch is an optional slight player grow (same precedent as the classic
+  // take) so the chosen enemy flips killable-yellow; everything else is the
+  // game's own systems: real flee AI, real kill, real popups, real sfx.
   const N = [0, -1], NW = [-0.707, -0.707], NE = [0.707, -0.707], W = [-1, 0], E = [1, 0];
   let heading = N;
   let jumped = 0;
-  let eating = null;
-  let eatUntil = 0;
+  let phase = 'vista'; // vista -> hunt -> shore
+  let targetId = null;
+  let grown = false;
+  let huntSince = 0;
+  let killAt = null;
   let lastIds = null;
 
-  while (Date.now() - t0 < 24500) {
+  while (Date.now() - t0 < 21500) {
     const s = await read();
     if (!s.active) { mark('game-over'); break; }
+    const elapsed = Date.now() - t0;
 
     const ids = new Set(s.en.map((e) => e.id));
-    if (lastIds && eating && lastIds.has(eating) && !ids.has(eating)) { mark('ate-prey'); eating = null; }
+    if (lastIds && targetId && lastIds.has(targetId) && !ids.has(targetId)) {
+      killAt = +(elapsed / 1000).toFixed(2);
+      mark(`KILL@${killAt}`);
+      targetId = null;
+      phase = 'shore';
+    }
     lastIds = ids;
 
+    // Danger avoidance always wins (a giant contact ends the run).
     let danger = null, dd = 1e9;
     for (const e of s.en) {
       if (e.h >= s.scale) {
@@ -448,43 +485,20 @@ async function recordEndless(browser) {
       continue;
     }
 
-    if (!eating) {
-      for (const e of s.en) {
-        if (e.h < s.scale * 0.9) {
-          const d = Math.hypot(e.x - s.px, e.z - s.pz);
-          if (d < 14 && (e.z - s.pz) < 4) { eating = e.id; eatUntil = Date.now() + 3500; mark('chasing-prey'); break; }
-        }
-      }
-    }
-    if (eating && Date.now() > eatUntil) { eating = null; mark('prey-chase-timeout'); }
+    let dirx = heading[0], dirz = heading[1];
 
-    let dirx, dirz;
-    if (eating) {
-      const e = s.en.find((q) => q.id === eating);
-      if (e) {
-        const dx = e.x - s.px, dz = e.z - s.pz;
-        const m = Math.hypot(dx, dz) || 1;
-        dirx = dx / m; dirz = dz / m;
-      } else { eating = null; dirx = heading[0]; dirz = heading[1]; }
-    } else {
+    if (phase === 'vista') {
+      // Open on the world-view: run the curve, jump the first close rock.
       let target = null;
-      if (jumped < 2) {
+      if (jumped < 1) {
         const rock = await findRock();
         if (rock) {
           if (rock.d <= 2.9) {
             await page.keyboard.press('Space');
-            jumped++; mark(`jump-rock-${jumped}(d=${rock.d})`);
+            jumped++; mark(`jump-rock(d=${rock.d})`);
           }
-          if (rock.d <= 6.5) target = rock;
+          if (rock.d <= 9.5) target = rock;
         }
-      }
-      if (!target) {
-        let bd = 1e9, food = null;
-        for (const c of s.cols) {
-          const d = Math.hypot(c.x - s.px, c.z - s.pz);
-          if (d < bd && d < 12 && (c.z - s.pz) < 3) { bd = d; food = c; }
-        }
-        if (food) target = food;
       }
       if (target) {
         const dx = target.x - s.px, dz = target.z - s.pz;
@@ -501,8 +515,71 @@ async function recordEndless(browser) {
           dirx = pick[0]; dirz = pick[1];
         }
       }
-      heading = [dirx, dirz];
+      // Move to the hunt once the vista has breathed and the jump landed
+      // (or by 8s regardless; the hunt keeps seeking a jumpable rock en route).
+      if ((jumped >= 1 && elapsed > 4600) || elapsed > 8000) {
+        phase = 'hunt'; huntSince = elapsed; mark('hunt-begins');
+      }
+    } else if (phase === 'hunt') {
+      // The jump can land organically mid-chase: hop any rock we skim past.
+      if (jumped < 1) {
+        const rock = await findRock();
+        if (rock && rock.d <= 2.9) {
+          await page.keyboard.press('Space');
+          jumped++; mark(`jump-rock-midchase(d=${rock.d})`);
+        }
+      }
+      // Pick the SMALLEST enemy in range: prey-band spawns are already
+      // yellow + fleeing for a scale-1 player, so growth is a fallback.
+      if (!targetId || !ids.has(targetId)) {
+        let best = null, bh = 1e9;
+        for (const e of s.en) {
+          const d = Math.hypot(e.x - s.px, e.z - s.pz);
+          if (d < 34 && e.h < bh) { bh = e.h; best = e; }
+        }
+        if (best) {
+          targetId = best.id;
+          if (best.h >= s.scale * 0.92 && !grown) {
+            // Slight grow so THIS enemy flips killable-yellow (honest
+            // staging: same state-touch the classic take used).
+            const ns = Math.max(s.scale, best.h * 1.18);
+            await page.evaluate((v) => {
+              const st = window.__game.state;
+              st.playerScale = v;
+              st.player.scale.set(v, v, v);
+              window.__game.debug.applySpeedMultiplier?.();
+            }, ns);
+            grown = true; mark(`grown-to-${ns.toFixed(2)}`);
+          }
+          mark(`chasing-prey(h=${best.h.toFixed(2)})`);
+        }
+      }
+      const e = s.en.find((q) => q.id === targetId);
+      if (e) {
+        const dx = e.x - s.px, dz = e.z - s.pz;
+        const m = Math.hypot(dx, dz) || 1;
+        dirx = dx / m; dirz = dz / m;
+      }
+      if (elapsed - huntSince > 7000) { mark('hunt-timeout-retarget'); targetId = null; huntSince = elapsed; }
+    } else {
+      // shore: keep moving with the lake in frame — steer at the nearest
+      // water until the shoreline blocks, then slide along it.
+      const water = await findWater();
+      if (water && water.d > 4.5) {
+        const dx = water.x - s.px, dz = water.z - s.pz;
+        const m = Math.hypot(dx, dz) || 1;
+        dirx = dx / m; dirz = dz / m;
+      } else if (water) {
+        // At the shore: walk its tangent so the water stays on camera.
+        const dx = water.x - s.px, dz = water.z - s.pz;
+        const m = Math.hypot(dx, dz) || 1;
+        dirx = -dz / m; dirz = dx / m;
+      } else {
+        const pN = await probe(N[0], N[1]);
+        dirx = pN.w4 ? N[0] : E[0]; dirz = pN.w4 ? N[1] : E[1];
+      }
     }
+    heading = [dirx, dirz];
     await steer.apply(dirx, dirz, 0.3);
     await sleep(130);
   }
@@ -510,9 +587,14 @@ async function recordEndless(browser) {
   if (fin) mark(`final-distance=${fin.dist}`);
   await steer.stop();
   await sleep(500);
-  // Hook/thumbnail still: the endless vista late in the run.
-  await page.screenshot({ path: path.join(PUBLIC, 'still-2026.png') });
-  mark(`still-2026@${((Date.now() - t0) / 1000).toFixed(1)}`);
+  // Hook/thumbnail still: only refresh on request — the film's frame-0 hook
+  // uses still-2026.png, and a staged retake must not silently change it.
+  if (process.env.RETAKE_STILL === '1') {
+    await page.screenshot({ path: path.join(PUBLIC, 'still-2026.png') });
+    mark(`still-2026@${((Date.now() - t0) / 1000).toFixed(1)}`);
+  } else {
+    console.log('kept existing still-2026.png (hook frame-0 preserved; set RETAKE_STILL=1 to refresh)');
+  }
   await sleep(400);
   const sfxLog = await collectSfxLog(page, t0);
   await finish(context, page, 'endless', log, sfxLog);
