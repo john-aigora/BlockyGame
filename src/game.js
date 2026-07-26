@@ -2,12 +2,13 @@ import * as THREE from 'three';
 import {
     growthFactor, enemyBaseHeight, speedMultipliers,
     FOOD_POINTS, ENEMY_HEIGHT_FACTOR,
+    SPEED_GROWTH_FACTOR, SPEED_GROWTH_CAP,
     BASE_PLAYER_SPEED, MOBILE_SPEED_MULTIPLIER,
     worldSize, initialFoodDensityArea,
     enemyStartOffset, MOVEMENT_MODE
 } from './constants.js';
 import { initContinuousMovement, resetContinuousMovement, updateContinuousMovement } from './movement-continuous.js';
-import { wrapPosition } from './worldmath.js';
+import { wrapPosition, torusDeltaComponent } from './worldmath.js';
 import { state } from './state.js';
 import { createPlayer, disposeCharacter } from './characters.js';
 import { createEnemy, updateEnemies, playerBox, scratchBox } from './enemies.js';
@@ -109,6 +110,7 @@ function setupNewGame() {
     state.isPaused = true; // Start the game in a paused state
     state.score = 0;
     state.playerScale = 1.0; // Player's initial scale (acts as height for 1x1x1 geometry)
+    applySpeedMultiplier(); // playerScale reset → drop any size speed bonus from the last run
     resetCameraZoom(); // New runs always start at the default framing
     updateScoreDisplay();
 
@@ -231,6 +233,16 @@ function update(dt) {
         // Player Wrapping Logic (preserves overshoot across the seam)
         wrapPosition(state.player.position);
 
+        // Seamless torus rendering: entities SIMULATE on the torus but RENDER
+        // at their image nearest the player. Without this, an enemy 2 units
+        // across the seam sits invisible ~198 units away until the player
+        // wraps. Runs right after the player's canonical wrap so the frame the
+        // player jumps ±worldSize, every entity re-images in the SAME frame —
+        // visually nothing moves. Positions may now sit outside ±worldBoundary;
+        // all gameplay math is torus-aware (worldmath.js), and AABB tests and
+        // indicator projection become MORE correct across the seam.
+        reimageEntities();
+
         if (state.ground) {
             state.ground.position.x = state.player.position.x;
             state.ground.position.z = state.player.position.z;
@@ -262,11 +274,29 @@ function update(dt) {
                 state.playerScale += growthFactor;
                 state.player.scale.set(state.playerScale, state.playerScale, state.playerScale);
                 state.player.position.y = 0; // MODIFIED: Group origin at feet, scaling handles height
+                applySpeedMultiplier(); // playerScale changed → refresh the size speed bonus
                 spawnNearPlayer();
                 resetCollectClock();
                 sfx.collect();
             }
         }
+    }
+}
+
+// Moves every enemy and collectible to its player-relative nearest torus
+// image. torusDeltaComponent returns the shortest signed delta, so this is a
+// no-op for entities already on the player's side of the world. Spawn and
+// kill paths keep producing canonical positions — they re-image here on the
+// next frame (or later this same frame for collectibles).
+function reimageEntities() {
+    const p = state.player.position;
+    for (const enemy of state.enemies) {
+        enemy.position.x = p.x + torusDeltaComponent(p.x, enemy.position.x);
+        enemy.position.z = p.z + torusDeltaComponent(p.z, enemy.position.z);
+    }
+    for (const collectible of state.collectibles) {
+        collectible.position.x = p.x + torusDeltaComponent(p.x, collectible.position.x);
+        collectible.position.z = p.z + torusDeltaComponent(p.z, collectible.position.z);
     }
 }
 
@@ -318,23 +348,29 @@ export function togglePause() {
     // freezes it and resuming does NOT reset it.
 }
 
-// NEW function to apply speed multiplier and update speeds
-function applySpeedMultiplier() {
+// Recomputes the actual speeds. The PLAYER's speed gains a size factor —
+// a big block should feel powerful, not sluggish — capped so a huge player
+// never outruns the fun. Enemies deliberately do NOT get the growth factor:
+// hunting getting slightly easier as you grow is the intended relief valve.
+// Called on init, on the speed button, and on every collect (playerScale
+// changes there, so the size factor must be recomputed).
+export function applySpeedMultiplier() {
     const baseSpeedForDevice = state.isMobile ? BASE_PLAYER_SPEED * MOBILE_SPEED_MULTIPLIER : BASE_PLAYER_SPEED;
-    state.actualPlayerSpeed = baseSpeedForDevice * speedMultipliers[state.currentSpeedMultiplierIndex];
+    const sizeFactor = Math.min(1 + (state.playerScale - 1) * SPEED_GROWTH_FACTOR, SPEED_GROWTH_CAP);
+    state.actualPlayerSpeed = baseSpeedForDevice * speedMultipliers[state.currentSpeedMultiplierIndex] * sizeFactor;
     state.actualEnemySpeed = (baseSpeedForDevice * 0.5) * speedMultipliers[state.currentSpeedMultiplierIndex]; // Enemy is 50% of player's base, then multiplied
 
     if (el.speedButton) {
         el.speedButton.textContent = `Speed: ${speedMultipliers[state.currentSpeedMultiplierIndex]}x`;
     }
-    console.log(`Current Speed Multiplier: ${speedMultipliers[state.currentSpeedMultiplierIndex]}x`);
-    console.log(`Actual Player Speed: ${state.actualPlayerSpeed}, Actual Enemy Speed: ${state.actualEnemySpeed}`);
 }
 
 // NEW function to handle speed cycle button click
 function cycleSpeed() {
     state.currentSpeedMultiplierIndex = (state.currentSpeedMultiplierIndex + 1) % speedMultipliers.length;
     applySpeedMultiplier();
+    console.log(`Current Speed Multiplier: ${speedMultipliers[state.currentSpeedMultiplierIndex]}x`);
+    console.log(`Actual Player Speed: ${state.actualPlayerSpeed}, Actual Enemy Speed: ${state.actualEnemySpeed}`);
 }
 
 // --- Start the game ---

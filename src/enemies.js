@@ -5,7 +5,7 @@ import {
     KILL_POINTS, MAX_ENEMIES, ENEMIES_PER_KILL, ENEMY_HEIGHT_FACTOR
 } from './constants.js';
 import { state } from './state.js';
-import { createCharacter, disposeCharacter } from './characters.js';
+import { createCharacter, disposeCharacter, shadeColor, CAP_LIGHTEN } from './characters.js';
 import { spawnAtPosition } from './collectibles.js';
 import { endGame, updateScoreDisplay } from './ui.js';
 import { wrapPosition, torusDelta, torusDistance } from './worldmath.js';
@@ -23,10 +23,16 @@ const awayVec = new THREE.Vector3();
 export const playerBox = new THREE.Box3();
 export const scratchBox = new THREE.Box3();
 
+// The cap (top-face highlight) flips shade-for-shade with the body color —
+// computed once here from the same shade factor characters.js builds with.
+const KILLABLE_CAP_COLOR = shadeColor(0xFFEB3B, CAP_LIGHTEN);
+const NORMAL_CAP_COLOR = shadeColor(0x03A9F4, CAP_LIGHTEN);
+
 export function createEnemy() {
     // perInstanceBodyMaterial: each enemy's body color flips independently
     // between killable-yellow and blue, so the material cannot be shared.
-    const enemyGroup = createCharacter({ baseSize: enemyBaseHeight, bodyColor: 0x03A9F4, faceColor: 0x222222, perInstanceBodyMaterial: true }); // Electric Blue body, dark grey face
+    // menacing: pointed ears, tail, fangs, angry brows (characters.js).
+    const enemyGroup = createCharacter({ baseSize: enemyBaseHeight, bodyColor: 0x03A9F4, faceColor: 0x222222, perInstanceBodyMaterial: true, menacing: true }); // Electric Blue body, dark grey face
 
     // --- Enemy AI Properties ---
     enemyGroup.randomVelocity = new THREE.Vector3(0, 0, 0);
@@ -66,11 +72,17 @@ export function updateEnemies(dt) {
         const enemyGroup = state.enemies[i];
         const bodyMesh = enemyGroup.getObjectByName('body'); // Get the body mesh
 
+        // The body material INSTANCE is shared by legs, ears, and tail, so
+        // one setHex flips them all; the cap has its own instance (lighter
+        // shade) and flips alongside. Feet keep the shared dark-blue material.
+        const capMaterial = enemyGroup.userData.capMaterial;
         if (canKillSpecificEnemy(enemyGroup)) {
             if (bodyMesh) bodyMesh.material.color.setHex(0xFFEB3B); // Bright Yellow if killable
+            if (capMaterial) capMaterial.color.setHex(KILLABLE_CAP_COLOR);
             enemyGroup.userData.killable = true; // effects.js drives the aura/wobble off this
         } else {
             if (bodyMesh) bodyMesh.material.color.setHex(0x03A9F4); // Electric Blue otherwise
+            if (capMaterial) capMaterial.color.setHex(NORMAL_CAP_COLOR);
             enemyGroup.userData.killable = false;
         }
 
@@ -131,8 +143,10 @@ export function updateEnemies(dt) {
 
         enemyGroup.position.addScaledVector(combinedMovement, dt);
 
-        // Enemy Wrapping Logic (preserves overshoot across the seam)
-        wrapPosition(enemyGroup.position);
+        // NO canonical wrap here (seamless torus rendering): after the player
+        // moves, game.js re-images every entity to its player-nearest torus
+        // image, so an enemy may legitimately sit outside ±worldBoundary.
+        // All gameplay math above is torus-aware, so this is invisible to AI.
 
         // --- Collision Detection (with player) ---
         scratchBox.setFromObject(enemyGroup); // enemyGroup is now the object

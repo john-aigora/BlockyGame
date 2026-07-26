@@ -8,6 +8,8 @@ export const KILL_POINTS = 25; // flat bounty per defeated enemy
 export const MAX_ENEMIES = 8; // hard population cap
 export const ENEMIES_PER_KILL = 2; // spawned per kill, subject to the cap
 export const ENEMY_HEIGHT_FACTOR = 1.5; // new-enemy height vs player (existing value, now named)
+export const SPEED_GROWTH_FACTOR = 0.18; // extra speed per point of playerScale above 1 (big = faster)
+export const SPEED_GROWTH_CAP = 2.2; // max multiple of base speed the size bonus can ever reach
 
 // Speed Multiplier Variables
 export const speedMultipliers = [1.0, 1.5, 2.0, 3.0, 5.0, 0.5]; // ADDED 5.0x, re-ordered

@@ -56,10 +56,66 @@ test('enemy AI chases the short way across the wrap seam', async ({ page }) => {
   });
   await startGame(page); // Begin the run
   await page.waitForTimeout(1000);
-  const finalX = await page.evaluate(() => window.__game.state.enemies[0].position.x);
+  // Rendered positions are player-relative torus images (seamless torus
+  // rendering) — read the CANONICAL coordinate for the assertion.
+  const finalX = await page.evaluate(() => {
+    const x = window.__game.state.enemies[0].position.x;
+    return ((x + 100) % 200 + 200) % 200 - 100;
+  });
   // The (non-killable) enemy must move toward +x / the seam, not the long
   // way toward -x. Speed is ~1.5 u/s with an orbit component, so expect a
   // clearly positive advance but stay generous about the exact amount.
   expect(finalX).toBeGreaterThan(95.2);
   expect(finalX).toBeLessThan(100);
+});
+
+test('enemies render at the player-nearest image across the seam', async ({ page }) => {
+  await page.evaluate(() => {
+    const s = window.__game.state;
+    // Player near the +x edge, enemy canonically near the -x edge: only 2
+    // units apart across the seam, but ~198 apart in canonical coords.
+    s.player.position.set(99, 0, 0);
+    const enemy = s.enemies[0];
+    enemy.position.set(-99, 0, 0);
+    enemy.randomVelocity.set(0, 0, 0);
+    enemy.timeToChangeRandomVelocity = 999;
+  });
+  await startGame(page);
+  await page.waitForTimeout(100); // A few frames — the re-image runs per frame
+  const { enemyX, playerX } = await page.evaluate(() => ({
+    enemyX: window.__game.state.enemies[0].position.x,
+    playerX: window.__game.state.player.position.x
+  }));
+  // The RENDERED enemy must sit at the near image (~101, just across the
+  // boundary from the player) — NOT ~198 units away at its canonical -99.
+  expect(Math.abs(enemyX - playerX)).toBeLessThan(5);
+  expect(enemyX).toBeGreaterThan(100 - 5);
+});
+
+test('ground grid offset stays continuous when the player wraps', async ({ page }) => {
+  await startGame(page);
+  await page.evaluate(() => { window.__game.state.player.position.set(99.9, 0, 0); });
+  await page.keyboard.down('ArrowRight'); // Walk +x, straight through the seam
+  // Sample player x and the grid texture offset each frame while crossing.
+  const samples = await page.evaluate(() => new Promise((resolve) => {
+    const s = window.__game.state;
+    const tex = s.ground.material.map;
+    const out = [];
+    function frame() {
+      out.push({ x: s.player.position.x, frac: ((tex.offset.x % 1) + 1) % 1 });
+      if (out.length < 40) requestAnimationFrame(frame);
+      else resolve(out);
+    }
+    requestAnimationFrame(frame);
+  }));
+  await page.keyboard.up('ArrowRight');
+  // The run must actually cross the wrap seam...
+  expect(samples.some((sample) => sample.x < -99)).toBe(true);
+  // ...and the grid offset's fractional part must stay continuous across it:
+  // per frame the offset moves ≤ speed * MAX_DELTA / GROUND_TILE ≈ 0.0075.
+  // A GROUND_TILE that doesn't divide worldSize would jump by 0.5 here.
+  for (let i = 1; i < samples.length; i++) {
+    const d = Math.abs(samples[i].frac - samples[i - 1].frac);
+    expect(Math.min(d, 1 - d)).toBeLessThan(0.05);
+  }
 });

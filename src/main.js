@@ -1,4 +1,4 @@
-import './game.js';
+import { applySpeedMultiplier } from './game.js';
 import { state } from './state.js';
 import { spawnNearPlayer, spawnAtPosition } from './collectibles.js';
 import { spawnNewEnemies } from './enemies.js';
@@ -18,6 +18,7 @@ window.__game = {
         spawnNearPlayer,
         spawnAtPosition,
         spawnNewEnemies,
+        applySpeedMultiplier, // Speed recompute path (balance spec — size speed bonus)
         touchHandlers: { onTouchStart, onTouchMove, onTouchEndOrCancel },
         sfx,
         isMuted,

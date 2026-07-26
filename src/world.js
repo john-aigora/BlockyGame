@@ -32,15 +32,18 @@ function makeSkyTexture() {
 // --- Living ground (plan 015) ---
 // Procedural canvas tile: subtle darker-teal grid lines with faint glowing
 // intersections on the base teal. Drawn once; tiled via RepeatWrapping.
-// GROUND_TILE is the world-space size of one canvas tile (4x4 grid cells of
-// 4 units each). The grid stays FIXED IN THE WORLD even though the ground
+// GROUND_TILE is the world-space size of one canvas tile (5x5 grid cells of
+// 4 units each). It MUST divide worldSize evenly (200 / 20 = 10): the wrap
+// seam then lands exactly on a tile boundary, so the texture offset stays
+// continuous when the player wraps (16 gave 12.5 repeats — a visible snap).
+// The grid stays FIXED IN THE WORLD even though the ground
 // plane follows the player — updateGroundScroll offsets the texture by the
 // player position, which is what makes movement visible on empty stretches.
-const GROUND_TILE = 16; // world units per canvas tile
+const GROUND_TILE = 20; // world units per canvas tile — must divide worldSize
 let groundTexture = null;
 
 function makeGroundTexture(renderer) {
-    const size = 512; // 4x4 cells → 128px per 4-unit cell
+    const size = 640; // 5x5 cells → 128px per 4-unit cell (same density as before)
     const cell = 128;
     const canvas = document.createElement('canvas');
     canvas.width = size;
@@ -51,7 +54,7 @@ function makeGroundTexture(renderer) {
     // Grid lines: a darker teal, thin, low-contrast (readability first)
     ctx.strokeStyle = 'rgba(0, 30, 24, 0.55)';
     ctx.lineWidth = 3;
-    for (let i = 0; i <= 4; i++) {
+    for (let i = 0; i <= 5; i++) {
         ctx.beginPath();
         ctx.moveTo(i * cell + 0.5, 0);
         ctx.lineTo(i * cell + 0.5, size);
@@ -62,8 +65,8 @@ function makeGroundTexture(renderer) {
         ctx.stroke();
     }
     // Faint glow dots at intersections — reads as an arcade grid floor
-    for (let gx = 0; gx <= 4; gx++) {
-        for (let gy = 0; gy <= 4; gy++) {
+    for (let gx = 0; gx <= 5; gx++) {
+        for (let gy = 0; gy <= 5; gy++) {
             const dot = ctx.createRadialGradient(gx * cell, gy * cell, 0, gx * cell, gy * cell, 14);
             dot.addColorStop(0, 'rgba(0, 121, 107, 0.75)');
             dot.addColorStop(1, 'rgba(0, 121, 107, 0)');
@@ -73,9 +76,11 @@ function makeGroundTexture(renderer) {
             ctx.fill();
         }
     }
-    // Very subtle per-cell tone variation so the floor isn't flat
-    for (let gx = 0; gx < 4; gx++) {
-        for (let gy = 0; gy < 4; gy++) {
+    // Very subtle per-cell tone variation so the floor isn't flat. (With an
+    // odd 5x5 cell count the checkerboard parity repeats at tile edges — at
+    // 2% alpha that is imperceptible, and continuity across the wrap wins.)
+    for (let gx = 0; gx < 5; gx++) {
+        for (let gy = 0; gy < 5; gy++) {
             if ((gx + gy) % 2 === 0) continue;
             ctx.fillStyle = 'rgba(255, 255, 255, 0.02)';
             ctx.fillRect(gx * cell, gy * cell, cell, cell);

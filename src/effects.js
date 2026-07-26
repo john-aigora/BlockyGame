@@ -284,6 +284,10 @@ function updateWalk(group, dt) {
         if (w.swing !== 0) {
             w.swing = 0;
             for (const leg of legs) leg.rotation.x = 0;
+            if (group.userData.tailMesh) group.userData.tailMesh.rotation.y = 0;
+            if (group.userData.earMeshes) {
+                for (const ear of group.userData.earMeshes) ear.position.y = ear.userData.baseY;
+            }
         }
         return;
     }
@@ -295,6 +299,16 @@ function updateWalk(group, dt) {
     const body = group.userData.bodyMesh;
     if (body && group.userData.bodyBaseY !== undefined) {
         body.position.y = group.userData.bodyBaseY + Math.abs(Math.sin(w.phase)) * 0.05 * w.swing;
+    }
+    // Glow-up flourishes: the enemy tail wags and ears bounce subtly on the
+    // same stride phase. Tagged at build time (characters.js), like the legs.
+    // Feet are parented to the legs and swing for free.
+    const tail = group.userData.tailMesh;
+    if (tail) tail.rotation.y = Math.sin(w.phase) * 0.35 * w.swing;
+    const ears = group.userData.earMeshes;
+    if (ears) {
+        const bounce = Math.abs(Math.sin(w.phase + Math.PI / 2)) * 0.06 * w.swing;
+        for (const ear of ears) ear.position.y = ear.userData.baseY + bounce;
     }
 }
 
@@ -308,6 +322,10 @@ function resetWalk(group) {
     if (group.userData.legs) for (const leg of group.userData.legs) leg.rotation.x = 0;
     const body = group.userData.bodyMesh;
     if (body && group.userData.bodyBaseY !== undefined) body.position.y = group.userData.bodyBaseY;
+    if (group.userData.tailMesh) group.userData.tailMesh.rotation.y = 0;
+    if (group.userData.earMeshes) {
+        for (const ear of group.userData.earMeshes) ear.position.y = ear.userData.baseY;
+    }
 }
 
 // --- Kill-mode aura + panic wobble ---

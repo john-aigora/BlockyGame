@@ -46,6 +46,24 @@ test('spawnNewEnemies never grows the horde past 8', async ({ page }) => {
   expect(count).toBe(8);
 });
 
+test('player speed grows with size and caps at SPEED_GROWTH_CAP', async ({ page }) => {
+  // SPEED_GROWTH_FACTOR = 0.18, SPEED_GROWTH_CAP = 2.2 (constants.js).
+  // Scale 5 → factor 1 + 4 * 0.18 = 1.72; scale 20 → 4.42 raw, capped at 2.2.
+  const { base, at5, at20 } = await page.evaluate(() => {
+    const s = window.__game.state;
+    const base = s.actualPlayerSpeed; // scale 1 → factor exactly 1
+    s.playerScale = 5;
+    window.__game.debug.applySpeedMultiplier();
+    const at5 = s.actualPlayerSpeed;
+    s.playerScale = 20;
+    window.__game.debug.applySpeedMultiplier();
+    const at20 = s.actualPlayerSpeed;
+    return { base, at5, at20 };
+  });
+  expect(at5).toBeCloseTo(base * 1.72, 5);
+  expect(at20).toBeCloseTo(base * 2.2, 5);
+});
+
 test('the score display stays in sync after a kill', async ({ page }) => {
   await killOneEnemy(page);
   // Single evaluate — state and DOM are read in the same JS turn.
