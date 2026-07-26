@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import {
     worldSize,
-    DUST_PARTICLES_PER_STEP, DUST_LIFE, DUST_SPEED, DUST_COLOR_FROM, DUST_COLOR_TO
+    DUST_PARTICLES_PER_STEP, DUST_LIFE, DUST_SPEED, DUST_COLOR_FROM, DUST_COLOR_TO,
+    POPUP_RISE, POPUP_LIFE, GROWTH_FRAME_FACTOR
 } from './constants.js';
 import { state } from './state.js';
 import { COLLECTIBLE_MATERIAL } from './collectibles.js';
@@ -49,6 +50,23 @@ let clock = 0;
 const SQUASH_DURATION = 0.3;
 let squashTime = 0;
 
+// Growth-milestone scale pulse (seconds remaining; 0 = at rest). Combines
+// multiplicatively with the squash in updatePlayerScaleFx, so a milestone
+// landing on a collect (it always does) never fights the squash for scale.
+const PULSE_DURATION = 0.35;
+let pulseTime = 0;
+
+// --- Floating score popup pool (score-juice pass) ---
+// "+N" text sprites that rise and fade at the kill position. POOLED like
+// everything else here: POPUP_POOL_SIZE sprites, each with its own small
+// canvas + CanvasTexture created ONCE in initEffects. Spawning redraws the
+// text on an existing canvas (a texture re-upload, not an allocation), so
+// repeated kills hold the renderer's geometry/texture counts flat.
+// THREE.Sprite shares one internal geometry across all instances (r128).
+const POPUP_POOL_SIZE = 8;
+const popups = []; // { sprite, texture, ctx2d, life, baseY }
+let popupCursor = 0; // Ring allocator, same policy as the particle pool
+
 export function initEffects() {
     reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (points) return; // Idempotent — resources live for the app's lifetime
@@ -75,6 +93,25 @@ export function initEffects() {
     points = new THREE.Points(geometry, material);
     points.frustumCulled = false; // Parked particles would wreck the bounding sphere
     state.scene.add(points);
+
+    // Score popup pool: all GPU-side resources exist from here on.
+    for (let i = 0; i < POPUP_POOL_SIZE; i++) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 256;
+        canvas.height = 128;
+        const ctx2d = canvas.getContext('2d');
+        const texture = new THREE.CanvasTexture(canvas);
+        const spriteMaterial = new THREE.SpriteMaterial({
+            map: texture,
+            transparent: true,
+            depthTest: false // Always readable, even inside a burst or a body
+        });
+        const sprite = new THREE.Sprite(spriteMaterial);
+        sprite.renderOrder = 10; // On top of particles
+        sprite.visible = false;
+        state.scene.add(sprite);
+        popups.push({ sprite, texture, ctx2d, life: 0, baseY: 0 });
+    }
 
     // Food reads as a glowing pickup: shared material, so ALL food pulses
     // in sync — one uniform update per frame, zero per-item cost.
@@ -123,6 +160,89 @@ export function spawnBurst(origin, opts = {}) {
     }
 }
 
+// Spawns a radial ring shockwave from the pool: particles placed evenly on a
+// circle around `origin`, all moving straight outward with no gravity — an
+// expanding ring, not a splash. Used by the growth milestone.
+export function spawnRing(origin, opts = {}) {
+    if (!points) return;
+    const count = opts.count ?? 28;
+    const radius = opts.radius ?? 0.8;
+    const speed = opts.speed ?? 5;
+    const lifeSpan = opts.life ?? 0.5;
+    scratchColorA.setHex(opts.colorFrom ?? 0xCCFF66);
+    scratchColorB.setHex(opts.colorTo ?? 0x76FF03);
+    for (let n = 0; n < count; n++) {
+        const i = cursor;
+        cursor = (cursor + 1) % MAX_PARTICLES;
+        const i3 = i * 3;
+        const angle = (n / count) * Math.PI * 2;
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+        positions[i3] = origin.x + cos * radius;
+        positions[i3 + 1] = 0.15; // Hugs the ground — a floor shockwave
+        positions[i3 + 2] = origin.z + sin * radius;
+        velocities[i3] = cos * speed;
+        velocities[i3 + 1] = 0.3; // The faintest lift so the ring stays visible
+        velocities[i3 + 2] = sin * speed;
+        colorFrom[i3] = scratchColorA.r;
+        colorFrom[i3 + 1] = scratchColorA.g;
+        colorFrom[i3 + 2] = scratchColorA.b;
+        colorTo[i3] = scratchColorB.r;
+        colorTo[i3 + 1] = scratchColorB.g;
+        colorTo[i3 + 2] = scratchColorB.b;
+        colors[i3] = scratchColorA.r;
+        colors[i3 + 1] = scratchColorA.g;
+        colors[i3 + 2] = scratchColorA.b;
+        life[i] = lifeSpan;
+        maxLife[i] = lifeSpan;
+        gravity[i] = 0; // Rings expand flat; they don't rain down
+    }
+}
+
+// Spawns a floating "+N" score popup at `position` (world space). Reuses the
+// pooled sprite/canvas ring — the only work is a 2D text redraw + upload.
+export function spawnScorePopup(position, points_) {
+    if (popups.length === 0) return;
+    const p = popups[popupCursor];
+    popupCursor = (popupCursor + 1) % POPUP_POOL_SIZE;
+    const ctx2d = p.ctx2d;
+    ctx2d.clearRect(0, 0, 256, 128);
+    ctx2d.font = 'bold 64px "Courier New", monospace'; // Chunky arcade digits
+    ctx2d.textAlign = 'center';
+    ctx2d.textBaseline = 'middle';
+    ctx2d.lineWidth = 10;
+    ctx2d.lineJoin = 'round';
+    ctx2d.strokeStyle = 'rgba(0, 0, 0, 0.9)'; // Outline first — readable on any bg
+    ctx2d.strokeText(`+${points_}`, 128, 64);
+    ctx2d.fillStyle = '#FFEB3B'; // Bright Yellow — the kill/bounty color
+    ctx2d.fillText(`+${points_}`, 128, 64);
+    p.texture.needsUpdate = true;
+    // Popups scale with the camera's growth pull-back so they stay the same
+    // size ON SCREEN as the player (and the framing) grows.
+    const frame = 1 + (state.playerScale - 1) * GROWTH_FRAME_FACTOR;
+    p.sprite.scale.set(3.0 * frame, 1.5 * frame, 1);
+    p.sprite.position.set(position.x, position.y + 0.5, position.z);
+    p.baseY = p.sprite.position.y;
+    p.sprite.material.opacity = 1;
+    p.sprite.visible = true;
+    p.life = POPUP_LIFE;
+}
+
+function updatePopups(dt) {
+    for (const p of popups) {
+        if (p.life <= 0) continue;
+        p.life -= dt;
+        if (p.life <= 0) {
+            p.sprite.visible = false;
+            continue;
+        }
+        const t = 1 - p.life / POPUP_LIFE;
+        p.sprite.position.y = p.baseY + POPUP_RISE * t;
+        // Fully opaque for the first ~40% of life, then a linear fade-out.
+        p.sprite.material.opacity = Math.min(1, p.life / (POPUP_LIFE * 0.6));
+    }
+}
+
 // --- Event hooks (called from game.js / enemies.js) ---
 
 // Food collected: lime sparks from the food's spot + player squash-stretch.
@@ -152,6 +272,22 @@ export function onEnemyKilled(position, bodyColorHex, enemyScale) {
     });
 }
 
+// Growth milestone (score-juice pass): a lime floor shockwave ring sized to
+// the player, plus a brief celebratory scale pulse. The pulse is screen-
+// space-adjacent motion on the object you stare at — skipped under
+// prefers-reduced-motion, like the squash. The ring (object motion) stays.
+export function onGrowthMilestone(position, playerScale) {
+    spawnRing(position, {
+        count: 30,
+        radius: 0.7 * playerScale,
+        speed: 5 + playerScale * 0.5,
+        colorFrom: 0xCCFF66, // Bright lime-white...
+        colorTo: 0x76FF03, // ...settling into food lime
+        life: 0.5
+    });
+    if (!reducedMotion) pulseTime = PULSE_DURATION;
+}
+
 // New run: park every particle and reset transient animation state.
 export function resetEffects() {
     for (let i = 0; i < MAX_PARTICLES; i++) {
@@ -160,6 +296,11 @@ export function resetEffects() {
     }
     activeParticles = 0;
     squashTime = 0;
+    pulseTime = 0;
+    for (const p of popups) {
+        p.life = 0;
+        p.sprite.visible = false;
+    }
     if (posAttr) posAttr.needsUpdate = true;
     if (state.player) resetWalk(state.player);
 }
@@ -168,7 +309,8 @@ export function resetEffects() {
 export function updateEffects(dt) {
     clock += dt;
     updateParticles(dt);
-    updateSquash(dt);
+    updatePopups(dt);
+    updatePlayerScaleFx(dt);
     updateFoodGlow();
     // Hero glow accents (antenna tip + scarf) breathe at a gentle 0.5Hz —
     // one shared material, one uniform write per frame.
@@ -226,22 +368,37 @@ function updateParticles(dt) {
     activeParticles = active;
 }
 
-// Player squash-and-stretch: a single damped bounce (squash → overshoot →
-// rest) layered ON TOP of playerScale. Restores the exact base scale when
-// done, so gameplay height checks are untouched between pulses.
-function updateSquash(dt) {
+// Player scale FX: the collect squash-and-stretch and the milestone pulse,
+// combined multiplicatively and layered ON TOP of playerScale. Restores the
+// exact base scale when both timers expire, so gameplay height checks are
+// untouched between pulses.
+function updatePlayerScaleFx(dt) {
     if (!state.player) return;
-    if (squashTime <= 0) return;
-    squashTime -= dt;
+    if (squashTime <= 0 && pulseTime <= 0) return;
     const base = state.playerScale;
-    if (squashTime <= 0) {
-        state.player.scale.set(base, base, base);
-        return;
+    let yf = 1;
+    let xzf = 1;
+    if (squashTime > 0) {
+        squashTime -= dt;
+        if (squashTime > 0) {
+            const t = 1 - squashTime / SQUASH_DURATION;
+            const wave = Math.sin(t * Math.PI * 2) * (1 - t) * 0.22;
+            yf *= 1 - wave; // Squash first (down), rebound second (up)
+            xzf *= 1 + wave * 0.6; // Roughly volume-preserving
+        }
     }
-    const t = 1 - squashTime / SQUASH_DURATION;
-    const wave = Math.sin(t * Math.PI * 2) * (1 - t) * 0.22;
-    const yf = 1 - wave; // Squash first (down), rebound second (up)
-    const xzf = 1 + wave * 0.6; // Roughly volume-preserving
+    if (pulseTime > 0) {
+        pulseTime -= dt;
+        if (pulseTime > 0) {
+            // A single proud swell: up ~10% and back, uniform on all axes
+            const t = 1 - pulseTime / PULSE_DURATION;
+            const swell = 1 + Math.sin(t * Math.PI) * 0.1;
+            yf *= swell;
+            xzf *= swell;
+        }
+    }
+    // When the LAST timer just expired this frame, yf/xzf are exactly 1 —
+    // this write IS the base-scale restore.
     state.player.scale.set(base * xzf, base * yf, base * xzf);
 }
 

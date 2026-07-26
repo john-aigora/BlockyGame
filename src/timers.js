@@ -1,6 +1,6 @@
 import { initialCollectTime } from './constants.js';
 import { state } from './state.js';
-import { el, endGame, updateCollectTimeDisplay } from './ui.js';
+import { el, endGame, updateCollectTimeDisplay, hideComboChip } from './ui.js';
 
 // --- Collect Clock Functions ---
 // The collect countdown runs on the game clock (advanced by dt from the
@@ -26,5 +26,19 @@ export function tickCollectClock(dt) {
 
     if (state.collectTimeLeft <= 0) { // Time ran out to collect a block
         endGame('Failed to collect a block in time.');
+    }
+}
+
+// --- Combo Window Clock (score-juice pass) ---
+// Runs on the game clock like the collect countdown, so pausing freezes a
+// live combo instead of silently eating it. killEnemy (enemies.js) starts /
+// refreshes the window; expiry here drops the multiplier back to nothing.
+export function tickComboClock(dt) {
+    if (state.comboTimeLeft <= 0) return;
+    state.comboTimeLeft -= dt;
+    if (state.comboTimeLeft <= 0) {
+        state.comboTimeLeft = 0;
+        state.comboCount = 0;
+        hideComboChip();
     }
 }

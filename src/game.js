@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {
     growthFactor, enemyBaseHeight, speedMultipliers,
-    FOOD_POINTS, ENEMY_HEIGHT_FACTOR,
+    FOOD_POINTS, ENEMY_HEIGHT_FACTOR, MILESTONE_STEP,
     SPEED_GROWTH_FACTOR, SPEED_GROWTH_CAP,
     BASE_PLAYER_SPEED, MOBILE_SPEED_MULTIPLIER,
     worldSize, initialFoodDensityArea,
@@ -14,10 +14,10 @@ import { createPlayer, disposeCharacter } from './characters.js';
 import { createEnemy, updateEnemies, playerBox, scratchBox } from './enemies.js';
 import { spawnNearPlayer, spawnAnywhere } from './collectibles.js';
 import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoomIn, zoomOut, updateGroundScroll } from './world.js';
-import { initEffects, updateEffects, resetEffects, onCollect } from './effects.js';
+import { initEffects, updateEffects, resetEffects, onCollect, onGrowthMilestone } from './effects.js';
 import { keys, keyboardVector, onKeyDown, onKeyUp, setupTouchControls } from './input.js';
-import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators } from './ui.js';
-import { resetCollectClock, tickCollectClock } from './timers.js';
+import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo } from './ui.js';
+import { resetCollectClock, tickCollectClock, tickComboClock } from './timers.js';
 import { unlockAudio, sfx, music } from './audio.js';
 
 // --- Simulation Clock ---
@@ -111,6 +111,7 @@ function setupNewGame() {
     state.score = 0;
     state.playerScale = 1.0; // Player's initial scale (acts as height for 1x1x1 geometry)
     applySpeedMultiplier(); // playerScale reset → drop any size speed bonus from the last run
+    resetCombo(); // A mid-run restart must not carry a live combo into the new run
     resetCameraZoom(); // New runs always start at the default framing
     updateScoreDisplay();
 
@@ -202,6 +203,9 @@ function update(dt) {
     // Advance the collect countdown on the game clock (before the enemy loop)
     tickCollectClock(dt);
 
+    // Combo window runs on the same clock (kills in enemies.js refresh it)
+    tickComboClock(dt);
+
     // Update kill indicator and enemy colors (visuals first)
     updateKillIndicator(dt);
 
@@ -272,10 +276,20 @@ function update(dt) {
                 state.collectibles.splice(i, 1);
                 state.score += FOOD_POINTS;
                 updateScoreDisplay();
+                const prevScale = state.playerScale;
                 state.playerScale += growthFactor;
                 state.player.scale.set(state.playerScale, state.playerScale, state.playerScale);
                 state.player.position.y = 0; // MODIFIED: Group origin at feet, scaling handles height
                 applySpeedMultiplier(); // playerScale changed → refresh the size speed bonus
+                // Growth milestone (score-juice pass): crossing a whole
+                // MILESTONE_STEP of scale earns a shockwave ring, a rising
+                // jingle, and a proud little swell. The epsilon absorbs the
+                // float drift of repeated += growthFactor at the boundary.
+                if (Math.floor((state.playerScale + 1e-9) / MILESTONE_STEP) >
+                    Math.floor((prevScale + 1e-9) / MILESTONE_STEP)) {
+                    onGrowthMilestone(state.player.position, state.playerScale);
+                    sfx.milestone();
+                }
                 spawnNearPlayer();
                 resetCollectClock();
                 sfx.collect();

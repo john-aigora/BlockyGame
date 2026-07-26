@@ -10,6 +10,10 @@ export const ENEMIES_PER_KILL = 2; // spawned per kill, subject to the cap
 export const ENEMY_HEIGHT_FACTOR = 1.5; // new-enemy height vs player (existing value, now named)
 export const SPEED_GROWTH_FACTOR = 0.18; // extra speed per point of playerScale above 1 (big = faster)
 export const SPEED_GROWTH_CAP = 2.2; // max multiple of base speed the size bonus can ever reach
+export const SIZE_BOUNTY_PER_UNIT = 5; // extra kill points per whole unit of the enemy's scaled body height
+export const COMBO_WINDOW = 4; // seconds after a kill in which the next kill escalates the combo
+export const COMBO_MAX = 5; // combo multiplier cap (x1..x5)
+export const MILESTONE_STEP = 1.0; // playerScale interval that fires a growth-milestone celebration
 
 // Speed Multiplier Variables
 export const speedMultipliers = [1.0, 1.5, 2.0, 3.0, 5.0, 0.5]; // ADDED 5.0x, re-ordered
@@ -55,6 +59,13 @@ export const DUST_LIFE = 0.3; // Seconds a puff lives
 export const DUST_SPEED = 0.7; // Outward drift, units/s (very low = soft)
 export const DUST_COLOR_FROM = 0xB2DFDB; // Pale teal-white puff...
 export const DUST_COLOR_TO = 0x6B9E97; // ...settling toward the ground teal
+
+// Score juice (score-juice pass) — floating "+N" popups and the kill
+// micro-shake. Sizes are world units; times are seconds.
+export const POPUP_RISE = 1.5; // How far a score popup floats up over its life
+export const POPUP_LIFE = 0.8; // Seconds a score popup lives
+export const SHAKE_DURATION = 0.12; // Kill micro-shake length
+export const SHAKE_AMPLITUDE = 0.15; // Max camera offset at shake start (decays to 0)
 
 // --- Movement mode flag (plan 014 design spike) ---
 // `?move=continuous` opts into the Little Big Snake-style prototype

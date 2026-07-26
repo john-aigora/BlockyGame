@@ -63,12 +63,19 @@ function blip({ freq = 440, endFreq, type = 'square', dur = 0.1, vol = 0.2, dela
 
 export const sfx = {
     collect: () => blip({ freq: 660, endFreq: 990, dur: 0.08, vol: 0.15 }),
-    kill: () => {
-        blip({ freq: 220, endFreq: 55, type: 'sawtooth', dur: 0.25, vol: 0.25 });
-        blip({ freq: 880, endFreq: 1760, dur: 0.12, vol: 0.12, delay: 0.05 });
+    // comboStep escalates the kill pitch: +2 semitones per chained kill
+    // (score-juice pass), so a combo AUDIBLY climbs. Step 0 is the original
+    // sound exactly; the clamp keeps even absurd steps musical.
+    kill: (comboStep = 0) => {
+        const pitch = Math.pow(2, Math.min(comboStep, 8) / 6);
+        blip({ freq: 220 * pitch, endFreq: 55 * pitch, type: 'sawtooth', dur: 0.25, vol: 0.25 });
+        blip({ freq: 880 * pitch, endFreq: 1760 * pitch, dur: 0.12, vol: 0.12, delay: 0.05 });
     },
     death: () => { blip({ freq: 330, endFreq: 82, type: 'triangle', dur: 0.6, vol: 0.3 }); },
     start: () => { [523, 659, 784].forEach((f, i) => blip({ freq: f, dur: 0.09, vol: 0.15, delay: i * 0.09 })); },
+    // Growth milestone: a quick 3-note rising jingle (E5 G5 B5) — brighter
+    // and faster than the start fanfare, so it reads as "level up", not "boot".
+    milestone: () => { [659, 784, 988].forEach((f, i) => blip({ freq: f, dur: 0.1, vol: 0.18, delay: i * 0.08 })); },
     click: () => blip({ freq: 880, dur: 0.03, vol: 0.08 }),
 };
 

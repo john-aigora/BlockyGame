@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import {
     worldSize, collectibleSpawnRadius,
     ZOOM_STEP, ZOOM_MIN, ZOOM_MAX, GROWTH_FRAME_FACTOR,
-    INITIAL_CAMERA_Y_OFFSET, INITIAL_CAMERA_Z_OFFSET
+    INITIAL_CAMERA_Y_OFFSET, INITIAL_CAMERA_Z_OFFSET,
+    SHAKE_DURATION, SHAKE_AMPLITUDE
 } from './constants.js';
 import { state } from './state.js';
 
@@ -106,7 +107,22 @@ export function updateGroundScroll() {
     );
 }
 
+// --- Kill micro-shake (score-juice pass) ---
+// A tiny additive camera offset that decays over SHAKE_DURATION. Lives at
+// the CAMERA layer (applied after the follow + lookAt), never on the player
+// — gameplay positions are untouched. Screen-space motion, so it is fully
+// disabled under prefers-reduced-motion (checked once in createWorld).
+let shakeTime = 0;
+let shakeEnabled = true;
+
+export function triggerKillShake() {
+    if (!shakeEnabled) return;
+    shakeTime = SHAKE_DURATION;
+}
+
 export function createWorld() {
+    shakeEnabled = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
     // 1. Scene: The container for all 3D objects.
     state.scene = new THREE.Scene();
     state.scene.background = makeSkyTexture(); // Gradient sky (plan 015)
@@ -198,6 +214,17 @@ export function updateCameraPosition(dt) {
         state.player.position.z + state.camZ
     );
     state.camera.lookAt(state.player.position);
+    // Kill micro-shake: additive offset AFTER lookAt, so the camera jitters
+    // in place without re-aiming — a punchy 0.12s thump, not a swing. The
+    // amplitude decays linearly to zero; at ~7 frames total this is far from
+    // any strobe, and reduced-motion users never get here (triggerKillShake).
+    if (shakeTime > 0) {
+        shakeTime = Math.max(0, shakeTime - dt);
+        const amp = SHAKE_AMPLITUDE * (shakeTime / SHAKE_DURATION);
+        state.camera.position.x += (Math.random() * 2 - 1) * amp;
+        state.camera.position.y += (Math.random() * 2 - 1) * amp;
+        state.camera.position.z += (Math.random() * 2 - 1) * amp;
+    }
     updateFog();
 }
 
@@ -214,6 +241,7 @@ function updateFog() {
 // default framing (no lerp-in from the previous game's zoom).
 export function resetCameraZoom() {
     state.zoomLevel = 1.0;
+    shakeTime = 0; // A new run never inherits the last kill's shake
     const target = cameraTargets();
     state.camY = target.y;
     state.camZ = target.z;

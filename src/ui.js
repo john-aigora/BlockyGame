@@ -10,6 +10,7 @@ export const el = {
     score: null,
     collectTime: null,
     killIndicator: null,
+    comboChip: null,
     messageBox: null,
     deathReason: null,
     finalScore: null,
@@ -25,6 +26,7 @@ export function initUI() {
     el.score = document.getElementById('score');
     el.collectTime = document.getElementById('collect-time');
     el.killIndicator = document.getElementById('kill-indicator');
+    el.comboChip = document.getElementById('combo-chip');
     el.messageBox = document.getElementById('message-box');
     el.deathReason = document.getElementById('death-reason');
     el.finalScore = document.getElementById('final-score');
@@ -111,12 +113,43 @@ function renderHiscores(list, rank) {
     el.hiscoreSlot.appendChild(ol);
 }
 
+// --- Combo chip (score-juice pass) ---
+// A small yellow "COMBO xN" chip under the kill indicator. Visible only at
+// x2 and up (x1 is just "a kill"); pops on every increment via the same
+// remove/reflow/add dance as the score pop. enemies.js shows it on chained
+// kills; timers.js hides it when the window expires; death and new games
+// reset it here.
+export function showComboChip(count) {
+    if (!el.comboChip) return;
+    el.comboChip.textContent = `COMBO x${count}`;
+    el.comboChip.style.display = 'block';
+    el.comboChip.classList.remove('combo-pop');
+    void el.comboChip.offsetWidth; // Forces a reflow so the animation restarts
+    el.comboChip.classList.add('combo-pop');
+}
+
+export function hideComboChip() {
+    if (el.comboChip && el.comboChip.style.display !== 'none') {
+        el.comboChip.style.display = 'none';
+    }
+}
+
+// Zeroes the combo state and hides the chip — the single combo reset path
+// (death via endGame, and every setupNewGame so a mid-run restart can't
+// smuggle a live combo into the next run).
+export function resetCombo() {
+    state.comboCount = 0;
+    state.comboTimeLeft = 0;
+    hideComboChip();
+}
+
 // Ends the current run. This is the ONLY legal way to end a game — every
 // death cause (enemy collision, collect-clock expiry, future hazards) must
 // call it. Idempotent: safe against double triggers within one frame.
 export function endGame(reason) {
     if (!state.gameActive) return;
     state.gameActive = false;
+    resetCombo(); // Death breaks the chain (and clears the chip behind the box)
     music.stop(); // 0.3s fadeout — the death jingle plays over it
     sfx.death();
     const { list, rank } = recordScore(state.score);

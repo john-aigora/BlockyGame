@@ -4,7 +4,7 @@ import { spawnNearPlayer, spawnAtPosition } from './collectibles.js';
 import { spawnNewEnemies } from './enemies.js';
 import { onTouchStart, onTouchMove, onTouchEndOrCancel } from './input.js';
 import { sfx, isMuted, audioState, music } from './audio.js';
-import { spawnBurst, effectsInfo } from './effects.js';
+import { spawnBurst, spawnScorePopup, effectsInfo } from './effects.js';
 import { movementDebug } from './movement-continuous.js';
 
 // Read-only debug/test handle; production code must never read it.
@@ -25,6 +25,7 @@ window.__game = {
         audioState,
         musicActive: () => music.isActive(),
         spawnBurst, // Particle pool-discipline checks (effects spec)
+        spawnScorePopup, // Score-popup pool-discipline checks (effects spec)
         effectsInfo, // { reducedMotion, activeParticles, poolSize }
         movementDebug // Plan 014 spike introspection: { energy, boostHeld, heading, hasMouse }
     }

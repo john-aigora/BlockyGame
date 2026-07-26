@@ -2,15 +2,17 @@ import * as THREE from 'three';
 import {
     enemyBaseHeight, worldBoundary, engagementRadius, orbitStrengthFactor,
     enemyRandomDriftFactor, AVOID_SPEED_FACTOR, BASE_ENEMY_SPAWN_DISTANCE, SPAWN_DISTANCE_SCALE_FACTOR,
-    KILL_POINTS, MAX_ENEMIES, ENEMIES_PER_KILL, ENEMY_HEIGHT_FACTOR
+    KILL_POINTS, MAX_ENEMIES, ENEMIES_PER_KILL, ENEMY_HEIGHT_FACTOR,
+    SIZE_BOUNTY_PER_UNIT, COMBO_WINDOW, COMBO_MAX
 } from './constants.js';
 import { state } from './state.js';
 import { createCharacter, disposeCharacter, shadeColor, CAP_LIGHTEN } from './characters.js';
 import { spawnAtPosition } from './collectibles.js';
-import { endGame, updateScoreDisplay } from './ui.js';
+import { endGame, updateScoreDisplay, showComboChip } from './ui.js';
 import { wrapPosition, torusDelta, torusDistance } from './worldmath.js';
 import { sfx } from './audio.js';
-import { onEnemyKilled } from './effects.js';
+import { onEnemyKilled, spawnScorePopup } from './effects.js';
+import { triggerKillShake } from './world.js';
 
 // Module-level scratch vectors — reused every frame to avoid per-frame allocation.
 const tmpVec = new THREE.Vector3();
@@ -162,11 +164,22 @@ export function updateEnemies(dt) {
     }
 }
 
-// Removes a killed enemy and pays out its rewards: the flat KILL_POINTS
-// bounty, 4 food particles at the death position, plus (up to) two new,
-// larger enemies. The single kill path — future kill causes must call this too.
+// Removes a killed enemy and pays out its rewards: the size-scaled kill
+// bounty times the combo multiplier, a "+N" popup, 4 food particles at the
+// death position, plus (up to) two new, larger enemies. The single kill
+// path — future kill causes must call this too.
 export function killEnemy(enemyGroup, index) {
     const enemyDeathPosition = enemyGroup.position.clone(); // Get position before removing
+
+    // Size bounty (score-juice pass): bigger enemies pay more — the risk of
+    // hunting up the food chain is now worth points, not just pride.
+    const bounty = KILL_POINTS + SIZE_BOUNTY_PER_UNIT * Math.floor(enemyBaseHeight * enemyGroup.scale.y);
+    // Combo multiplier: kills chained within COMBO_WINDOW escalate x1, x2...
+    // up to COMBO_MAX. The window refreshes on every kill; timers.js expires
+    // it on the game clock, and ui.js resets it on death / new game.
+    state.comboCount = state.comboTimeLeft > 0 ? Math.min(state.comboCount + 1, COMBO_MAX) : 1;
+    state.comboTimeLeft = COMBO_WINDOW;
+    const payout = bounty * state.comboCount;
 
     // Death explosion (plan 015): burst in the enemy's CURRENT body color
     // (yellow, since it was killable) transitioning to food-lime — the
@@ -175,17 +188,20 @@ export function killEnemy(enemyGroup, index) {
     const burstColor = bodyMesh ? bodyMesh.material.color.getHex() : 0xFFEB3B;
     enemyDeathPosition.y = (enemyGroup.userData.bodyBaseY ?? 0.9) * enemyGroup.scale.y;
     onEnemyKilled(enemyDeathPosition, burstColor, enemyGroup.scale.y);
+    spawnScorePopup(enemyDeathPosition, payout); // "+N" rises from the body center
+    triggerKillShake(); // 0.12s camera thump (no-op under reduced motion)
     enemyDeathPosition.y = 0; // Food still spawns at ground level below
 
     state.scene.remove(enemyGroup);
     disposeCharacter(enemyGroup); // Release the per-instance body material
     state.enemies.splice(index, 1);
-    sfx.kill();
+    sfx.kill(state.comboCount - 1); // Pitch climbs with the combo
 
     // Kill bounty (plan 011): hunting must beat pacifism — the README's
     // "strategically defeating enemies" promise, now actually paid.
-    state.score += KILL_POINTS;
+    state.score += payout;
     updateScoreDisplay();
+    if (state.comboCount > 1) showComboChip(state.comboCount);
 
     // Spawn 4 food particles
     for (let i = 0; i < 4; i++) {

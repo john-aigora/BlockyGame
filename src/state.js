@@ -20,6 +20,8 @@ export const state = {
   isPaused: false, // Track if game is paused
   killIndicatorVisible: true, // For flashing kill indicator (starts visible)
   killFlashClock: 0, // Seconds accumulated toward the next kill-indicator flash toggle
+  comboCount: 0, // Current kill-combo multiplier (0/1 = no combo; capped at COMBO_MAX)
+  comboTimeLeft: 0, // Game-clock seconds left in the combo window (ticked in timers.js)
   animationFrameId: null, // requestAnimationFrame handle
 
   // Speed Multiplier Variables
