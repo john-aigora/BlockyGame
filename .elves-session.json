@@ -22,22 +22,22 @@
     "scope": "current Elves run"
   },
   "continuation_guard": {
-    "remaining_batches": 4,
+    "remaining_batches": 3,
     "stop_allowed": false,
     "stop_allowed_reason": "run launched via /goal; 11 batches remain",
     "checkpoint_is_stop": false,
-    "next_required_action": "Tag elves/pre-batch-8, execute Batch 8 (plans 011 + 012)"
+    "next_required_action": "Tag elves/pre-batch-9, execute Batch 9 (plan 015)"
   },
   "test_baseline": {
-    "passed": 31,
-    "total": 31,
+    "passed": 37,
+    "total": 37,
     "skipped": 0,
     "status": "captured",
     "reason": null
   },
   "current_batch": {
-    "id": 8,
-    "name": "Balance + mobile polish",
+    "id": 9,
+    "name": "Visual juice pass (user-mandated)",
     "status": "pending"
   },
   "collision_tripwire": "f4d3ecc1ca0a292ed42b09beb63a01343211dd48",
@@ -115,7 +115,8 @@
         "011",
         "012"
       ],
-      "status": "pending"
+      "status": "complete",
+      "rollback_tag": "elves/pre-batch-8"
     },
     {
       "id": 9,

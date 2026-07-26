@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import {
     enemyBaseHeight, worldBoundary, engagementRadius, orbitStrengthFactor,
-    enemyRandomDriftFactor, AVOID_SPEED_FACTOR, BASE_ENEMY_SPAWN_DISTANCE, SPAWN_DISTANCE_SCALE_FACTOR
+    enemyRandomDriftFactor, AVOID_SPEED_FACTOR, BASE_ENEMY_SPAWN_DISTANCE, SPAWN_DISTANCE_SCALE_FACTOR,
+    KILL_POINTS, MAX_ENEMIES, ENEMIES_PER_KILL, ENEMY_HEIGHT_FACTOR
 } from './constants.js';
 import { state } from './state.js';
 import { createCharacter, disposeCharacter } from './characters.js';
 import { spawnAtPosition } from './collectibles.js';
-import { endGame } from './ui.js';
+import { endGame, updateScoreDisplay } from './ui.js';
 import { wrapPosition, torusDelta, torusDistance } from './worldmath.js';
 import { sfx } from './audio.js';
 
@@ -144,9 +145,9 @@ export function updateEnemies(dt) {
     }
 }
 
-// Removes a killed enemy and pays out its rewards: 4 food particles at the
-// death position plus two new, larger enemies. The single kill path — future
-// kill causes must call this too.
+// Removes a killed enemy and pays out its rewards: the flat KILL_POINTS
+// bounty, 4 food particles at the death position, plus (up to) two new,
+// larger enemies. The single kill path — future kill causes must call this too.
 export function killEnemy(enemyGroup, index) {
     const enemyDeathPosition = enemyGroup.position.clone(); // Get position before removing
 
@@ -154,6 +155,11 @@ export function killEnemy(enemyGroup, index) {
     disposeCharacter(enemyGroup); // Release the per-instance body material
     state.enemies.splice(index, 1);
     sfx.kill();
+
+    // Kill bounty (plan 011): hunting must beat pacifism — the README's
+    // "strategically defeating enemies" promise, now actually paid.
+    state.score += KILL_POINTS;
+    updateScoreDisplay();
 
     // Spawn 4 food particles
     for (let i = 0; i < 4; i++) {
@@ -164,8 +170,15 @@ export function killEnemy(enemyGroup, index) {
 }
 
 export function spawnNewEnemies() {
+    // Population cap (plan 011): only spawn into free slots under
+    // MAX_ENEMIES. Zero is valid — a full horde means the kill still paid
+    // points and food, which is the difficulty curve's relief valve.
+    const slots = Math.max(0, MAX_ENEMIES - state.enemies.length);
+    const count = Math.min(ENEMIES_PER_KILL, slots);
+    if (count === 0) return;
+
     const currentPlayerActualHeight = state.playerScale * 1.0;
-    const newEnemyTargetHeight = currentPlayerActualHeight * 1.5;
+    const newEnemyTargetHeight = currentPlayerActualHeight * ENEMY_HEIGHT_FACTOR;
     const newEnemyScaleFactor = newEnemyTargetHeight / enemyBaseHeight;
 
     // Calculate dynamic spawn distance based on playerScale, capped so spawns
@@ -176,24 +189,20 @@ export function spawnNewEnemies() {
     );
     console.log(`Player scale: ${state.playerScale}, New enemy spawn distance: ${spawnDistance}`); // For debugging
 
-    // Spawn first enemy at a random angle
-    const enemy1 = createEnemy();
-    enemy1.scale.set(newEnemyScaleFactor, newEnemyScaleFactor, newEnemyScaleFactor);
-    enemy1.position.y = 0;
-    const angle1 = Math.random() * Math.PI * 2; // Random angle (0 to 360 degrees)
-    enemy1.position.x = state.player.position.x + Math.cos(angle1) * spawnDistance;
-    enemy1.position.z = state.player.position.z + Math.sin(angle1) * spawnDistance;
-    wrapPosition(enemy1.position); // A capped distance can still cross the seam near an edge
-
-    // Spawn second enemy on the opposite side with some deviation
-    const enemy2 = createEnemy();
-    enemy2.scale.set(newEnemyScaleFactor, newEnemyScaleFactor, newEnemyScaleFactor);
-    enemy2.position.y = 0;
-    // Opposite side (angle1 + PI) with a random deviation of +/- 45 degrees (PI/4 radians)
-    const angle2 = angle1 + Math.PI + (Math.random() - 0.5) * (Math.PI / 2);
-    enemy2.position.x = state.player.position.x + Math.cos(angle2) * spawnDistance;
-    enemy2.position.z = state.player.position.z + Math.sin(angle2) * spawnDistance;
-    wrapPosition(enemy2.position);
+    // First enemy at a random angle; second on the opposite side (angle1 + PI)
+    // with a random deviation of +/- 45 degrees (PI/4 radians).
+    const angle1 = Math.random() * Math.PI * 2;
+    for (let n = 0; n < count; n++) {
+        const angle = n === 0
+            ? angle1
+            : angle1 + Math.PI + (Math.random() - 0.5) * (Math.PI / 2);
+        const enemy = createEnemy();
+        enemy.scale.set(newEnemyScaleFactor, newEnemyScaleFactor, newEnemyScaleFactor);
+        enemy.position.y = 0;
+        enemy.position.x = state.player.position.x + Math.cos(angle) * spawnDistance;
+        enemy.position.z = state.player.position.z + Math.sin(angle) * spawnDistance;
+        wrapPosition(enemy.position); // A capped distance can still cross the seam near an edge
+    }
 }
 
 // Sums the normalized (torus-aware) away-directions from every neighbor

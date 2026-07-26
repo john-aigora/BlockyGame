@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Blocky Collector 3D - Collect or Die!</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
@@ -14,6 +14,10 @@
         <div id="start-overlay">
             <h1>BLOCKY COLLECTOR 3D</h1>
             <p class="tagline">Collect. Grow. Hunt the yellow ones.</p>
+            <!-- Teaching the mobile layout relies on: #instructions is hidden
+                 on small screens (plan 012), so the survival rules live here. -->
+            <p class="tagline">Grab a LIME block every 15s to grow. <br>
+                Get TALLER than an enemy and it turns YELLOW &mdash; touch it to defeat it!</p>
             <button id="start-button" class="game-button">&#9654; START</button>
             <p class="start-hint">or press any key</p>
         </div>
@@ -47,7 +51,7 @@
             Collect LIME blocks every 15s to grow! <br>
             If TALLER than an enemy, they turn YELLOW. <br>
             Touch YELLOW enemies to defeat them. <br>
-            Defeating an enemy spawns two new, larger foes. <br>
+            Defeat YELLOW enemies: +25 points... but two larger foes appear! <br>
             Survive & get a high score!
         </div>
     </div>

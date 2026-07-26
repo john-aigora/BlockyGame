@@ -18,6 +18,23 @@
 
 ---
 
+## Batch 8 complete: 2026-07-26
+
+**Batch:** 8: Balance (011) + mobile polish (012) — subagent a0f0ec5421259589c, coordinator-verified
+**Contract status:** all done criteria met (family-playtest + physical-device checks flagged as operator follow-ups — inherently manual)
+
+**What changed:** GAME BALANCE constants block (kid-tunable console): kills now pay 25 pts through the real collision path (README promised this; they paid 0), enemy population capped at 8, named ENEMY_HEIGHT_FACTOR; instructions + one README sentence updated. Mobile: UI touches (buttons/overlays) can no longer drive movement, driving finger tracked by identifier (second finger can't hijack), pointer:coarse device detection (no UA sniffing), touch-action hardening, 100dvh, filled ≤600px media query (44px targets, instructions hidden — their teaching moved into the overlay tagline first), viewport-fit=cover. 37 tests (+3 balance, +3 touch).
+
+**Gates (agent + coordinator):** lint 0 · 37 passed · build 626ms · all greps clean.
+
+**Review (light):** clean. **Bug found & fixed per user rule:** touches starting on the start overlay/death box seeded stale drag state into the new run — UI-exclusion guard covers overlays, not just buttons.
+
+**Regression attestation:** baseline 31→37 (+6, 0 removed). Confidence HIGH.
+
+**Next:** Batch 9 (plan 015 — visual juice pass, user-mandated creative latitude). Tag elves/pre-batch-9.
+
+---
+
 ## Batch 7 complete: 2026-07-26
 
 **Batch:** 7: High scores (009) + sound & music (010) — subagent ab8ad34a6007bc4f9, coordinator-verified

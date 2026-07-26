@@ -56,7 +56,59 @@ export function onKeyUp(event) {
     }
 }
 
-// NEW Touch Anywhere Event Listeners
+// --- Touch Anywhere Controls (plan 012) ---
+// The finger that started the drag is tracked by its Touch.identifier so a
+// second finger (e.g. tapping Pause mid-drag) can never hijack the movement
+// vector. null means no drag in progress.
+let activeTouchId = null;
+
+// Returns the tracked driving touch from a TouchList-like, or null.
+function findTrackedTouch(touchList) {
+    for (let i = 0; i < touchList.length; i++) {
+        if (touchList[i].identifier === activeTouchId) return touchList[i];
+    }
+    return null;
+}
+
+// Exported (and exposed on window.__game.debug) so the touch spec can drive
+// the handler logic directly with fabricated event objects.
+export function onTouchStart(e) {
+    // Touches that start on UI never drive movement: buttons handle their
+    // own taps, and the start overlay / message box own their whole surface.
+    if (e.target.closest('button, #start-overlay, #message-box')) return;
+    e.preventDefault();
+    // A second finger on the canvas must not restart or hijack the drag.
+    if (state.touchActive) return;
+    const touch = e.changedTouches[0];
+    if (!touch) return;
+    activeTouchId = touch.identifier;
+    state.touchActive = true;
+    state.touchStartPoint.x = touch.clientX;
+    state.touchStartPoint.y = touch.clientY;
+    state.currentTouchPoint.x = touch.clientX;
+    state.currentTouchPoint.y = touch.clientY;
+    updateMovementVector();
+}
+
+export function onTouchMove(e) {
+    if (!state.touchActive) return;
+    e.preventDefault();
+    const touch = findTrackedTouch(e.changedTouches);
+    if (!touch) return; // Only the driving finger steers
+    state.currentTouchPoint.x = touch.clientX;
+    state.currentTouchPoint.y = touch.clientY;
+    updateMovementVector();
+}
+
+export function onTouchEndOrCancel(e) {
+    if (!state.touchActive) return;
+    // Another finger lifting must not end the drag — only the driving one.
+    if (!findTrackedTouch(e.changedTouches)) return;
+    activeTouchId = null;
+    state.touchActive = false;
+    state.movementVector = { x: 0, y: 0 };
+}
+
 export function setupTouchControls() {
     state.gameScreenContainer = document.getElementById('game-container'); // Control area
 
@@ -72,39 +124,8 @@ export function setupTouchControls() {
         updateGameCanvasBounds(); // Initial calculation
         window.addEventListener('resize', updateGameCanvasBounds); // Update on window resize
 
-        state.gameScreenContainer.addEventListener('touchstart', (e) => {
-            const targetElement = e.target;
-            if (!targetElement.closest('button')) {
-                e.preventDefault();
-            }
-            if (e.touches.length > 0) {
-                state.touchActive = true;
-                state.touchStartPoint.x = e.touches[0].clientX;
-                state.touchStartPoint.y = e.touches[0].clientY;
-                state.currentTouchPoint.x = e.touches[0].clientX;
-                state.currentTouchPoint.y = e.touches[0].clientY;
-                updateMovementVector();
-            }
-        });
-
-        state.gameScreenContainer.addEventListener('touchmove', (e) => {
-            if (state.touchActive) {
-                e.preventDefault();
-            }
-            if (state.touchActive && e.touches.length > 0) {
-                state.currentTouchPoint.x = e.touches[0].clientX;
-                state.currentTouchPoint.y = e.touches[0].clientY;
-                updateMovementVector();
-            }
-        });
-
-        const onTouchEndOrCancel = () => {
-            if (state.touchActive) {
-                state.touchActive = false;
-                state.movementVector = { x: 0, y: 0 };
-            }
-        };
-
+        state.gameScreenContainer.addEventListener('touchstart', onTouchStart);
+        state.gameScreenContainer.addEventListener('touchmove', onTouchMove);
         state.gameScreenContainer.addEventListener('touchend', onTouchEndOrCancel);
         state.gameScreenContainer.addEventListener('touchcancel', onTouchEndOrCancel);
     } else {

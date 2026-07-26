@@ -24,8 +24,8 @@ row when done.
 | 008 | Start screen + death screen + keyboard restart | P2 | M | 004 | DONE |
 | 009 | Local high scores (top-5, localStorage) on the death screen | P2 | S | 008 | DONE |
 | 010 | Synthesized sound effects + procedural background music + persistent mute | P2 | M | 008 | DONE |
-| 011 | Kill points + enemy population cap (scoring/balance) | P2 | S | 003, 004, 005 | TODO |
-| 012 | Mobile polish: touch/UI conflicts, responsive layout, honest device detection | P2 | M | 002, 008 | TODO |
+| 011 | Kill points + enemy population cap (scoring/balance) | P2 | S | 003, 004, 005 | DONE |
+| 012 | Mobile polish: touch/UI conflicts, responsive layout, honest device detection | P2 | M | 002, 008 | DONE |
 | 013 | Docs truth pass + favicon/meta + Vercel deployment | P2 | S | 001 (hard); 002-012 (soft — run LAST) | TODO |
 | 014 | SPIKE: Little Big Snake continuous movement + boost, behind `?move=continuous` | P3 | M | 003, 012 | TODO |
 | 015 | Visual "juice" pass — particles, walk animation, living ground, glow (user-mandated creative latitude) | P2 | M | 007 | TODO |

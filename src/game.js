@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {
     growthFactor, enemyBaseHeight, speedMultipliers,
+    FOOD_POINTS, ENEMY_HEIGHT_FACTOR,
     BASE_PLAYER_SPEED, MOBILE_SPEED_MULTIPLIER,
     worldSize, initialFoodDensityArea,
     enemyStartOffset
@@ -34,8 +35,11 @@ function init() {
 
     initUI(); // Resolve all UI DOM refs once — everything after this uses el.*
 
-    // Mobile detection and speed adjustment
-    state.isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || /Mobi|Android/i.test(navigator.userAgent);
+    // Mobile detection and speed adjustment (plan 012): capability +
+    // form-factor, not UA sniffing. A touch-laptop with a mouse reports
+    // `pointer: fine` and correctly gets desktop speed; the boost is only
+    // for touch-primary (coarse-pointer) devices.
+    state.isMobile = window.matchMedia('(pointer: coarse)').matches;
     if (state.isMobile) {
         state.playerSpeed = BASE_PLAYER_SPEED * MOBILE_SPEED_MULTIPLIER;
         console.log("Mobile device detected. Player speed adjusted to:", state.playerSpeed);
@@ -127,10 +131,11 @@ function setupNewGame() {
         createPlayer(); // createPlayer sets scale to playerScale by default
     }
 
-    // Create initial enemy, 50% taller than player
+    // Create initial enemy, taller than the player by the same factor as
+    // kill-spawned foes (ENEMY_HEIGHT_FACTOR)
     const firstEnemy = createEnemy();
     const initialPlayerActualHeight = state.playerScale * 1.0; // Player's geometry height is 1
-    const firstEnemyTargetHeight = initialPlayerActualHeight * 1.5;
+    const firstEnemyTargetHeight = initialPlayerActualHeight * ENEMY_HEIGHT_FACTOR;
     // enemyBaseHeight is the enemy's unscaled geometry height (1.2)
     const firstEnemyScaleFactor = firstEnemyTargetHeight / enemyBaseHeight;
     firstEnemy.scale.set(firstEnemyScaleFactor, firstEnemyScaleFactor, firstEnemyScaleFactor);
@@ -234,7 +239,7 @@ function update(dt) {
             if (playerBox.intersectsBox(scratchBox)) {
                 state.scene.remove(collectible);
                 state.collectibles.splice(i, 1);
-                state.score++;
+                state.score += FOOD_POINTS;
                 updateScoreDisplay();
                 state.playerScale += growthFactor;
                 state.player.scale.set(state.playerScale, state.playerScale, state.playerScale);

@@ -14,7 +14,9 @@ body {
     align-items: center;
     justify-content: center;
     height: 100vh;
-    /* Full viewport height */
+    /* Fallback for browsers without dvh support */
+    height: 100dvh;
+    /* Full viewport height, tracking the mobile URL bar show/hide */
 }
 
 /* Container for the game canvas */
@@ -35,6 +37,19 @@ body {
     /* Shadow for depth */
     position: relative;
     /* For positioning UI elements like the message box inside */
+}
+
+/* Touch hardening (plan 012): `manipulation` kills double-tap zoom on the
+   controls; the canvas is the drag surface, so no browser gestures at all. */
+.game-button,
+#start-button,
+#restart-button,
+#mute-button {
+    touch-action: manipulation;
+}
+
+#game-container canvas {
+    touch-action: none;
 }
 
 /* Styling for the Three.js canvas */
@@ -392,4 +407,36 @@ canvas {
     /* Hidden by default */
 }
 
-/* Media Query for Mobile Screen Adjustments */
+/* Media Query for Mobile Screen Adjustments (plan 012): edge-to-edge game
+   area, 44px touch targets, and no always-open instruction block — the
+   start overlay carries the teaching on phones. */
+@media (max-width: 600px) {
+    #game-container {
+        width: 100vw;
+        height: 60dvh;
+        border-width: 3px;
+        border-radius: 0;
+    }
+
+    .game-button {
+        padding: 12px 14px;
+        font-size: 11px;
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    #ui-container {
+        width: 100vw;
+        font-size: 0.9em;
+        padding: 8px;
+    }
+
+    #instructions {
+        display: none;
+        /* The start overlay now teaches the game */
+    }
+
+    .ui-element {
+        font-size: 1em;
+    }
+}
