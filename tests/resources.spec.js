@@ -50,13 +50,25 @@ test('kill indicator flashes at ~1Hz when an enemy is killable', async ({ page }
   await startGame(page); // Begin the run so the indicator updates
   await expect(page.locator('#kill-indicator')).toBeVisible();
 
-  const opacities = [];
-  for (let i = 0; i < 20; i++) {
-    opacities.push(await page.evaluate(() =>
-      document.getElementById('kill-indicator').style.opacity
-    ));
-    await page.waitForTimeout(100);
-  }
+  // Sample every 0.1 GAME seconds (2.0 game seconds total): the flash runs
+  // on killFlashClock += dt, so wall-clock sampling under parallel-suite
+  // load would compress the observed game-time window and miss toggles.
+  // dt is clamped to MAX_DELTA = 0.05 < 0.1, so no frame skips a sample.
+  const opacities = await page.evaluate(() => new Promise((resolve) => {
+    const s = window.__game.state;
+    const indicator = document.getElementById('kill-indicator');
+    const out = [];
+    let nextSampleAt = s.runTime;
+    function frame() {
+      if (s.runTime >= nextSampleAt) {
+        out.push(indicator.style.opacity);
+        nextSampleAt += 0.1;
+      }
+      if (out.length < 20) requestAnimationFrame(frame);
+      else resolve(out);
+    }
+    requestAnimationFrame(frame);
+  }));
   const distinct = new Set(opacities);
   expect(distinct).toEqual(new Set(['1', '0.35'])); // Both flash states observed
   let changes = 0;

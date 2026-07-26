@@ -52,6 +52,14 @@ export const state = {
   collectTimeLeft: initialCollectTime,
   lastShownCollectTime: initialCollectTime, // Last integer written to the DOM
 
+  // Run clock: game-time seconds simulated in the current run (dt-accumulated
+  // in update(); frozen by pause and death; reset by setupNewGame). The
+  // Playwright suites time gameplay against THIS clock: under parallel-suite
+  // load, headless frame rates fall low enough that the MAX_DELTA frame clamp
+  // (game.js) dilates game time well below wall time, so wall-clock timing
+  // of game-clock behavior would misread a perfectly healthy simulation.
+  runTime: 0,
+
   isMobile: false, // For mobile-specific adjustments
 
   // Off-Screen Enemy Indicator Variables

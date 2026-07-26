@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { startGame } from './helpers.js';
+import { startGame, waitGameSeconds } from './helpers.js';
 
 // Toroidal world correctness (plan 005): wrapping preserves overshoot, all
 // food spawns land inside the world, and enemy AI takes the short way across
@@ -35,7 +35,9 @@ test('all food spawns stay inside the world even with the player at the edge', a
 test('player wrap preserves overshoot (no snap to the edge)', async ({ page }) => {
   await startGame(page); // Begin the run (game boots on the start overlay)
   await page.evaluate(() => { window.__game.state.player.position.x = 100.4; });
-  await page.waitForTimeout(100); // Let at least one update frame run
+  // Wait for the wrap itself (it runs on the next update frame) — not a
+  // wall-clock guess that parallel-suite load could starve of frames.
+  await page.waitForFunction(() => window.__game.state.player.position.x < 0, null, { timeout: 30000 });
   const x = await page.evaluate(() => window.__game.state.player.position.x);
   // wrapCoord(100.4) = -99.6 — overshoot preserved, not clamped to -99.9
   expect(x).toBeGreaterThan(-99.6 - 0.5);
@@ -55,7 +57,9 @@ test('enemy AI chases the short way across the wrap seam', async ({ page }) => {
     enemy.timeToChangeRandomVelocity = 999;
   });
   await startGame(page); // Begin the run
-  await page.waitForTimeout(1000);
+  // One GAME second of chasing (~1.5 u advance at enemy speed) — the game
+  // clock, not wall time, is what the enemy's dt-driven movement integrates.
+  await waitGameSeconds(page, 1);
   // Rendered positions are player-relative torus images (seamless torus
   // rendering) — read the CANONICAL coordinate for the assertion.
   const finalX = await page.evaluate(() => {
@@ -81,7 +85,9 @@ test('enemies render at the player-nearest image across the seam', async ({ page
     enemy.timeToChangeRandomVelocity = 999;
   });
   await startGame(page);
-  await page.waitForTimeout(100); // A few frames — the re-image runs per frame
+  // The re-image runs inside every update frame; one simulated frame is
+  // enough. runTime > 0 is exactly "at least one update frame ran".
+  await page.waitForFunction(() => window.__game.state.runTime > 0, null, { timeout: 30000 });
   const { enemyX, playerX } = await page.evaluate(() => ({
     enemyX: window.__game.state.enemies[0].position.x,
     playerX: window.__game.state.player.position.x

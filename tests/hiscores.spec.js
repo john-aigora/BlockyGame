@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { startGame } from './helpers.js';
+import { startGame, waitForGameOver } from './helpers.js';
 
 // Local high scores (plan 009): recording, ranking, trimming, and storage
 // resilience. Each test seeds localStorage via addInitScript BEFORE goto,
@@ -13,7 +13,7 @@ test.beforeEach(async ({ page }) => {
 async function idleRunToDeath(page) {
   await page.goto('/');
   await startGame(page);
-  await expect(page.locator('#message-box')).toBeVisible({ timeout: 25000 });
+  await waitForGameOver(page); // Game-clock death; load-proof ceiling (helpers.js)
 }
 
 test('records the run and ranks it below an existing better score', async ({ page }) => {

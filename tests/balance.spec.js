@@ -27,7 +27,9 @@ async function killOneEnemy(page) {
     const enemy = s.enemies[0];
     s.player.position.set(enemy.position.x, 0, enemy.position.z);
   });
-  await page.waitForFunction(() => window.__game.state.score >= 25, null, { timeout: 2000 });
+  // Frame-driven (the kill lands on the first running frame); the ceiling is
+  // generous only for parallel-suite load, where frames arrive slowly.
+  await page.waitForFunction(() => window.__game.state.score >= 25, null, { timeout: 10000 });
 }
 
 test('defeating an enemy pays at least the 25-point kill bounty', async ({ page }) => {
@@ -54,7 +56,7 @@ test('two rapid kills pay more than 2x the single-kill bounty (combo)', async ({
     s.collectibles = [];
   });
   await startGame(page);
-  await page.waitForFunction(() => window.__game.state.score >= 25, null, { timeout: 2000 });
+  await page.waitForFunction(() => window.__game.state.score >= 25, null, { timeout: 10000 });
 
   // Second kill inside the 4s combo window: grow just past the fresh spawns
   // (height 30) and land on one. 35 — not huge — keeps the wave spawned by
@@ -84,7 +86,7 @@ test('two rapid kills pay more than 2x the single-kill bounty (combo)', async ({
       return s.score >= before + 2 * bounty ? { combo: s.comboCount } : false;
     },
     { before, bounty },
-    { timeout: 2000 }
+    { timeout: 10000 }
   );
   const { combo } = await handle.jsonValue();
   expect(combo).toBeGreaterThanOrEqual(2); // The multiplier really escalated

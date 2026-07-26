@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { startGame } from './helpers.js';
+import { startGame, waitForGameOver } from './helpers.js';
 
 test.beforeEach(async ({ page }) => {
   page.on('pageerror', (err) => { throw new Error(`Page error: ${err.message}`); });
@@ -9,7 +9,7 @@ test.beforeEach(async ({ page }) => {
 // Start the run and let it end (collect-clock expiry or enemy collision).
 async function reachGameOver(page) {
   await startGame(page);
-  await expect(page.locator('#message-box')).toBeVisible({ timeout: 25000 });
+  await waitForGameOver(page); // Game-clock death; load-proof ceiling (helpers.js)
 }
 
 test('the world freezes on death: no movement, no post-mortem spawning', async ({ page }) => {
@@ -42,22 +42,35 @@ test('the death screen renders once, structured, and stays stable', async ({ pag
 });
 
 test('the death screen waits out the cinematic death beat (~0.9s)', async ({ page }) => {
+  // Reaching death takes 15 GAME seconds — far more wall time under
+  // parallel-suite load (see helpers.js). The beat itself is a wall-clock
+  // setTimeout, so the measured delay bounds below stay load-independent.
+  test.setTimeout(150000);
   await startGame(page);
-  // ONE in-page poll measures the gap from gameActive flipping false to
-  // #message-box turning visible — no protocol round-trips can shrink or
-  // stretch the measurement. 16ms sampling on both edges vs a 900ms delay
-  // leaves a comfortable margin over the 850ms floor.
+  // ONE in-page measurement captures the gap from gameActive flipping false
+  // to #message-box turning visible — no protocol round-trips can shrink or
+  // stretch it, and neither can main-thread starvation: a polled sampler
+  // (e.g. a 16ms setInterval) under-reads the beat when parallel-suite load
+  // stretches its firing gaps. Death edge: deaths only happen inside the
+  // game's rAF update, and a test rAF callback runs in the SAME frame batch
+  // right after it — near-zero capture lag at any load. Display edge: the
+  // show is a style mutation, so a MutationObserver fires synchronously
+  // with the setTimeout callback that reveals the death screen.
   const delayMs = await page.evaluate(() => new Promise((resolve) => {
     const box = document.getElementById('message-box');
-    let deathAt = null;
-    const timer = setInterval(() => {
-      if (deathAt === null) {
-        if (!window.__game.state.gameActive) deathAt = performance.now();
-      } else if (getComputedStyle(box).display !== 'none') {
-        clearInterval(timer);
-        resolve(performance.now() - deathAt);
+    function frame() {
+      if (window.__game.state.gameActive) {
+        requestAnimationFrame(frame);
+        return;
       }
-    }, 16);
+      const deathAt = performance.now();
+      new MutationObserver(() => {
+        if (getComputedStyle(box).display !== 'none') {
+          resolve(performance.now() - deathAt);
+        }
+      }).observe(box, { attributes: true, attributeFilter: ['style'] });
+    }
+    requestAnimationFrame(frame);
   }));
   expect(delayMs).toBeGreaterThan(850); // The beat really played...
   expect(delayMs).toBeLessThan(5000); // ...and the screen still arrived promptly
@@ -72,7 +85,7 @@ test('restart still works after the post-death freeze', async ({ page }) => {
   // The new run must actually simulate again despite the gameActive gate.
   await startGame(page);
   await expect
-    .poll(async () => Number(await page.locator('#collect-time').textContent()), { timeout: 5000 })
+    .poll(async () => Number(await page.locator('#collect-time').textContent()), { timeout: 15000 })
     .toBeLessThan(15);
 });
 
@@ -86,6 +99,6 @@ test('keyboard restart: Space on the death screen returns to the start overlay',
   await page.keyboard.press('Enter');
   await expect(page.locator('#start-overlay')).toBeHidden();
   await expect
-    .poll(async () => Number(await page.locator('#collect-time').textContent()), { timeout: 5000 })
+    .poll(async () => Number(await page.locator('#collect-time').textContent()), { timeout: 15000 })
     .toBeLessThan(15);
 });

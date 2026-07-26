@@ -52,9 +52,10 @@ test('restart resets zoom to the default framing', async ({ page }) => {
 test('camera pulls back as the player grows', async ({ page }) => {
   const camYAtScaleOne = await page.evaluate(() => window.__game.state.camY);
   await page.evaluate(() => { window.__game.state.playerScale = 5; });
-  await page.waitForTimeout(1000);
-  const camYAtScaleFive = await page.evaluate(() => window.__game.state.camY);
-  // Target at scale 5 is 15 * (1 + 4 * 0.35) = 36; after 1s of easing the
-  // camera should be well past 1.5x its scale-1 height.
-  expect(camYAtScaleFive).toBeGreaterThan(camYAtScaleOne * 1.5);
+  // Target at scale 5 is 15 * (1 + 4 * 0.35) = 36; the eased camera must
+  // clear 1.5x its scale-1 height. Condition-based: the easing is dt-driven,
+  // so under parallel-suite load a fixed 1s wall wait could sample too early.
+  await expect
+    .poll(() => page.evaluate(() => window.__game.state.camY), { timeout: 20000 })
+    .toBeGreaterThan(camYAtScaleOne * 1.5);
 });

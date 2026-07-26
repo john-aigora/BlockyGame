@@ -28,7 +28,7 @@ Requires Node 18+.
 ```bash
 npm install
 npm run dev        # dev server at http://localhost:5173
-npm test           # Playwright test suite (39 tests)
+npm test           # Playwright test suite (47 tests)
 npm run lint       # ESLint
 npm run build      # production build into dist/
 npm run preview    # serve the production build locally

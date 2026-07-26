@@ -109,6 +109,7 @@ function setupNewGame() {
     state.gameActive = true;
     state.isPaused = true; // Start the game in a paused state
     state.score = 0;
+    state.runTime = 0; // Fresh run clock (see state.js — the tests' timing base)
     state.playerScale = 1.0; // Player's initial scale (acts as height for 1x1x1 geometry)
     applySpeedMultiplier(); // playerScale reset → drop any size speed bonus from the last run
     resetCombo(); // A mid-run restart must not carry a live combo into the new run
@@ -204,6 +205,10 @@ export function startRun() {
 // dt is the frame delta in seconds; all speeds are units/second.
 function update(dt) {
     if (!state.player || state.isPaused || !state.gameActive) return;
+
+    // Advance the run clock first: every game-clock consumer (and the test
+    // suite) sees a runTime that already includes this frame's dt.
+    state.runTime += dt;
 
     // Advance the collect countdown on the game clock (before the enemy loop)
     tickCollectClock(dt);

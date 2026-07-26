@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { startGame } from './helpers.js';
+import { startGame, waitForGameOver } from './helpers.js';
 
 // Audio (plan 010): real output can't be asserted headlessly, so these
 // tests assert STATE (mute persistence, context lifecycle, music
@@ -44,7 +44,7 @@ test('full playthrough with mute ON stays silent-safe to the death screen', asyn
   await page.addInitScript(() => localStorage.setItem('blocky.muted', '1'));
   await page.goto('/');
   await startGame(page);
-  await expect(page.locator('#message-box')).toBeVisible({ timeout: 25000 });
+  await waitForGameOver(page);
   expect(await page.evaluate(() => window.__game.debug.isMuted())).toBe(true);
 });
 
@@ -54,7 +54,7 @@ test('music lifecycle: off before start, on during the run, off after death; nev
   expect(await musicActive()).toBe(false);
   await startGame(page);
   expect(await musicActive()).toBe(true);
-  await expect(page.locator('#message-box')).toBeVisible({ timeout: 25000 });
+  await waitForGameOver(page);
   await page.waitForTimeout(1000); // let the 0.3s fadeout finish
   expect(await musicActive()).toBe(false);
   // Muted at boot: the scheduler must never start at all.
