@@ -2,13 +2,33 @@ import { MAX_ENEMY_INDICATORS } from './constants.js';
 import { state } from './state.js';
 import { canKillSpecificEnemy } from './enemies.js';
 
+// Cached DOM references, resolved once at init (plan 007) — the hot loop
+// must never call getElementById. game.js calls initUI() before any UI write.
+export const el = {
+    score: null,
+    collectTime: null,
+    killIndicator: null,
+    messageBox: null,
+    messageText: null,
+    pauseButton: null,
+    speedButton: null
+};
+
+export function initUI() {
+    el.score = document.getElementById('score');
+    el.collectTime = document.getElementById('collect-time');
+    el.killIndicator = document.getElementById('kill-indicator');
+    el.messageBox = document.getElementById('message-box');
+    el.messageText = document.getElementById('message-text');
+    el.pauseButton = document.getElementById('pause-button');
+    el.speedButton = document.getElementById('speed-cycle-button');
+}
+
 // --- UI and Message Functions ---
 // Displays a message (usually game over) in the message box.
 export function showMessage(message) {
-    const messageBox = document.getElementById('message-box');
-    const messageText = document.getElementById('message-text');
-    messageText.textContent = message;
-    messageBox.style.display = 'block'; // Make the message box visible
+    el.messageText.textContent = message;
+    el.messageBox.style.display = 'block'; // Make the message box visible
 }
 
 // Ends the current run. This is the ONLY legal way to end a game — every
@@ -22,17 +42,16 @@ export function endGame(reason) {
 
 // Hides the message box.
 export function hideMessage() {
-    const messageBox = document.getElementById('message-box');
-    messageBox.style.display = 'none'; // Make the message box invisible
+    el.messageBox.style.display = 'none'; // Make the message box invisible
 }
 
 // Score / timer DOM writes.
 export function updateScoreDisplay() {
-    document.getElementById('score').textContent = state.score;
+    el.score.textContent = state.score;
 }
 
 export function updateCollectTimeDisplay() {
-    document.getElementById('collect-time').textContent = Math.max(0, Math.ceil(state.collectTimeLeft));
+    el.collectTime.textContent = Math.max(0, Math.ceil(state.collectTimeLeft));
 }
 
 // Creates the pool of off-screen enemy indicator elements.
@@ -50,22 +69,25 @@ export function createEnemyIndicators() {
 }
 
 // Per-frame kill indicator update (flashes when any enemy is killable).
-// dt is in seconds; the flash toggles on a time accumulator (plan 007 owns the final look).
+// dt is in seconds; the 0.5s accumulator gives a 1 flash/sec pulse — well
+// under the 3/sec photosensitivity limit (WCAG 2.3.1) and, with the CSS
+// opacity transition removed, an actually visible discrete flash.
 export function updateKillIndicator(dt) {
     const anyEnemyKillable = state.enemies.some(enemy => canKillSpecificEnemy(enemy));
-    const killIndicator = document.getElementById('kill-indicator');
-    if (killIndicator) {
-        if (anyEnemyKillable) {
-            killIndicator.style.display = 'block';
-            state.killFlashClock += dt;
-            if (state.killFlashClock > 0.5) {
-                state.killFlashClock = 0;
-                state.killIndicatorVisible = !state.killIndicatorVisible;
-            }
-            killIndicator.style.opacity = state.killIndicatorVisible ? '1' : '0.3';
-        } else {
-            killIndicator.style.display = 'none';
+    if (!el.killIndicator) return;
+    if (anyEnemyKillable) {
+        el.killIndicator.style.display = 'block';
+        state.killFlashClock += dt;
+        if (state.killFlashClock > 0.5) {
+            state.killFlashClock = 0;
+            state.killIndicatorVisible = !state.killIndicatorVisible;
         }
+        el.killIndicator.style.opacity = state.killIndicatorVisible ? '1' : '0.35';
+    } else if (el.killIndicator.style.display !== 'none') {
+        el.killIndicator.style.display = 'none';
+        // Reset so the next appearance always starts fully visible
+        state.killFlashClock = 0;
+        state.killIndicatorVisible = true;
     }
 }
 

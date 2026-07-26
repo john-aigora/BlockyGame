@@ -1,12 +1,17 @@
 import * as THREE from 'three';
 import { worldSize, worldBoundary, collectibleSpawnRadius, minSpawnDistanceFromPlayer } from './constants.js';
 import { state } from './state.js';
+import { wrapPosition } from './worldmath.js';
 
-// Builds the shared collectible mesh (small lime-green cube).
+// Shared GPU resources for ALL collectibles — allocated once for the app's
+// lifetime and never disposed (plan 007). Per-spawn allocation would leak
+// GPU memory since removal is scene.remove only.
+const COLLECTIBLE_GEOMETRY = new THREE.BoxGeometry(0.7, 0.7, 0.7); // Smaller cube
+const COLLECTIBLE_MATERIAL = new THREE.MeshStandardMaterial({ color: 0x76FF03 }); // Lime Green for collectibles (food)
+
+// Builds a collectible mesh (small lime-green cube) on the shared resources.
 function buildCollectible() {
-    const collectibleGeometry = new THREE.BoxGeometry(0.7, 0.7, 0.7); // Smaller cube
-    const collectibleMaterial = new THREE.MeshStandardMaterial({ color: 0x76FF03 }); // Lime Green for collectibles (food)
-    const collectible = new THREE.Mesh(collectibleGeometry, collectibleMaterial);
+    const collectible = new THREE.Mesh(COLLECTIBLE_GEOMETRY, COLLECTIBLE_MATERIAL);
     collectible.castShadow = true;
     collectible.receiveShadow = true; // Though small, good practice
     return collectible;
@@ -17,6 +22,7 @@ export function spawnCollectible(pickPosition) {
     const collectible = buildCollectible();
     const { x, z } = pickPosition();
     collectible.position.set(x, 0.35, z); // Position on the ground
+    wrapPosition(collectible.position); // Never place food outside the world — it would be uncollectable
     state.collectibles.push(collectible);
     state.scene.add(collectible);
 }

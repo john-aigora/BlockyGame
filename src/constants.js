@@ -29,7 +29,7 @@ export const enemyStartOffset = 10; // Initial distance of enemy from player
 export const engagementRadius = 15; // Enemies within this radius will try to orbit
 export const orbitStrengthFactor = 0.4; // How strongly enemies try to orbit (0 to 1)
 export const enemyRandomDriftFactor = 0.3; // How strong the random drift is, relative to enemy speed
-export const AVOID_FORCE = 21.0; // units/s enemy-avoidance shove (was 0.35/frame at 60fps; plan 005 retunes)
+export const AVOID_SPEED_FACTOR = 1.2; // Enemy-separation steering strength, as a multiple of enemy speed (pre-cap; see plan 005)
 export const BASE_ENEMY_SPAWN_DISTANCE = 30; // Base spawn distance for new enemies
 export const SPAWN_DISTANCE_SCALE_FACTOR = 10; // Scaling of spawn distance with player size
 

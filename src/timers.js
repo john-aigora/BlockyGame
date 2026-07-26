@@ -1,6 +1,6 @@
 import { initialCollectTime } from './constants.js';
 import { state } from './state.js';
-import { endGame, updateCollectTimeDisplay } from './ui.js';
+import { el, endGame, updateCollectTimeDisplay } from './ui.js';
 
 // --- Collect Clock Functions ---
 // The collect countdown runs on the game clock (advanced by dt from the
@@ -21,7 +21,7 @@ export function tickCollectClock(dt) {
     const shown = Math.max(0, Math.ceil(state.collectTimeLeft));
     if (shown !== state.lastShownCollectTime) {
         state.lastShownCollectTime = shown;
-        document.getElementById('collect-time').textContent = shown;
+        el.collectTime.textContent = shown;
     }
 
     if (state.collectTimeLeft <= 0) { // Time ran out to collect a block

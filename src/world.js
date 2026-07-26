@@ -24,6 +24,7 @@ export function createWorld() {
 
     // 3. Renderer: Draws the scene from the camera's perspective.
     state.renderer = new THREE.WebGLRenderer({ antialias: true }); // antialias for smoother edges
+    state.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Sharp on retina; cap 2 — dpr 3+ costs GPU for invisible gains
     state.renderer.setSize(state.gameContainer.clientWidth, state.gameContainer.clientHeight);
     state.renderer.shadowMap.enabled = true; // Enable shadows in the scene
     // Add the renderer's canvas element to the game container div
@@ -67,6 +68,7 @@ export function onWindowResize() {
 
     state.camera.aspect = newWidth / newHeight; // Update camera aspect ratio
     state.camera.updateProjectionMatrix(); // Apply changes to camera
+    state.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Window may have moved to a display with a different dpr
     state.renderer.setSize(newWidth, newHeight); // Resize renderer
 }
 

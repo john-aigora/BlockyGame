@@ -18,6 +18,23 @@
 
 ---
 
+## Batch 5 complete: 2026-07-26
+
+**Batch:** 5: Toroidal world (005) + rendering hygiene (007) — subagent a977878ab92bd4030, coordinator-verified
+**Contract status:** all done criteria of both plans met
+
+**What changed:** src/worldmath.js (wrapCoord/wrapPosition/torusDelta/torusDistance — semantics verified: 103→−97, −101→99, Δ(95,−95)=+10); ALL entity AI now torus-aware; wrap preserves overshoot; avoidance rebuilt as pre-cap steering (AVOID_SPEED_FACTOR 1.2, cap 1.25×) — **the family's "shaking" bug is dead: scripted 2s sample shows monotonic 2.00→7.00 separation, zero oscillation**; **"teleporting" fixed: seam AI takes the 10-unit short path, not 190 the long way**; spawns capped (worldBoundary×0.8) and wrapped — no more uncollectable food. Rendering: pixel ratio (retina-sharp), shared/cached geometries+materials with per-instance enemy body clones + disposeCharacter (renderer.info geometries pinned at 10 across full spawn/kill/collect cycles), cached DOM refs, 2 module-level scratch Box3s, kill flash 1Hz clean (transition removed).
+
+**Gates (agent + coordinator):** lint 0 · 20 passed (+3 world, +3 resources) · build 566ms · all done-criteria greps clean.
+
+**Review (light):** deviations minor and sound (scripted browser run replacing manual check — with quantitative data, better than the plan asked; extra el caching). No new bugs beyond plan scope.
+
+**Regression attestation:** baseline 14→20 (+6, 0 removed); smoke/timing/gameover/camera all green. Confidence HIGH — the two marquee bug fixes have direct numeric proof.
+
+**Next:** Batch 6 (plan 008 — start & death screens; rewrites 2 smoke tests per plan). Tag elves/pre-batch-6.
+
+---
+
 ## Batch 4 complete: 2026-07-26
 
 **Batch:** 4: Game-over correctness (004) + camera/zoom/fog (006) — subagent a3d13d1b26106d34a, coordinator-verified

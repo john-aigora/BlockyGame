@@ -17,7 +17,7 @@ export const state = {
   gameActive: false,
   playerScale: 1, // Track player's current scale
   isPaused: false, // Track if game is paused
-  killIndicatorVisible: false, // For flashing kill indicator
+  killIndicatorVisible: true, // For flashing kill indicator (starts visible)
   killFlashClock: 0, // Seconds accumulated toward the next kill-indicator flash toggle
   animationFrameId: null, // requestAnimationFrame handle
 

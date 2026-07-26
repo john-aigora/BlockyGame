@@ -2,16 +2,17 @@ import * as THREE from 'three';
 import {
     growthFactor, enemyBaseHeight, speedMultipliers,
     BASE_PLAYER_SPEED, MOBILE_SPEED_MULTIPLIER,
-    worldSize, worldBoundary, initialFoodDensityArea,
+    worldSize, initialFoodDensityArea,
     enemyStartOffset
 } from './constants.js';
+import { wrapPosition } from './worldmath.js';
 import { state } from './state.js';
-import { createPlayer } from './characters.js';
-import { createEnemy, updateEnemies } from './enemies.js';
+import { createPlayer, disposeCharacter } from './characters.js';
+import { createEnemy, updateEnemies, playerBox, scratchBox } from './enemies.js';
 import { spawnNearPlayer, spawnAnywhere } from './collectibles.js';
 import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoomIn, zoomOut } from './world.js';
 import { keys, onKeyDown, onKeyUp, setupTouchControls } from './input.js';
-import { hideMessage, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators } from './ui.js';
+import { el, initUI, hideMessage, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators } from './ui.js';
 import { resetCollectClock, tickCollectClock } from './timers.js';
 
 // --- Simulation Clock ---
@@ -29,6 +30,8 @@ function init() {
         console.error('Game container not found!');
         return;
     }
+
+    initUI(); // Resolve all UI DOM refs once — everything after this uses el.*
 
     // Mobile detection and speed adjustment
     state.isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || /Mobi|Android/i.test(navigator.userAgent);
@@ -94,15 +97,19 @@ function setupNewGame() {
     updateScoreDisplay();
 
     // Set initial state for the pause button
-    const pauseButton = document.getElementById('pause-button');
-    if (pauseButton) {
-        pauseButton.textContent = 'Resume';
-        pauseButton.classList.add('paused');
+    if (el.pauseButton) {
+        el.pauseButton.textContent = 'Resume';
+        el.pauseButton.classList.add('paused');
     }
 
+    // Collectibles use shared resources — scene.remove is the whole cleanup.
     state.collectibles.forEach(c => state.scene.remove(c));
     state.collectibles = [];
-    state.enemies.forEach(e => state.scene.remove(e));
+    // Enemies own a cloned body material each — dispose it with the enemy.
+    state.enemies.forEach(e => {
+        state.scene.remove(e);
+        disposeCharacter(e);
+    });
     state.enemies = [];
 
     if (state.player) {
@@ -175,11 +182,8 @@ function update(dt) {
             state.player.position.z += state.movementVector.y * state.actualPlayerSpeed * dt; // USE actualPlayerSpeed
         }
 
-        // Player Wrapping Logic
-        if (state.player.position.x > worldBoundary) state.player.position.x = -worldBoundary + 0.1; // Add small offset
-        if (state.player.position.x < -worldBoundary) state.player.position.x = worldBoundary - 0.1;
-        if (state.player.position.z > worldBoundary) state.player.position.z = -worldBoundary + 0.1;
-        if (state.player.position.z < -worldBoundary) state.player.position.z = worldBoundary - 0.1;
+        // Player Wrapping Logic (preserves overshoot across the seam)
+        wrapPosition(state.player.position);
 
         if (state.ground) {
             state.ground.position.x = state.player.position.x;
@@ -194,12 +198,13 @@ function update(dt) {
             dirLight.target.updateMatrixWorld();
         }
 
-        // Collectibles collision
-        const playerBoxForCollectibles = new THREE.Box3().setFromObject(state.player);
+        // Collectibles collision — refresh the shared playerBox once (the
+        // player moved since the enemy pass), then reuse scratchBox per item.
+        playerBox.setFromObject(state.player);
         for (let i = state.collectibles.length - 1; i >= 0; i--) {
             const collectible = state.collectibles[i];
-            const collectibleBox = new THREE.Box3().setFromObject(collectible);
-            if (playerBoxForCollectibles.intersectsBox(collectibleBox)) {
+            scratchBox.setFromObject(collectible);
+            if (playerBox.intersectsBox(scratchBox)) {
                 state.scene.remove(collectible);
                 state.collectibles.splice(i, 1);
                 state.score++;
@@ -239,14 +244,13 @@ function resetGame() {
 // Add new pause toggle function
 export function togglePause() {
     state.isPaused = !state.isPaused;
-    const pauseButton = document.getElementById('pause-button');
 
     if (state.isPaused) {
-        pauseButton.textContent = 'Resume';
-        pauseButton.classList.add('paused');
+        el.pauseButton.textContent = 'Resume';
+        el.pauseButton.classList.add('paused');
     } else {
-        pauseButton.textContent = 'Pause';
-        pauseButton.classList.remove('paused');
+        el.pauseButton.textContent = 'Pause';
+        el.pauseButton.classList.remove('paused');
         // Don't integrate the paused gap into the next frame's dt
         lastFrameTime = null;
     }
@@ -260,9 +264,8 @@ function applySpeedMultiplier() {
     state.actualPlayerSpeed = baseSpeedForDevice * speedMultipliers[state.currentSpeedMultiplierIndex];
     state.actualEnemySpeed = (baseSpeedForDevice * 0.5) * speedMultipliers[state.currentSpeedMultiplierIndex]; // Enemy is 50% of player's base, then multiplied
 
-    const speedButton = document.getElementById('speed-cycle-button');
-    if (speedButton) {
-        speedButton.textContent = `Speed: ${speedMultipliers[state.currentSpeedMultiplierIndex]}x`;
+    if (el.speedButton) {
+        el.speedButton.textContent = `Speed: ${speedMultipliers[state.currentSpeedMultiplierIndex]}x`;
     }
     console.log(`Current Speed Multiplier: ${speedMultipliers[state.currentSpeedMultiplierIndex]}x`);
     console.log(`Actual Player Speed: ${state.actualPlayerSpeed}, Actual Enemy Speed: ${state.actualEnemySpeed}`);

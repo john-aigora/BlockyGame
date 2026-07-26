@@ -234,7 +234,8 @@ canvas {
     font-weight: bold;
     text-transform: uppercase;
     display: none;
-    transition: opacity 0.3s ease;
+    /* No opacity transition: the flash is a discrete 1Hz toggle from JS
+       (a transition here smears it into a static shimmer) */
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
     border: 2px solid #FFFFFF;
     box-shadow: 0 0 10px rgba(255, 69, 0, 0.5);
