@@ -22,22 +22,22 @@
     "scope": "current Elves run"
   },
   "continuation_guard": {
-    "remaining_batches": 9,
+    "remaining_batches": 8,
     "stop_allowed": false,
     "stop_allowed_reason": "run launched via /goal; 11 batches remain",
     "checkpoint_is_stop": false,
-    "next_required_action": "Tag elves/pre-batch-3, execute Batch 3 (plans/003-frame-rate-independence.md)"
+    "next_required_action": "Tag elves/pre-batch-4, execute Batch 4 (plans 004 + 006)"
   },
   "test_baseline": {
-    "passed": 4,
-    "total": 4,
+    "passed": 7,
+    "total": 7,
     "skipped": 0,
     "status": "captured",
     "reason": null
   },
   "current_batch": {
-    "id": 3,
-    "name": "Frame-rate independence + game-clock timer",
+    "id": 4,
+    "name": "Game-over correctness + camera/zoom/fog",
     "status": "pending"
   },
   "collision_tripwire": "f4d3ecc1ca0a292ed42b09beb63a01343211dd48",
@@ -66,7 +66,8 @@
       "plans": [
         "003"
       ],
-      "status": "pending"
+      "status": "complete",
+      "rollback_tag": "elves/pre-batch-3"
     },
     {
       "id": 4,

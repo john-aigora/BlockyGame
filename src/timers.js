@@ -2,33 +2,30 @@ import { initialCollectTime } from './constants.js';
 import { state } from './state.js';
 import { showMessage, updateCollectTimeDisplay } from './ui.js';
 
-// --- Collect Timer Functions ---
-export function startCollectTimer() {
-    state.collectTimerValue = initialCollectTime;
+// --- Collect Clock Functions ---
+// The collect countdown runs on the game clock (advanced by dt from the
+// animation loop), so pausing inherently freezes it and resuming does NOT
+// reset it.
+
+export function resetCollectClock() {
+    state.collectTimeLeft = initialCollectTime;
+    state.lastShownCollectTime = initialCollectTime;
     updateCollectTimeDisplay();
-
-    if (state.collectTimerInterval) { // Clear any existing interval
-        clearInterval(state.collectTimerInterval);
-    }
-
-    state.collectTimerInterval = setInterval(() => {
-        if (!state.gameActive) { // If game ends for another reason, stop this timer
-            clearInterval(state.collectTimerInterval);
-            return;
-        }
-        state.collectTimerValue--;
-        updateCollectTimeDisplay();
-
-        if (state.collectTimerValue <= 0) { // Time ran out to collect a block
-            clearInterval(state.collectTimerInterval);
-            state.gameActive = false;
-            showMessage(`GAME OVER! Failed to collect a block in time. Final Score: ${state.score}`);
-        }
-    }, 1000); // Update every second
 }
 
-export function resetCollectTimer() {
-    state.collectTimerValue = initialCollectTime;
-    updateCollectTimeDisplay();
-    // The interval continues running, just the countdown value is reset.
+export function tickCollectClock(dt) {
+    if (!state.gameActive) return;
+    state.collectTimeLeft -= dt;
+
+    // DOM write: ceil, and only when the displayed integer changes
+    const shown = Math.max(0, Math.ceil(state.collectTimeLeft));
+    if (shown !== state.lastShownCollectTime) {
+        state.lastShownCollectTime = shown;
+        document.getElementById('collect-time').textContent = shown;
+    }
+
+    if (state.collectTimeLeft <= 0) { // Time ran out to collect a block
+        state.gameActive = false;
+        showMessage(`GAME OVER! Failed to collect a block in time. Final Score: ${state.score}`);
+    }
 }

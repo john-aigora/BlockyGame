@@ -23,7 +23,7 @@ export function updateScoreDisplay() {
 }
 
 export function updateCollectTimeDisplay() {
-    document.getElementById('collect-time').textContent = state.collectTimerValue;
+    document.getElementById('collect-time').textContent = Math.max(0, Math.ceil(state.collectTimeLeft));
 }
 
 // Creates the pool of off-screen enemy indicator elements.
@@ -41,13 +41,18 @@ export function createEnemyIndicators() {
 }
 
 // Per-frame kill indicator update (flashes when any enemy is killable).
-export function updateKillIndicator() {
+// dt is in seconds; the flash toggles on a time accumulator (plan 007 owns the final look).
+export function updateKillIndicator(dt) {
     const anyEnemyKillable = state.enemies.some(enemy => canKillSpecificEnemy(enemy));
     const killIndicator = document.getElementById('kill-indicator');
     if (killIndicator) {
         if (anyEnemyKillable) {
             killIndicator.style.display = 'block';
-            state.killIndicatorVisible = !state.killIndicatorVisible;
+            state.killFlashClock += dt;
+            if (state.killFlashClock > 0.5) {
+                state.killFlashClock = 0;
+                state.killIndicatorVisible = !state.killIndicatorVisible;
+            }
             killIndicator.style.opacity = state.killIndicatorVisible ? '1' : '0.3';
         } else {
             killIndicator.style.display = 'none';

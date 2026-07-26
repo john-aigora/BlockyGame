@@ -3,7 +3,7 @@ import {
     growthFactor, enemyBaseHeight, speedMultipliers,
     BASE_PLAYER_SPEED, MOBILE_SPEED_MULTIPLIER,
     worldSize, worldBoundary, initialFoodDensityArea,
-    enemyStartOffset, initialCollectTime
+    enemyStartOffset
 } from './constants.js';
 import { state } from './state.js';
 import { createPlayer } from './characters.js';
@@ -11,8 +11,14 @@ import { createEnemy, updateEnemies } from './enemies.js';
 import { spawnNearPlayer, spawnAnywhere } from './collectibles.js';
 import { createWorld, onWindowResize, updateCameraPosition, zoomOutCamera } from './world.js';
 import { keys, onKeyDown, onKeyUp, setupTouchControls } from './input.js';
-import { hideMessage, updateScoreDisplay, updateCollectTimeDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators } from './ui.js';
-import { startCollectTimer, resetCollectTimer } from './timers.js';
+import { hideMessage, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators } from './ui.js';
+import { resetCollectClock, tickCollectClock } from './timers.js';
+
+// --- Simulation Clock ---
+// dt (seconds) drives all movement and timers; MAX_DELTA clamps tab-switch
+// gaps and GC hitches so the world never teleports.
+let lastFrameTime = null;
+const MAX_DELTA = 0.05; // seconds; clamps tab-switch gaps and GC hitches
 
 
 // --- Initialization Function ---
@@ -58,12 +64,18 @@ function init() {
     // NEW Touch Anywhere Event Listeners
     setupTouchControls();
 
+    // Auto-pause when the tab is hidden (the dt clamp already prevents
+    // catch-up jumps; this puts the player in a fair, deliberate resume state).
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden && !state.isPaused && state.gameActive) togglePause();
+    });
+
     // 8. Initial Game Setup
     setupNewGame();
 
     // 9. Start the Animation Loop
     // This function will be called repeatedly to update and render the game.
-    animate();
+    state.animationFrameId = requestAnimationFrame(animate);
 
     console.log('Game initialized successfully');
 
@@ -124,38 +136,41 @@ function setupNewGame() {
     }
     hideMessage();
 
-    // Initialize the collect timer display, but don't start the interval yet.
-    // The timer will start when the player first unpauses.
-    state.collectTimerValue = initialCollectTime;
-    updateCollectTimeDisplay();
+    // Initialize the collect countdown; it only ticks while the game is
+    // unpaused (driven by dt in update()).
+    resetCollectClock();
 }
 
 // --- Game Logic Update Function ---
 // This function is called every frame by animate() to update game state.
-function update() {
+// dt is the frame delta in seconds; all speeds are units/second.
+function update(dt) {
     if (!state.player || state.isPaused) return;
 
+    // Advance the collect countdown on the game clock (before the enemy loop)
+    tickCollectClock(dt);
+
     // Update kill indicator and enemy colors (visuals first)
-    updateKillIndicator();
+    updateKillIndicator(dt);
 
     // --- Off-Screen Enemy Indicator Logic ---
     updateOffscreenIndicators();
 
     // Enemy AI, movement, and player-collision handling
-    updateEnemies();
+    updateEnemies(dt);
 
     // Player movement and other game updates (ground, light, camera, collectibles)
     if (state.gameActive) {
         // Keyboard movement (can coexist or be removed)
-        if (keys['arrowup']) state.player.position.z -= state.actualPlayerSpeed; // USE actualPlayerSpeed
-        if (keys['arrowdown']) state.player.position.z += state.actualPlayerSpeed; // USE actualPlayerSpeed
-        if (keys['arrowleft']) state.player.position.x -= state.actualPlayerSpeed; // USE actualPlayerSpeed
-        if (keys['arrowright']) state.player.position.x += state.actualPlayerSpeed; // USE actualPlayerSpeed
+        if (keys['arrowup']) state.player.position.z -= state.actualPlayerSpeed * dt; // USE actualPlayerSpeed
+        if (keys['arrowdown']) state.player.position.z += state.actualPlayerSpeed * dt; // USE actualPlayerSpeed
+        if (keys['arrowleft']) state.player.position.x -= state.actualPlayerSpeed * dt; // USE actualPlayerSpeed
+        if (keys['arrowright']) state.player.position.x += state.actualPlayerSpeed * dt; // USE actualPlayerSpeed
 
         // Joystick movement - now touch-anywhere movement
         if (state.touchActive) {
-            state.player.position.x += state.movementVector.x * state.actualPlayerSpeed; // USE actualPlayerSpeed
-            state.player.position.z += state.movementVector.y * state.actualPlayerSpeed; // USE actualPlayerSpeed
+            state.player.position.x += state.movementVector.x * state.actualPlayerSpeed * dt; // USE actualPlayerSpeed
+            state.player.position.z += state.movementVector.y * state.actualPlayerSpeed * dt; // USE actualPlayerSpeed
         }
 
         // Player Wrapping Logic
@@ -191,7 +206,7 @@ function update() {
                 state.player.scale.set(state.playerScale, state.playerScale, state.playerScale);
                 state.player.position.y = 0; // MODIFIED: Group origin at feet, scaling handles height
                 spawnNearPlayer();
-                resetCollectTimer();
+                resetCollectClock();
             }
         }
     }
@@ -201,11 +216,14 @@ function update() {
 }
 
 // --- Animation Loop ---
-// This function is called by the browser typically 60 times per second.
-function animate() {
-    requestAnimationFrame(animate);
+// Called by the browser each display frame; `now` is the RAF timestamp (ms).
+function animate(now) {
+    state.animationFrameId = requestAnimationFrame(animate);
+    if (lastFrameTime === null) lastFrameTime = now;
+    const dt = Math.min((now - lastFrameTime) / 1000, MAX_DELTA);
+    lastFrameTime = now;
     if (!state.isPaused) {
-        update();
+        update(dt);
     }
     state.renderer.render(state.scene, state.camera);
 }
@@ -213,10 +231,6 @@ function animate() {
 // --- Game Reset Function ---
 // Called when the "Play Again" button is clicked.
 function resetGame() {
-    // Clear existing collect timer interval before setting up new game to avoid multiple timers
-    if (state.collectTimerInterval) {
-        clearInterval(state.collectTimerInterval);
-    }
     setupNewGame(); // Re-initialize game state
 }
 
@@ -228,18 +242,14 @@ export function togglePause() {
     if (state.isPaused) {
         pauseButton.textContent = 'Resume';
         pauseButton.classList.add('paused');
-        // Pause the collect timer
-        if (state.collectTimerInterval) {
-            clearInterval(state.collectTimerInterval);
-        }
     } else {
         pauseButton.textContent = 'Pause';
         pauseButton.classList.remove('paused');
-        // Resume/Start the collect timer if the game is active
-        if (state.gameActive) { // Only start if game is actually active (not game over)
-            startCollectTimer();
-        }
+        // Don't integrate the paused gap into the next frame's dt
+        lastFrameTime = null;
     }
+    // The collect countdown runs on the game clock, so pausing inherently
+    // freezes it and resuming does NOT reset it.
 }
 
 // NEW function to apply speed multiplier and update speeds

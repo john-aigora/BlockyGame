@@ -18,6 +18,23 @@
 
 ---
 
+## Batch 3 complete: 2026-07-25
+
+**Batch:** 3: Frame-rate independence + game-clock timer (plan 003) — subagent a61d3630287eec3ce, coordinator-verified
+**Contract status:** all plan-003 done criteria met
+
+**What changed:** dt clock in animate() (MAX_DELTA 0.05, RAF-timestamped — agent correctly fixed the plan snippet's NaN-first-frame by starting the loop via requestAnimationFrame); constants ×60 to per-second (BASE_PLAYER_SPEED 3.0, AVOID_FORCE 21.0 deliberately unretuned until 005); enemy drift timer and movement dt-integrated; collect timer rewritten onto the game clock (setInterval eliminated — pause-refill exploit dead, hidden-tab death dead); visibilitychange auto-pause; kill flash on 0.5s accumulator; tests/timing.spec.js (pause-no-refill regression, visibility auto-pause via document.hidden override, ±30% speed-integration sanity).
+
+**Gates:** lint 0 warnings · 7 tests passed (ran twice, coordinator re-ran: 7 passed) · build 566ms · greps: zero setInterval / 1/60 in src/.
+
+**Review (light):** deviations examined and accepted — RAF start (root-cause correctness), document.hidden override instead of CDP (tests the actual listener; deterministic). Fixed-in-batch: NaN dt on first frame (would have been a real shipped bug from the plan's own snippet — noted per user bug rule).
+
+**Regression attestation:** smoke suite unchanged and green; baseline 4→7 tests (+3, 0 removed). 60fps behavior preserved by exact ×60 conversion, verified empirically by the speed test. Confidence HIGH.
+
+**Next:** Batch 4 (plans 004 + 006). Tag elves/pre-batch-4.
+
+---
+
 ## Batch 2 complete: 2026-07-25
 
 **Batch:** 2: Modularize + dedupe (plan 002) — implemented by subagent a026c0be1207de492, verified by coordinator

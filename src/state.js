@@ -18,6 +18,8 @@ export const state = {
   playerScale: 1, // Track player's current scale
   isPaused: false, // Track if game is paused
   killIndicatorVisible: false, // For flashing kill indicator
+  killFlashClock: 0, // Seconds accumulated toward the next kill-indicator flash toggle
+  animationFrameId: null, // requestAnimationFrame handle
 
   // Speed Multiplier Variables
   currentSpeedMultiplierIndex: 0,
@@ -39,9 +41,9 @@ export const state = {
   // HTML Element references
   gameContainer: null, // The div that will hold the Three.js canvas
 
-  // Collect Timer variables
-  collectTimerValue: initialCollectTime,
-  collectTimerInterval: null, // Stores the interval ID for the collect timer
+  // Collect Timer variables (runs on the game clock, in seconds)
+  collectTimeLeft: initialCollectTime,
+  lastShownCollectTime: initialCollectTime, // Last integer written to the DOM
 
   isMobile: false, // For mobile-specific adjustments
 

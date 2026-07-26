@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {
     enemyBaseHeight, worldBoundary, engagementRadius, orbitStrengthFactor,
-    enemyRandomDriftFactor, BASE_ENEMY_SPAWN_DISTANCE, SPAWN_DISTANCE_SCALE_FACTOR
+    enemyRandomDriftFactor, AVOID_FORCE, BASE_ENEMY_SPAWN_DISTANCE, SPAWN_DISTANCE_SCALE_FACTOR
 } from './constants.js';
 import { state } from './state.js';
 import { createCharacter } from './characters.js';
@@ -35,7 +35,8 @@ export function canKillSpecificEnemy(enemyGroup) {
 // --- Enemy Update (called every frame from update()) ---
 // Handles enemy coloring, AI movement (flee/chase/orbit + random drift),
 // avoidance, world wrapping, and collision with the player.
-export function updateEnemies() {
+// dt is the frame delta in seconds; all speeds are units/second.
+export function updateEnemies(dt) {
     state.enemies.forEach((enemyGroup, index) => {
         const bodyMesh = enemyGroup.getObjectByName('body'); // Get the body mesh
 
@@ -50,7 +51,7 @@ export function updateEnemies() {
         let combinedMovement = new THREE.Vector3();
 
         // --- Random Movement Component (calculated for all states) ---
-        enemyGroup.timeToChangeRandomVelocity -= (1 / 60);
+        enemyGroup.timeToChangeRandomVelocity -= dt;
         if (enemyGroup.timeToChangeRandomVelocity <= 0) {
             const randomStrength = state.actualEnemySpeed * enemyRandomDriftFactor;
             enemyGroup.randomVelocity.set(
@@ -89,10 +90,10 @@ export function updateEnemies() {
             combinedMovement.normalize().multiplyScalar(state.actualEnemySpeed);
         }
 
-        enemyGroup.position.add(combinedMovement);
+        enemyGroup.position.addScaledVector(combinedMovement, dt);
 
         // Apply avoidance after all other movement calculations for this frame
-        avoidOtherEnemies(enemyGroup, index);
+        avoidOtherEnemies(enemyGroup, index, dt);
 
         // Enemy Wrapping Logic
         if (enemyGroup.position.x > worldBoundary) enemyGroup.position.x = -worldBoundary + 0.1; // Add small offset to prevent immediate re-wrap issues
@@ -118,7 +119,6 @@ export function updateEnemies() {
                 spawnNewEnemies();
             } else {
                 state.gameActive = false;
-                clearInterval(state.collectTimerInterval);
                 showMessage(`GAME OVER! The enemy caught you. Final Score: ${state.score}`);
                 return; // Exit forEach loop and update function if game over
             }
@@ -153,9 +153,8 @@ export function spawnNewEnemies() {
     enemy2.position.z = state.player.position.z + Math.sin(angle2) * spawnDistance;
 }
 
-function avoidOtherEnemies(enemyGroup, index) {
+function avoidOtherEnemies(enemyGroup, index, dt) {
     const avoidRadius = 7; // INCREASED from 5 to 7
-    const avoidForce = 0.35; // INCREASED from 0.25 to 0.35
 
     state.enemies.forEach((otherEnemyGroup, otherIndex) => {
         if (index !== otherIndex) {
@@ -166,8 +165,8 @@ function avoidOtherEnemies(enemyGroup, index) {
                     .subVectors(enemyGroup.position, otherEnemyGroup.position)
                     .normalize();
 
-                // Apply avoidance force
-                enemyGroup.position.addScaledVector(avoidDirection, avoidForce);
+                // Apply avoidance force (units/second × dt)
+                enemyGroup.position.addScaledVector(avoidDirection, AVOID_FORCE * dt);
             }
         }
     });
