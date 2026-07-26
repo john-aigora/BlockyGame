@@ -22,22 +22,22 @@
     "scope": "current Elves run"
   },
   "continuation_guard": {
-    "remaining_batches": 8,
+    "remaining_batches": 7,
     "stop_allowed": false,
     "stop_allowed_reason": "run launched via /goal; 11 batches remain",
     "checkpoint_is_stop": false,
-    "next_required_action": "Tag elves/pre-batch-4, execute Batch 4 (plans 004 + 006)"
+    "next_required_action": "Tag elves/pre-batch-5, execute Batch 5 (plans 005 + 007)"
   },
   "test_baseline": {
-    "passed": 7,
-    "total": 7,
+    "passed": 14,
+    "total": 14,
     "skipped": 0,
     "status": "captured",
     "reason": null
   },
   "current_batch": {
-    "id": 4,
-    "name": "Game-over correctness + camera/zoom/fog",
+    "id": 5,
+    "name": "Toroidal world + rendering hygiene",
     "status": "pending"
   },
   "collision_tripwire": "f4d3ecc1ca0a292ed42b09beb63a01343211dd48",
@@ -76,7 +76,8 @@
         "004",
         "006"
       ],
-      "status": "pending"
+      "status": "complete",
+      "rollback_tag": "elves/pre-batch-4"
     },
     {
       "id": 5,

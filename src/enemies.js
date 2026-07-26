@@ -6,7 +6,7 @@ import {
 import { state } from './state.js';
 import { createCharacter } from './characters.js';
 import { spawnAtPosition } from './collectibles.js';
-import { showMessage } from './ui.js';
+import { endGame } from './ui.js';
 
 export function createEnemy() {
     const enemyGroup = createCharacter({ baseSize: enemyBaseHeight, bodyColor: 0x03A9F4, faceColor: 0x222222 }); // Electric Blue body, dark grey face
@@ -36,8 +36,12 @@ export function canKillSpecificEnemy(enemyGroup) {
 // Handles enemy coloring, AI movement (flee/chase/orbit + random drift),
 // avoidance, world wrapping, and collision with the player.
 // dt is the frame delta in seconds; all speeds are units/second.
+// Iterates backwards so killEnemy's splice never skips the next enemy;
+// enemies appended mid-frame by spawnNewEnemies() get indexes above the
+// cursor and intentionally act on the NEXT frame (same as the old forEach).
 export function updateEnemies(dt) {
-    state.enemies.forEach((enemyGroup, index) => {
+    for (let i = state.enemies.length - 1; i >= 0; i--) {
+        const enemyGroup = state.enemies[i];
         const bodyMesh = enemyGroup.getObjectByName('body'); // Get the body mesh
 
         if (canKillSpecificEnemy(enemyGroup)) {
@@ -93,7 +97,7 @@ export function updateEnemies(dt) {
         enemyGroup.position.addScaledVector(combinedMovement, dt);
 
         // Apply avoidance after all other movement calculations for this frame
-        avoidOtherEnemies(enemyGroup, index, dt);
+        avoidOtherEnemies(enemyGroup, dt);
 
         // Enemy Wrapping Logic
         if (enemyGroup.position.x > worldBoundary) enemyGroup.position.x = -worldBoundary + 0.1; // Add small offset to prevent immediate re-wrap issues
@@ -106,24 +110,31 @@ export function updateEnemies(dt) {
         const enemyBox = new THREE.Box3().setFromObject(enemyGroup); // enemyGroup is now the object
         if (playerBox.intersectsBox(enemyBox)) {
             if (canKillSpecificEnemy(enemyGroup)) {
-                const enemyDeathPosition = enemyGroup.position.clone(); // Get position before removing
-
-                state.scene.remove(enemyGroup);
-                state.enemies.splice(index, 1);
-
-                // Spawn 4 food particles
-                for (let i = 0; i < 4; i++) {
-                    spawnAtPosition(enemyDeathPosition);
-                }
-
-                spawnNewEnemies();
+                killEnemy(enemyGroup, i); // splice(i, 1) — safe going backwards
+                continue;
             } else {
-                state.gameActive = false;
-                showMessage(`GAME OVER! The enemy caught you. Final Score: ${state.score}`);
-                return; // Exit forEach loop and update function if game over
+                endGame('The enemy caught you.');
+                return; // NOW actually exits the enemy update
             }
         }
-    });
+    }
+}
+
+// Removes a killed enemy and pays out its rewards: 4 food particles at the
+// death position plus two new, larger enemies. The single kill path — future
+// kill causes must call this too.
+export function killEnemy(enemyGroup, index) {
+    const enemyDeathPosition = enemyGroup.position.clone(); // Get position before removing
+
+    state.scene.remove(enemyGroup);
+    state.enemies.splice(index, 1);
+
+    // Spawn 4 food particles
+    for (let i = 0; i < 4; i++) {
+        spawnAtPosition(enemyDeathPosition);
+    }
+
+    spawnNewEnemies();
 }
 
 export function spawnNewEnemies() {
@@ -153,11 +164,11 @@ export function spawnNewEnemies() {
     enemy2.position.z = state.player.position.z + Math.sin(angle2) * spawnDistance;
 }
 
-function avoidOtherEnemies(enemyGroup, index, dt) {
+function avoidOtherEnemies(enemyGroup, dt) {
     const avoidRadius = 7; // INCREASED from 5 to 7
 
-    state.enemies.forEach((otherEnemyGroup, otherIndex) => {
-        if (index !== otherIndex) {
+    state.enemies.forEach((otherEnemyGroup) => {
+        if (otherEnemyGroup !== enemyGroup) {
             const distance = enemyGroup.position.distanceTo(otherEnemyGroup.position);
             if (distance < avoidRadius) {
                 // Calculate direction away from other enemy

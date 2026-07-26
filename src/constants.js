@@ -5,8 +5,11 @@ export const enemyBaseHeight = 1.2; // Base height of enemy
 // Speed Multiplier Variables
 export const speedMultipliers = [1.0, 1.5, 2.0, 3.0, 5.0, 0.5]; // ADDED 5.0x, re-ordered
 
-// Zoom Variables - REVISED
-export const ZOOM_OUT_FACTOR = 1.5;
+// Camera zoom model (bounded two-way zoom; see plan 006)
+export const ZOOM_STEP = 1.25; // Multiplier applied per zoom button click
+export const ZOOM_MIN = 0.6; // Slightly closer than default
+export const ZOOM_MAX = 3.0; // ~2.9x default distance, still inside a scaled fog
+export const GROWTH_FRAME_FACTOR = 0.35; // How much camera pulls back per unit of playerScale growth
 export const INITIAL_CAMERA_Y_OFFSET = 15; // Base Y offset
 export const INITIAL_CAMERA_Z_OFFSET = 12; // Base Z offset
 

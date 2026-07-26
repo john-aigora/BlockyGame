@@ -17,9 +17,9 @@ row when done.
 | 001 | Tooling baseline (Vite, npm three@0.128.0, ESLint, Playwright smoke) | P1 | M | — | DONE |
 | 002 | Modularize game.js, character factory dedupe, dead-code removal | P1 | M | 001 | DONE |
 | 003 | Frame-rate independence + game-clock collect timer (kills pause exploit, tab-switch death) | P1 | M | 002 | DONE |
-| 004 | Stop the world on game over; safe enemy-kill iteration | P1 | S | 003 | TODO |
+| 004 | Stop the world on game over; safe enemy-kill iteration | P1 | S | 003 | DONE |
 | 005 | Toroidal world correctness (fixes "shaking" + "teleporting" enemies, unreachable food) | P1 | M | 004 | TODO |
-| 006 | Camera: bounded two-way zoom, growth-aware framing, fog follows camera | P1 | M | 003 | TODO |
+| 006 | Camera: bounded two-way zoom, growth-aware framing, fog follows camera | P1 | M | 003 | DONE |
 | 007 | Rendering hygiene: pixel ratio, shared/disposed GPU resources, cached DOM/AABB, safe kill-flash | P2 | M | 003 | TODO |
 | 008 | Start screen + death screen + keyboard restart | P2 | M | 004 | TODO |
 | 009 | Local high scores (top-5, localStorage) on the death screen | P2 | S | 008 | TODO |

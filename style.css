@@ -202,9 +202,18 @@ canvas {
     left: 10px;
 }
 
-#zoom-toggle-button {
+#zoom-in-button {
+    bottom: 52px;
+    right: 10px;
+    min-width: 40px;
+    min-height: 40px;
+}
+
+#zoom-out-button {
     bottom: 10px;
     right: 10px;
+    min-width: 40px;
+    min-height: 40px;
 }
 
 /* Kill indicator styling */

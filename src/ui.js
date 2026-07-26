@@ -11,6 +11,15 @@ export function showMessage(message) {
     messageBox.style.display = 'block'; // Make the message box visible
 }
 
+// Ends the current run. This is the ONLY legal way to end a game — every
+// death cause (enemy collision, collect-clock expiry, future hazards) must
+// call it. Idempotent: safe against double triggers within one frame.
+export function endGame(reason) {
+    if (!state.gameActive) return;
+    state.gameActive = false;
+    showMessage(`GAME OVER! ${reason} Final Score: ${state.score}`);
+}
+
 // Hides the message box.
 export function hideMessage() {
     const messageBox = document.getElementById('message-box');

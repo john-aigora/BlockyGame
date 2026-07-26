@@ -9,7 +9,7 @@ import { state } from './state.js';
 import { createPlayer } from './characters.js';
 import { createEnemy, updateEnemies } from './enemies.js';
 import { spawnNearPlayer, spawnAnywhere } from './collectibles.js';
-import { createWorld, onWindowResize, updateCameraPosition, zoomOutCamera } from './world.js';
+import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoomIn, zoomOut } from './world.js';
 import { keys, onKeyDown, onKeyUp, setupTouchControls } from './input.js';
 import { hideMessage, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators } from './ui.js';
 import { resetCollectClock, tickCollectClock } from './timers.js';
@@ -59,7 +59,8 @@ function init() {
     // Add event listeners for pause and restart buttons
     document.getElementById('pause-button').addEventListener('click', togglePause);
     document.getElementById('speed-cycle-button').addEventListener('click', cycleSpeed);
-    document.getElementById('zoom-toggle-button').addEventListener('click', zoomOutCamera);
+    document.getElementById('zoom-in-button').addEventListener('click', zoomIn);
+    document.getElementById('zoom-out-button').addEventListener('click', zoomOut);
 
     // NEW Touch Anywhere Event Listeners
     setupTouchControls();
@@ -89,6 +90,7 @@ function setupNewGame() {
     state.isPaused = true; // Start the game in a paused state
     state.score = 0;
     state.playerScale = 1.0; // Player's initial scale (acts as height for 1x1x1 geometry)
+    resetCameraZoom(); // New runs always start at the default framing
     updateScoreDisplay();
 
     // Set initial state for the pause button
@@ -145,7 +147,7 @@ function setupNewGame() {
 // This function is called every frame by animate() to update game state.
 // dt is the frame delta in seconds; all speeds are units/second.
 function update(dt) {
-    if (!state.player || state.isPaused) return;
+    if (!state.player || state.isPaused || !state.gameActive) return;
 
     // Advance the collect countdown on the game clock (before the enemy loop)
     tickCollectClock(dt);
@@ -210,9 +212,6 @@ function update(dt) {
             }
         }
     }
-
-    // Update camera position consistently every frame game is active & not paused
-    updateCameraPosition();
 }
 
 // --- Animation Loop ---
@@ -225,6 +224,9 @@ function animate(now) {
     if (!state.isPaused) {
         update(dt);
     }
+    // Camera follow and rendering run every frame regardless of pause or
+    // game over — the frozen scene must stay visible behind the message box.
+    updateCameraPosition(dt);
     state.renderer.render(state.scene, state.camera);
 }
 

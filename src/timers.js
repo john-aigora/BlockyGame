@@ -1,6 +1,6 @@
 import { initialCollectTime } from './constants.js';
 import { state } from './state.js';
-import { showMessage, updateCollectTimeDisplay } from './ui.js';
+import { endGame, updateCollectTimeDisplay } from './ui.js';
 
 // --- Collect Clock Functions ---
 // The collect countdown runs on the game clock (advanced by dt from the
@@ -25,7 +25,6 @@ export function tickCollectClock(dt) {
     }
 
     if (state.collectTimeLeft <= 0) { // Time ran out to collect a block
-        state.gameActive = false;
-        showMessage(`GAME OVER! Failed to collect a block in time. Final Score: ${state.score}`);
+        endGame('Failed to collect a block in time.');
     }
 }

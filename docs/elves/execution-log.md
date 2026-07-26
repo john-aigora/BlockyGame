@@ -18,6 +18,27 @@
 
 ---
 
+## Batch 4 complete: 2026-07-26
+
+**Batch:** 4: Game-over correctness (004) + camera/zoom/fog (006) — subagent a3d13d1b26106d34a, coordinator-verified
+**Contract status:** all done criteria of both plans met
+
+**What changed:** single idempotent `endGame(reason)` in ui.js (only "GAME OVER" construction site); update() gated on gameActive with camera+render moved to animate() level (frozen scene visible behind death box); backwards kill loop + `killEnemy()` helper; avoidance identity-by-reference; NEW clamped zoom model (zoomLevel 0.6-3.0, ×1.25 steps, +/− buttons), growth-aware framing (GROWTH_FRAME_FACTOR 0.35), fog tracks camera distance (×1.1/×4.5), zoom resets on new game. Tests: +3 gameover, +4 camera → 14 total.
+
+**Gates (agent + coordinator):** lint 0 warnings · 14 passed · build 565ms · all greps clean (single GAME OVER site, no ZOOM_OUT_FACTOR/activeCameraOffsets/zoom-toggle remnants).
+
+**Review (light):** deviations accepted (endGame in ui.js; camera easing while paused — improvement; browser-pane RAF throttling worked around deterministically). Untracked `.claude/launch.json` left OUT of the commit (local preview tooling, not product).
+
+**Confirmations:** death freezes world (deep-equal positions over 2s); restart resets zoom to exactly 1.0/15/12; clamps exact at 3.0 and 0.6; scene fully visible at max zoom (fog far ≈192 > camDist ≈43). The audit's "4 clicks = blank screen" bug is dead.
+
+**Entropy check (after batch 3, logged here):** cross-batch scan clean — no duplicated utilities, lint at zero warnings, conventions holding. No fixes needed.
+
+**Regression attestation:** baseline 7→14 tests (+7, 0 removed); smoke suite untouched. Confidence HIGH.
+
+**Next:** Batch 5 (plans 005 toroidal + 007 rendering hygiene). Tag elves/pre-batch-5.
+
+---
+
 ## Batch 3 complete: 2026-07-25
 
 **Batch:** 3: Frame-rate independence + game-clock timer (plan 003) — subagent a61d3630287eec3ce, coordinator-verified

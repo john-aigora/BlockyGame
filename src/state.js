@@ -27,9 +27,11 @@ export const state = {
   actualEnemySpeed: undefined, // Will store the fully adjusted enemy speed
   playerSpeed: undefined, // To be set in init
 
-  // Zoom Variables - REVISED
-  activeCameraYOffset: INITIAL_CAMERA_Y_OFFSET,
-  activeCameraZOffset: INITIAL_CAMERA_Z_OFFSET,
+  // Camera zoom model (bounded two-way zoom; camY/camZ are the smoothed
+  // actual offsets, driven toward the zoom/growth target each frame)
+  zoomLevel: 1.0,
+  camY: INITIAL_CAMERA_Y_OFFSET,
+  camZ: INITIAL_CAMERA_Z_OFFSET,
 
   // Touch-anywhere control variables
   touchActive: false,
