@@ -18,6 +18,26 @@
 
 ---
 
+## Staging Amendment: 2026-07-25 (still staging — before launch)
+
+Three mid-staging user directives, all incorporated:
+
+1. **"install whatever you need"** → Node v22.23.1 LTS installed user-space at
+   `~/.local/elves-tools/node` (official tarball, SHA-256 verified). Launch blocker RESOLVED.
+2. **"you also have our permission to surprise us with some beautiful graphical upgrades"** →
+   new `plans/015-visual-upgrades.md` (creative-latitude visual pass with hard guardrails:
+   procedural-only, photosensitivity-safe, pooled particles, palette identity). Slotted as
+   Batch 9, before the docs pass. Batch count 10 → 11; all run docs updated.
+3. **"you can give us cool music too"** → plan 010 amended: procedural WebAudio chiptune loop
+   (lookahead scheduler, bass+arp+hat, hunt-mode intensity layer) moved INTO scope (was
+   explicitly deferred). Still zero audio asset files.
+
+**Decisions made:** 015 runs after 007 (needs shared-resource + dt + camera foundations) and
+before 013 (docs/screenshots should reflect the final look). Music shares plan 010's batch (7) —
+same module, same hooks, no new batch needed.
+
+---
+
 ## Session Setup: 2026-07-25 (staging)
 
 **Phase:** Staging complete
@@ -61,8 +81,8 @@
 > Launch the elves run. Read docs/elves/survival-guide.md first (note LOCAL-ONLY MODE — never push,
 > no PR), then .elves-session.json, docs/elves/learnings.md, plans/README.md, and this log. Flip the
 > Stop Gate to "no", export the Node PATH, verify green, tag elves/pre-batch-1, and execute Batch 1
-> (plans/001-tooling-baseline.md) through Batch 10 per the Batch Map. Do not stop between batches.
-> Local review subagent after every batch. Finite mode: finish all 10 batches, then Final Completion
+> (plans/001-tooling-baseline.md) through Batch 11 per the Batch Map. Do not stop between batches.
+> Local review subagent after every batch. Finite mode: finish all 11 batches, then Final Completion
 > with the Elves Report.
 
 ---

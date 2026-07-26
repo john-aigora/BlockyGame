@@ -9,7 +9,7 @@
 ## Mission
 
 Take BlockyGame (a father/son three.js browser arcade game, currently one 1000-line game.js) to
-"the best version of itself": execute the 14 audit plans in `plans/` — tooling baseline, module
+"the best version of itself": execute the 15 audit plans in `plans/` — tooling baseline, module
 refactor, frame-rate independence, all verified gameplay/camera bug fixes, start/death screens,
 high scores, sound, balance, mobile polish, docs, Vercel-deploy prep (docs only), and a movement
 design spike. Every plan file is self-contained with steps, verification commands, and STOP
@@ -19,13 +19,13 @@ conditions. `plans/README.md` is the authoritative index and dependency graph.
 
 ## Run Control
 
-- **Run mode:** finite (10 batches covering plans 001-014, then Final Completion)
+- **Run mode:** finite (11 batches covering plans 001-015, then Final Completion)
 - **Stop policy:** blocker-only until all batches complete
 - **User intent:** "i want to do it all... take care of everything you have found" + "just work locally" + "no, commit locally to the branch"
 - **Checkpoint due by:** none
 - **Checkpoint semantics:** none
 - **May continue after checkpoint:** yes (no checkpoints defined)
-- **Actual stop conditions:** all 10 batches complete OR a plan STOP condition fires with no safe workaround OR hard environment failure
+- **Actual stop conditions:** all 11 batches complete OR a plan STOP condition fires with no safe workaround OR hard environment failure
 - **Workspace ownership:** owned branch `feat/best-version` in the main checkout (solo run; no other agents touch this repo)
 - **Branch tip at start (collision tripwire):** `f4d3ecc1ca0a292ed42b09beb63a01343211dd48`
 - **Merge policy:** user-merges (never merge; additionally NEVER PUSH — see LOCAL-ONLY MODE below)
@@ -71,13 +71,13 @@ also verified DENIED for this machine's account (`RBrownHOPE` has read-only acce
 - **Checkpoint expectation:** none; deliver completed batches + Elves Report
 - **Time budget:** ~10h from launch (soft; finite mode governed by batch completion)
 - **Average batch time so far:** n/a
-- **Batches remaining:** 10 of 10
+- **Batches remaining:** 11 of 11
 
 ---
 
 ## Stop Gate
 
-- **Planned batches remaining:** 10
+- **Planned batches remaining:** 11
 - **Stop allowed right now:** yes — STAGING IS COMPLETE BUT THE RUN HAS NOT LAUNCHED. Staging ends
   with a deliberate stop; the unattended run starts only from the launch prompt in a fresh call.
 - **Why:** two-stage rule (stage, then start in a fresh call). No open blockers.
@@ -102,7 +102,7 @@ Shell state does not persist between tool calls — prepend this in each Bash in
 
 ## Effort Standard
 
-- Work as hard as you can for the full run. Same effort on Batch 10 as Batch 1.
+- Work as hard as you can for the full run. Same effort on Batch 11 as Batch 1.
 - Do not settle for the first green result when a plan's verification list has unchecked items.
 - When one batch completes, immediately begin the next after the batch-close ritual.
 
@@ -132,7 +132,7 @@ to); this feels like a natural checkpoint (there is no one to check in with).
 
 ## Launch Readiness
 
-- [x] Plan cleaned and saved to disk (`plans/` — 14 plans + README index)
+- [x] Plan cleaned and saved to disk (`plans/` — 15 plans + README index; 015 visual pass and the plan-010 music amendment were added at staging by user mandate)
 - [x] Survival guide updated from the current plan (this file)
 - [x] Learnings file initialized (`docs/elves/learnings.md`)
 - [x] Execution log initialized with batch breakdown and preflight notes
@@ -200,8 +200,9 @@ approved the Node toolchain path; it is part of the standard toolchain install).
 | 6 | 008 | start/death screens (rewrites 2 smoke tests — the plan says how) |
 | 7 | 009 + 010 | high scores; sound (both hang off 008) |
 | 8 | 011 + 012 | balance; mobile polish |
-| 9 | 013 | docs truth pass + favicon/meta + deploy DOCS (Path A only — no vercel CLI, no push) |
-| 10 | 014 | LBS movement spike (timeboxed; writeup is the deliverable) |
+| 9 | 015 | visual "juice" pass — USER-MANDATED creative latitude ("surprise us with some beautiful graphical upgrades"); guardrails in the plan |
+| 10 | 013 | docs truth pass + favicon/meta + deploy DOCS (Path A only — no vercel CLI, no push) — runs after 015 so docs/screenshots reflect the final look |
+| 11 | 014 | LBS movement spike (timeboxed; writeup is the deliverable) |
 
 Entropy checks after batches 3, 6, and 9. Each batch's contract = the plan file's own
 Why/Steps/Done criteria; write the contract entry in the execution log referencing the plan file

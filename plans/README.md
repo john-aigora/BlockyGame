@@ -23,11 +23,12 @@ row when done.
 | 007 | Rendering hygiene: pixel ratio, shared/disposed GPU resources, cached DOM/AABB, safe kill-flash | P2 | M | 003 | TODO |
 | 008 | Start screen + death screen + keyboard restart | P2 | M | 004 | TODO |
 | 009 | Local high scores (top-5, localStorage) on the death screen | P2 | S | 008 | TODO |
-| 010 | Synthesized sound effects + persistent mute | P2 | M | 008 | TODO |
+| 010 | Synthesized sound effects + procedural background music + persistent mute | P2 | M | 008 | TODO |
 | 011 | Kill points + enemy population cap (scoring/balance) | P2 | S | 003, 004, 005 | TODO |
 | 012 | Mobile polish: touch/UI conflicts, responsive layout, honest device detection | P2 | M | 002, 008 | TODO |
 | 013 | Docs truth pass + favicon/meta + Vercel deployment | P2 | S | 001 (hard); 002-012 (soft — run LAST) | TODO |
 | 014 | SPIKE: Little Big Snake continuous movement + boost, behind `?move=continuous` | P3 | M | 003, 012 | TODO |
+| 015 | Visual "juice" pass — particles, walk animation, living ground, glow (user-mandated creative latitude) | P2 | M | 007 | TODO |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
 
@@ -40,7 +41,7 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJE
 - **008 → 009/010/012**: the start overlay (`startRun()`) is the user gesture that unlocks audio, the death screen hosts the leaderboard, and touch tests use the start flow.
 - **013 runs last**: it documents whatever actually shipped and performs the deploy.
 - **006 and 007 are parallel-safe** with each other and with 005 (different files), except both 006 and 007 touch `src/ui.js`/indicator surroundings lightly — if executed concurrently, rebase carefully.
-- **Suggested batching for an autonomous run**: [001] → [002] → [003] → [004, 006] → [005, 007] → [008] → [009, 010, 012] → [011] → [013] → [014].
+- **Suggested batching for an autonomous run**: [001] → [002] → [003] → [004, 006] → [005, 007] → [008] → [009, 010] → [011, 012] → [015] → [013] → [014]. (015 was added at staging: the user granted explicit creative latitude for graphical upgrades; it runs after the rendering/camera foundations and before the docs pass so 013 documents the final look.)
 
 ## Test-suite ownership
 

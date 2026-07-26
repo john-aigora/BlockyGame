@@ -48,7 +48,11 @@ The game is fully silent. The maintainers' `todo.md` has a 16-item audio wishlis
 
 **In scope**: `src/audio.js` (create), one-line hook calls in `src/game.js` / `src/enemies.js` / `src/ui.js` / `src/input.js`, `index.html` (mute button), `style.css` (mute button), `tests/audio.spec.js` (create).
 
-**Out of scope**: background music (wishlist, but loops need real composition — defer), volume slider, any gameplay change. Do not add audio asset files of any kind.
+**Out of scope**: volume slider, any gameplay change. Do not add audio asset files of any kind.
+
+> **Scope amendment (2026-07-25, during elves staging):** the user explicitly asked for music
+> ("you can give us cool music too"), overriding the earlier deferral. Background music is IN
+> scope — see step 4. Still zero asset files: the music is a procedural WebAudio pattern loop.
 
 ## Git workflow
 
@@ -113,6 +117,29 @@ One line each: `sfx.collect()` in the collect branch; `sfx.kill()` in `killEnemy
 
 **Verify (manual, dev server)**: start a run → 3-note jingle; collect → rising blip; kill an enemy → thud+chirp; die → descending tone; mute → silence, label 🔇; reload → still muted.
 
+### Step 4: Background music (user-mandated)
+
+Add a procedural chiptune loop to `src/audio.js` using the standard WebAudio lookahead scheduler
+(the "tale of two clocks" pattern: a `setInterval(25ms)` that schedules notes 100ms ahead on
+`ctx.currentTime` — the interval only schedules, so tab-throttling pauses cleanly rather than
+glitching):
+
+- **Composition** (keep it simple and genuinely game-y): ~112 BPM, A-minor pentatonic. A 2-bar
+  bass line (triangle osc, notes A1/C2/E2/G1 pattern, one per beat) + an 8-step arpeggio lead
+  (square osc, A3-C4-E4-A4 up/down, 16th notes, low gain ~0.05) + a soft noise-burst hat
+  (bandpassed white noise, 8ths). Master music gain ~0.12 so SFX sit on top.
+- **Intensity layer:** when any enemy is killable (hunt mode), raise the lead an octave and add
+  the off-beat hat — same loop, hunt feels different. Switch layers at bar boundaries only (no
+  mid-bar jarring).
+- **Lifecycle:** starts inside `startRun()` (after `unlockAudio()`), stops (with a 0.3s gain ramp)
+  on `endGame()`; death jingle from `sfx.death` plays over the fadeout. Respects the same mute
+  state and persists nothing extra.
+- **API:** `music.start()`, `music.stop()`, `music.setIntensity(level)` — called from the same
+  hook sites as the sfx (game.js knows nothing about scheduling).
+
+**Verify (manual)**: full run — music starts on START, shifts when an enemy turns yellow, fades on
+death, silent when muted; loop has no audible seam over 2+ minutes.
+
 ## Test plan
 
 Create `tests/audio.spec.js` (audio output can't be asserted headlessly; assert STATE and RESILIENCE):
@@ -121,12 +148,15 @@ Create `tests/audio.spec.js` (audio output can't be asserted headlessly; assert 
 2. **No crash without gesture**: `page.evaluate(() => window.__game.debug.sfx.collect())` before any click (expose `sfx` + `isMuted` on `window.__game.debug` in `src/main.js`) → no pageerror (the shared beforeEach trap enforces).
 3. **Unlock wiring**: start a run via the start button, then `page.evaluate(() => window.__game.debug.audioState())` (expose `() => ctx?.state ?? 'none'`) → `'running'` in Chromium (Playwright Chromium allows autoplay after gesture; if it reports 'suspended' in CI, assert only `!== 'none'` and note it).
 4. **Full playthrough silence-safety**: with mute ON, play an idle run to death → no pageerror.
+5. **Music lifecycle**: expose `window.__game.debug.musicActive()` → false before start, true after
+   clicking START, false again ~1s after death. With mute ON at boot, remains false throughout.
 
 **Verify**: `npm test` → all pass.
 
 ## Done criteria
 
-- [ ] `grep -rn "new Audio\|\.mp3\|\.wav\|\.ogg" src/ index.html` → no matches (synth only)
+- [ ] `grep -rn "new Audio\|\.mp3\|\.wav\|\.ogg" src/ index.html` → no matches (synth only, music included)
+- [ ] Background music: starts on run start, intensity shifts in hunt mode, fades on death, obeys mute
 - [ ] `grep -rn "localStorage" src/` → only `src/hiscores.js` and `src/audio.js`
 - [ ] `npm run lint` / `npm test` exit 0 (incl. audio.spec.js)
 - [ ] Manual: all five effects audible; mute persists across reload
@@ -140,6 +170,6 @@ Create `tests/audio.spec.js` (audio output can't be asserted headlessly; assert 
 
 ## Maintenance notes
 
-- Background music (todo wishlist) would live in `src/audio.js` as a scheduled pattern loop — the `ctx`/mute plumbing here is ready for it; keep `sfx` envelope-style one-shots separate from any future music scheduler.
+- Music lives in `src/audio.js` as a lookahead-scheduled pattern loop (step 4); keep `sfx` one-shots and the `music` scheduler as separate objects sharing only `ctx` and mute state. New tracks = new note-pattern arrays, not new scheduler code.
 - The `blip` envelope is the house sound — new effects should be `blip` compositions first, custom nodes only if genuinely needed.
 - iOS resumes the context only on a REAL user gesture — never call `unlockAudio()` from timers; `startRun()` and button handlers are the sanctioned sites.

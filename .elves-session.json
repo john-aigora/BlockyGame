@@ -22,7 +22,7 @@
     "scope": "current Elves run"
   },
   "continuation_guard": {
-    "remaining_batches": 10,
+    "remaining_batches": 11,
     "stop_allowed": true,
     "stop_allowed_reason": "staging handoff — flips to false at launch",
     "checkpoint_is_stop": false,
@@ -44,10 +44,11 @@
     { "id": 4, "name": "Game-over correctness + camera/zoom/fog", "plans": ["004", "006"], "status": "pending" },
     { "id": 5, "name": "Toroidal world + rendering hygiene", "plans": ["005", "007"], "status": "pending" },
     { "id": 6, "name": "Start & death screens", "plans": ["008"], "status": "pending" },
-    { "id": 7, "name": "High scores + sound", "plans": ["009", "010"], "status": "pending" },
+    { "id": 7, "name": "High scores + sound & music", "plans": ["009", "010"], "status": "pending" },
     { "id": 8, "name": "Balance + mobile polish", "plans": ["011", "012"], "status": "pending" },
-    { "id": 9, "name": "Docs + deploy prep", "plans": ["013"], "status": "pending" },
-    { "id": 10, "name": "LBS movement spike", "plans": ["014"], "status": "pending" }
+    { "id": 9, "name": "Visual juice pass (user-mandated)", "plans": ["015"], "status": "pending" },
+    { "id": 10, "name": "Docs + deploy prep", "plans": ["013"], "status": "pending" },
+    { "id": 11, "name": "LBS movement spike", "plans": ["014"], "status": "pending" }
   ],
   "review_comments": []
 }
