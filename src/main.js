@@ -1,7 +1,7 @@
 import { applySpeedMultiplier } from './game.js';
 import { state } from './state.js';
 import { spawnNearPlayer, spawnAtPosition } from './collectibles.js';
-import { spawnNewEnemies } from './enemies.js';
+import { spawnNewEnemies, updateEnemyStreaming, resetEnemyStreaming } from './enemies.js';
 import { onTouchStart, onTouchMove, onTouchEndOrCancel } from './input.js';
 import { sfx, isMuted, audioState, music } from './audio.js';
 import { spawnBurst, spawnScorePopup, effectsInfo } from './effects.js';
@@ -20,6 +20,8 @@ window.__game = {
         spawnNearPlayer,
         spawnAtPosition,
         spawnNewEnemies,
+        updateEnemyStreaming, // Bubble spawn path (endless spawn-band spec)
+        resetEnemyStreaming,
         applySpeedMultiplier, // Speed recompute path (balance spec — size speed bonus)
         touchHandlers: { onTouchStart, onTouchMove, onTouchEndOrCancel },
         sfx,

@@ -136,6 +136,13 @@ export const ENEMY_DETOUR_TIME = 1; // Seconds the 45-degree detour heading is h
 // before the second collect. Target 4 (+1 per ramp level) passes through
 // the design's 6-9 band at 300-750u and hits the cap 12 at 1200u.
 export const ENDLESS_ENEMY_TARGET = 4; // Enemies maintained in the bubble at ramp level 0 (+1 per level)
+// Bubble-spawn size bands (owner: "enemies bigger than me keep appearing, I
+// never get to eat anybody"). The classic 1.5x-your-height rule regenerated
+// the whole population pre-grown; this rotating pattern guarantees prey keeps
+// appearing: 1 in 4 spawns is edible now, 1 in 4 soon, half stay giants.
+export const SPAWN_SIZE_PATTERN = ['prey', 'giant', 'peer', 'giant']; // deterministic rotation per bubble spawn
+export const PREY_HEIGHT_RANGE = [0.55, 0.85]; // prey band: x player height (edible immediately)
+export const PEER_HEIGHT_RANGE = [0.95, 1.25]; // peer band: x player height (edible after a snack or two)
 export const ENDLESS_ENEMY_CAP = 12; // Hard endless population cap (ramp target never exceeds it)
 export const ENEMY_DESPAWN_RADIUS = 80; // Enemies beyond this distance are removed AND disposed
 export const ENDLESS_SPAWN_MIN = 35; // Bubble spawns land between MIN and MAX units from the player...

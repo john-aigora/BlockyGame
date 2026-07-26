@@ -3,6 +3,7 @@ import {
     enemyBaseHeight, worldBoundary, engagementRadius, orbitStrengthFactor,
     enemyRandomDriftFactor, AVOID_SPEED_FACTOR, BASE_ENEMY_SPAWN_DISTANCE, SPAWN_DISTANCE_SCALE_FACTOR,
     KILL_POINTS, MAX_ENEMIES, ENEMIES_PER_KILL, ENEMY_HEIGHT_FACTOR,
+    SPAWN_SIZE_PATTERN, PREY_HEIGHT_RANGE, PEER_HEIGHT_RANGE,
     SIZE_BOUNTY_PER_UNIT, COMBO_WINDOW, COMBO_MAX,
     SPAWN_MATERIALIZE_TIME, SPAWN_MATERIALIZE_START_SCALE,
     ENEMY_COLLIDER_HALF_WIDTH, ENEMY_WEDGE_TIME, ENEMY_DETOUR_TIME,
@@ -416,9 +417,11 @@ function moveEnemyWithCollision(enemyGroup, movement, dt) {
 // must release resources, not leak a trail of frozen hunters), top up one
 // throttled materialize at a time on land, ENDLESS_SPAWN_MIN..MAX out.
 let bubbleSpawnCooldown = 0;
+let bubbleSpawnCounter = 0; // Drives the SPAWN_SIZE_PATTERN rotation
 
 export function resetEnemyStreaming() {
     bubbleSpawnCooldown = 0;
+    bubbleSpawnCounter = 0; // Every run opens with the pattern's prey spawn
 }
 
 export function updateEnemyStreaming(dt) {
@@ -436,7 +439,19 @@ export function updateEnemyStreaming(dt) {
     if (bubbleSpawnCooldown > 0 || state.enemies.length >= target) return;
     bubbleSpawnCooldown = ENDLESS_SPAWN_INTERVAL;
 
-    const scaleFactor = currentEnemyScaleFactor();
+    // Size band rotates deterministically (owner fix: the old always-1.5x rule
+    // regenerated the bubble pre-grown — "I never get to eat anybody"). Giants
+    // keep the classic rule + ramp; prey/peer scale to the player's CURRENT
+    // height so a hunt target is always on its way.
+    const band = SPAWN_SIZE_PATTERN[bubbleSpawnCounter % SPAWN_SIZE_PATTERN.length];
+    let scaleFactor;
+    if (band === 'giant') {
+        scaleFactor = currentEnemyScaleFactor();
+    } else {
+        const [lo, hi] = band === 'prey' ? PREY_HEIGHT_RANGE : PEER_HEIGHT_RANGE;
+        const targetHeight = state.playerScale * (lo + Math.random() * (hi - lo));
+        scaleFactor = targetHeight / enemyBaseHeight;
+    }
     const radius = scaleFactor * ENEMY_COLLIDER_HALF_WIDTH;
     for (let attempt = 0; attempt < 10; attempt++) {
         const angle = Math.random() * Math.PI * 2;
@@ -448,6 +463,7 @@ export function updateEnemyStreaming(dt) {
         enemy.scale.setScalar(scaleFactor);
         enemy.position.set(spawnX, groundHeightAt(spawnX, spawnZ), spawnZ);
         beginMaterialize(enemy); // Same telegraph as every other spawn
+        bubbleSpawnCounter++; // Advance the band rotation only on a real spawn
         return;
     }
 }

@@ -288,3 +288,30 @@ test('the hunt works in endless: flee flip, kill, bounty, and combo state', asyn
   expect(result.comboCount).toBeGreaterThanOrEqual(1);
   expect(result.collectTicking).toBe(true); // The collect pressure runs in endless too
 });
+
+test('bubble spawns rotate size bands: prey appears, not only giants', async ({ page }) => {
+  await bootEndless(page);
+  const heights = await page.evaluate(() => {
+    const d = window.__game.debug;
+    const s = window.__game.state;
+    // Teleport far: the next streaming tick despawns the whole old bubble
+    // (beyond the 80u ring), freeing every slot under the bubble target so
+    // the rotation can be observed from a clean slate.
+    s.player.position.x += 500;
+    d.updateEnemyStreaming(0); // Despawn pass (no spawn — cooldown untouched)
+    d.resetEnemyStreaming(); // Band rotation restarts at 'prey'
+    let tries = 0;
+    while (s.enemies.length < 3 && tries < 40) {
+      d.updateEnemyStreaming(5); // Big dt clears the cooldown each call
+      tries++;
+    }
+    // Scaled BODY height of each spawn vs the player's height — read the
+    // materialize TARGET (fresh spawns animate up from 5% of full size).
+    return s.enemies.map((e) => (e.userData.materializeTarget ?? e.scale.y) * 1.2 / s.playerScale);
+  });
+  expect(heights.length).toBeGreaterThanOrEqual(3);
+  // The rotation guarantees at least one prey (shorter than the player)
+  // and at least one giant (taller) among any three consecutive spawns.
+  expect(Math.min(...heights)).toBeLessThan(1);
+  expect(Math.max(...heights)).toBeGreaterThan(1);
+});
