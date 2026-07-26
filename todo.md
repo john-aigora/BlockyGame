@@ -1,5 +1,7 @@
 # Blocky Collector 3D - Todo & Future Ideas
 
+> Bug fixes and infra improvements from the 2026 overhaul are tracked as plans in `plans/` — this file is the feature wishlist. Items marked [x] shipped in that overhaul.
+
 This file tracks potential future enhancements and features for the game.
 
 ## Core Gameplay & Feature Additions (New & From Grok/Gemini Summary)
@@ -74,43 +76,43 @@ This file tracks potential future enhancements and features for the game.
     *   [ ] Player movement (continuous if LBS style, or steps).
     *   [ ] Boost activation/deactivation/loop.
     *   [ ] Energy depletion/recharge sounds.
-    *   [ ] Food collection (consider "oof" sound if food becomes "Noobs").
+    *   [x] Food collection (consider "oof" sound if food becomes "Noobs").
     *   [ ] Player growth / segment addition.
     *   [ ] Enemy movement/spawn (Corgi sounds if skinned?).
-    *   [ ] Enemy defeat (explosion/food burst).
-    *   [ ] Player-enemy collision (game over).
+    *   [x] Enemy defeat (explosion/food burst).
+    *   [x] Player-enemy collision (game over).
     *   [ ] Player segment collision (game over).
-    *   [ ] Timer running out (game over).
+    *   [x] Timer running out (game over).
     *   [ ] Power-up spawn/collection/activation/deactivation.
-    *   [ ] Button clicks in UI.
-    *   [ ] Game start.
+    *   [x] Button clicks in UI.
+    *   [x] Game start.
 - [ ] **Music:**
-    *   [ ] Background music loop for gameplay.
-    *   [ ] Short jingle for game over.
+    *   [x] Background music loop for gameplay.
+    *   [x] Short jingle for game over.
     *   [ ] Music for title/menu screen (if one is added).
 
 ## Visual & UI Enhancements
 - [ ] **Visual Effects (Particles, etc.):**
-    *   [ ] Particle effect when player collects food.
-    *   [ ] More elaborate particle effect for enemy "explosion" on defeat (linked to dynamic food spawn).
+    *   [x] Particle effect when player collects food.
+    *   [x] More elaborate particle effect for enemy "explosion" on defeat (linked to dynamic food spawn).
     *   [ ] Trail effect for player movement (especially during boost - e.g., lime green sparks).
     *   [ ] Visual feedback for player growth (beyond just scaling/segments).
     *   [ ] Visual effect for power-up orbs (e.g., glowing).
     *   [ ] Visual indication for Shield power-up active on player.
 - [ ] **Character Animation (More Advanced):**
-    *   [ ] "Walking" / "Slithering" animation for player & segments.
-    *   [ ] Enemy leg animations.
+    *   [x] "Walking" / "Slithering" animation for player & segments.
+    *   [x] Enemy leg animations.
     *   [ ] Simple idle animations.
 - [ ] **Textures:**
-    *   [ ] Apply textures to player, enemies, ground, or collectibles.
+    *   [x] Apply textures to player, enemies, ground, or collectibles.
 - [ ] **UI Polish:**
-    *   [ ] More distinct styling for active/hover states on UI buttons.
-    *   [ ] Potentially a start screen/main menu.
+    *   [x] More distinct styling for active/hover states on UI buttons.
+    *   [x] Potentially a start screen/main menu.
     *   [ ] On-screen indication of current speed multiplier (if button text isn't enough).
     *   [ ] Energy Bar for Boost Mechanic.
     *   [ ] Icon display for active Power-Up.
     *   [ ] Skin selector UI (post-game or in menu for Roblox skins).
-    *   [ ] Improve "New Game" start flow/button for user-friendliness.
+    *   [x] Improve "New Game" start flow/button for user-friendliness.
 - [ ] **Improved Off-Screen Indicators:**
     *   [ ] Make indicators fade based on distance.
     *   [ ] Ensure indicators don't overlap UI elements too much (z-index management).
@@ -118,10 +120,10 @@ This file tracks potential future enhancements and features for the game.
 
 ## Features & Long-Term
 - [ ] **High Score System:**
-    *   [ ] Track and display personal high scores (local storage).
+    *   [x] Track and display personal high scores (local storage).
     *   [ ] Track and display a global high score (requires backend).
     *   [ ] Track and display a daily high score (requires backend).
-    *   [ ] Display leaderboard on game-over screen.
+    *   [x] Display leaderboard on game-over screen.
 - [ ] **Unlockable Skins & Progression (LBS Style & Roblox):**
     *   [ ] Unlock cosmetic skins (e.g., different player colors, face designs, Roblox avatar items if applicable) by reaching score milestones or using "Wins".
 - [ ] **Save Game State (More Advanced):**
@@ -130,25 +132,25 @@ This file tracks potential future enhancements and features for the game.
     *   [ ] Different arenas or layouts.
     *   [ ] Challenge modes (e.g., time attack, survival against waves).
 - [ ] **Settings Menu:**
-    *   [ ] Toggle sound/music on/off.
+    *   [x] Toggle sound/music on/off.
     *   [ ] Adjust control sensitivity (if applicable for new movement styles).
 
 ## Bug Fixes & Known Issues (From Gemini Summary)
-- [ ] **Shaking/Immobile Bug:** Investigate and fix issue where characters might shake or player becomes unable to move.
-- [ ] **Teleporting Enemy Glitch:** Fix instances where enemies might appear to teleport unfairly (distinct from world wrapping).
+- [x] **Shaking/Immobile Bug:** Investigate and fix issue where characters might shake or player becomes unable to move.
+- [x] **Teleporting Enemy Glitch:** Fix instances where enemies might appear to teleport unfairly (distinct from world wrapping).
 - [ ] **General Glitch Prioritization:** Ongoing effort to identify and fix gameplay bugs.
 
 ## Code & Technical Refinements
 - [ ] **Performance Optimization:**
-    *   [ ] Review object pooling (collectibles, indicators, trail segments).
-    *   [ ] Optimize rendering if many objects are on screen.
+    *   [x] Review object pooling (collectibles, indicators, trail segments).
+    *   [x] Optimize rendering if many objects are on screen.
 - [ ] **Code Refactoring:**
-    *   [ ] Further componentize JavaScript if game grows much larger.
+    *   [x] Further componentize JavaScript if game grows much larger.
     *   [ ] Add more detailed comments for complex sections.
-    *   [ ] Ensure frame-rate independence for movement and timers (`deltaTime` implementation).
+    *   [x] Ensure frame-rate independence for movement and timers (`deltaTime` implementation).
 - [ ] **Enhanced Mobile UI/UX:**
     *   [ ] Consider dedicated pause button for touch interface that's larger/better placed than top-corner controls.
-    *   [ ] Test on various device sizes and adjust UI breakpoints.
+    *   [x] Test on various device sizes and adjust UI breakpoints.
     *   [ ] Design/Implement dedicated touch button for Boost if LBS movement and boost are adopted.
 
 ---

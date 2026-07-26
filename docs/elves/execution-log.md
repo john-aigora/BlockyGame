@@ -18,6 +18,23 @@
 
 ---
 
+## Batch 10 complete: 2026-07-26
+
+**Batch:** 10: Docs + deploy prep (plan 013) — executed directly by coordinator (doc-heavy, full context in hand)
+**Contract status:** all done criteria met; deployment via Path A (GitHub→Vercel import docs — the run is local-only by user directive, so the actual click-through is the family's step after they push)
+
+**What changed:** readme.md fully rewritten to describe the SHIPPED game (stale claims gone: CDN three, Live Server, food-density maintenance); Vercel deploy section with the exact click path + CLI alternative; public/favicon.svg (orange player block, hand-written SVG) + description/OG/theme-color meta; push_changes.ps1 deleted (hardcoded stale commit message footgun); todo.md: 26 shipped wishlist items checked off + pointer line added.
+
+**Gates:** build 594ms with favicon present in dist/ · lint 0 · 39 passed (no logic changed — full suite as regression proof).
+
+**Review (light):** direct — docs verified against actual shipped behavior (scoring numbers, module map, test count all cross-checked in-context).
+
+**Regression attestation:** zero source changes (index.html head + docs only); 39/39 green. Confidence HIGH.
+
+**Next:** Batch 11 (plan 014 — LBS movement spike, timeboxed). Tag elves/pre-batch-11.
+
+---
+
 ## Batch 9 complete: 2026-07-26
 
 **Batch:** 9: Visual juice pass (plan 015, user-mandated creative latitude) — subagent a2041d3725a2177be, coordinator-verified incl. visual screenshot review

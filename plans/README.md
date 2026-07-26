@@ -26,7 +26,7 @@ row when done.
 | 010 | Synthesized sound effects + procedural background music + persistent mute | P2 | M | 008 | DONE |
 | 011 | Kill points + enemy population cap (scoring/balance) | P2 | S | 003, 004, 005 | DONE |
 | 012 | Mobile polish: touch/UI conflicts, responsive layout, honest device detection | P2 | M | 002, 008 | DONE |
-| 013 | Docs truth pass + favicon/meta + Vercel deployment | P2 | S | 001 (hard); 002-012 (soft — run LAST) | TODO |
+| 013 | Docs truth pass + favicon/meta + Vercel deployment | P2 | S | 001 (hard); 002-012 (soft — run LAST) | DONE (deploy = Path A docs; human clicks Vercel import) |
 | 014 | SPIKE: Little Big Snake continuous movement + boost, behind `?move=continuous` | P3 | M | 003, 012 | TODO |
 | 015 | Visual "juice" pass — particles, walk animation, living ground, glow (user-mandated creative latitude) | P2 | M | 007 | DONE |
 
