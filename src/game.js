@@ -15,7 +15,7 @@ import { createEnemy, updateEnemies, playerBox, scratchBox } from './enemies.js'
 import { spawnNearPlayer, spawnAnywhere } from './collectibles.js';
 import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoomIn, zoomOut, updateGroundScroll } from './world.js';
 import { initEffects, updateEffects, resetEffects, onCollect } from './effects.js';
-import { keys, onKeyDown, onKeyUp, setupTouchControls } from './input.js';
+import { keys, keyboardVector, onKeyDown, onKeyUp, setupTouchControls } from './input.js';
 import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators } from './ui.js';
 import { resetCollectClock, tickCollectClock } from './timers.js';
 import { unlockAudio, sfx, music } from './audio.js';
@@ -217,11 +217,12 @@ function update(dt) {
             // Plan 014 spike: cursor-steered constant motion + boost.
             updateContinuousMovement(dt);
         } else {
-        // Keyboard movement (can coexist or be removed)
-        if (keys['arrowup']) state.player.position.z -= state.actualPlayerSpeed * dt; // USE actualPlayerSpeed
-        if (keys['arrowdown']) state.player.position.z += state.actualPlayerSpeed * dt; // USE actualPlayerSpeed
-        if (keys['arrowleft']) state.player.position.x -= state.actualPlayerSpeed * dt; // USE actualPlayerSpeed
-        if (keys['arrowright']) state.player.position.x += state.actualPlayerSpeed * dt; // USE actualPlayerSpeed
+        // Keyboard movement: arrows or WASD, as a normalized vector — a
+        // diagonal is exactly actualPlayerSpeed, not the old 1.41x per-axis
+        // sum, and opposite keys cancel to a standstill (game-feel pass).
+        const kv = keyboardVector();
+        state.player.position.x += kv.x * state.actualPlayerSpeed * dt;
+        state.player.position.z += kv.z * state.actualPlayerSpeed * dt;
 
         // Joystick movement - now touch-anywhere movement
         if (state.touchActive) {

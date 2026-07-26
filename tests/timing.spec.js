@@ -55,3 +55,23 @@ test('ArrowUp moves the player at roughly actualPlayerSpeed units/second', async
   expect(moved).toBeGreaterThan(expected * 0.7);
   expect(moved).toBeLessThan(expected * 1.3);
 });
+
+test('WASD alias: holding D moves the player toward +x', async ({ page }) => {
+  await startGame(page);
+  await page.keyboard.down('d');
+  const start = await page.evaluate(() => ({
+    x: window.__game.state.player.position.x,
+    speed: window.__game.state.actualPlayerSpeed,
+    t: performance.now(),
+  }));
+  await page.waitForTimeout(500);
+  const end = await page.evaluate(() => ({
+    x: window.__game.state.player.position.x,
+    t: performance.now(),
+  }));
+  await page.keyboard.up('d');
+  const moved = end.x - start.x; // D aliases ArrowRight: toward +x
+  const expected = start.speed * ((end.t - start.t) / 1000);
+  expect(moved).toBeGreaterThan(expected * 0.7);
+  expect(moved).toBeLessThan(expected * 1.3);
+});

@@ -4,6 +4,29 @@ import { togglePause, startRun, resetGame } from './game.js';
 
 export const keys = {}; // Object to keep track of currently pressed keys
 
+// --- Keyboard movement vector (game-feel pass) ---
+// Builds a UNIT-length input vector from the held movement keys (arrows and
+// their WASD aliases), so diagonals move at exactly player speed instead of
+// the old per-axis 1.41x. Opposite keys cancel to a clean zero (no jitter).
+// Returned object is a module-level scratch — read it, don't keep it.
+const keyboardScratch = { x: 0, z: 0 };
+export function keyboardVector() {
+    const right = (keys['arrowright'] || keys['d']) ? 1 : 0;
+    const left = (keys['arrowleft'] || keys['a']) ? 1 : 0;
+    const down = (keys['arrowdown'] || keys['s']) ? 1 : 0;
+    const up = (keys['arrowup'] || keys['w']) ? 1 : 0;
+    let x = right - left;
+    let z = down - up;
+    if (x !== 0 && z !== 0) {
+        const inv = 1 / Math.hypot(x, z); // Both axes held: scale to unit length
+        x *= inv;
+        z *= inv;
+    }
+    keyboardScratch.x = x;
+    keyboardScratch.z = z;
+    return keyboardScratch;
+}
+
 // --- Event Handlers ---
 // Handles key press down events.
 export function onKeyDown(event) {

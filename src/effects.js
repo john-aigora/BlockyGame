@@ -1,5 +1,8 @@
 import * as THREE from 'three';
-import { worldSize } from './constants.js';
+import {
+    worldSize,
+    DUST_PARTICLES_PER_STEP, DUST_LIFE, DUST_SPEED, DUST_COLOR_FROM, DUST_COLOR_TO
+} from './constants.js';
 import { state } from './state.js';
 import { COLLECTIBLE_MATERIAL } from './collectibles.js';
 import { HERO_GLOW_MATERIAL, ENEMY_PUPIL_HUNT_MATERIAL, ENEMY_PUPIL_SCARED_MATERIAL } from './characters.js';
@@ -272,7 +275,7 @@ function updateWalk(group, dt) {
     if (!legs) return;
     let w = group.userData.walk;
     if (!w) {
-        w = group.userData.walk = { phase: 0, swing: 0, lastX: group.position.x, lastZ: group.position.z };
+        w = group.userData.walk = { phase: 0, swing: 0, step: 0, lastX: group.position.x, lastZ: group.position.z };
     }
     walkScratch.dx = seamDelta(group.position.x, w.lastX);
     walkScratch.dz = seamDelta(group.position.z, w.lastZ);
@@ -283,6 +286,15 @@ function updateWalk(group, dt) {
     if (moving) {
         // Stride length scales with character size: big blocks lumber, small ones scurry
         w.phase += (dist / Math.max(group.scale.y, 0.001)) * 7;
+        // Footstep dust: legs plant each half-cycle of the stride phase (the
+        // diagonal pairs alternate), so a puff fires every π of phase — at
+        // most one per frame, even if a teleport skips several strides.
+        // Object motion → deliberately kept under prefers-reduced-motion.
+        const step = Math.floor(w.phase / Math.PI);
+        if (step !== w.step) {
+            w.step = step;
+            if (w.swing > 0.35) spawnFootstepDust(group);
+        }
     }
     // Swing amplitude eases in when moving, out when idle (legs settle to rest)
     const target = moving ? 1 : 0;
@@ -334,11 +346,31 @@ function updateWalk(group, dt) {
     }
 }
 
+// Footstep dust: a tiny, soft puff at ground level under the character on
+// each stride plant. Uses the ONE pooled burst engine — 3-5 particles, pale
+// teal-white, low velocity, gone in ~0.3s. Dust, not smoke.
+const dustOrigin = { x: 0, y: 0, z: 0 }; // Scratch — never allocated per step
+function spawnFootstepDust(group) {
+    dustOrigin.x = group.position.x;
+    dustOrigin.y = 0.06; // Just above the ground-bounce plane
+    dustOrigin.z = group.position.z;
+    spawnBurst(dustOrigin, {
+        count: DUST_PARTICLES_PER_STEP,
+        colorFrom: DUST_COLOR_FROM,
+        colorTo: DUST_COLOR_TO,
+        speed: DUST_SPEED,
+        upBias: 0.5, // Barely lifts — settles right back down
+        life: DUST_LIFE,
+        gravity: 2
+    });
+}
+
 function resetWalk(group) {
     const w = group.userData.walk;
     if (!w) return;
     w.phase = 0;
     w.swing = 0;
+    w.step = 0;
     w.lastX = group.position.x;
     w.lastZ = group.position.z;
     if (group.userData.legs) for (const leg of group.userData.legs) leg.rotation.x = 0;

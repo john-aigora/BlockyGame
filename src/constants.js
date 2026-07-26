@@ -48,6 +48,14 @@ export const initialCollectTime = 15; // MODIFIED from 10 to 15 seconds
 // Off-Screen Enemy Indicator
 export const MAX_ENEMY_INDICATORS = 10; // Max number of indicators to show
 
+// Footstep dust (game-feel pass) — soft pooled puffs on each stride plant.
+// Deliberately tiny numbers: it must read as dust kicked up by feet, not smoke.
+export const DUST_PARTICLES_PER_STEP = 4; // Pooled particles per foot plant
+export const DUST_LIFE = 0.3; // Seconds a puff lives
+export const DUST_SPEED = 0.7; // Outward drift, units/s (very low = soft)
+export const DUST_COLOR_FROM = 0xB2DFDB; // Pale teal-white puff...
+export const DUST_COLOR_TO = 0x6B9E97; // ...settling toward the ground teal
+
 // --- Movement mode flag (plan 014 design spike) ---
 // `?move=continuous` opts into the Little Big Snake-style prototype
 // (src/movement-continuous.js). Any other value — including no param at all —
