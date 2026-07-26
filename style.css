@@ -394,6 +394,20 @@ canvas {
     /* Darker Muted Green on hover */
 }
 
+/* Time-machine toggle: hop to the untouched May 2025 build. Sits above the
+   start overlay (z 110) so the comparison is one tap from the title screen.
+   Uses the `translate` property (not transform) for centering so the
+   .game-button hover scale doesn't clobber it. */
+#original-link {
+    top: 10px;
+    left: 50%;
+    translate: -50% 0;
+    z-index: 120;
+    text-decoration: none;
+    font-size: 10px;
+    opacity: 0.85;
+}
+
 /* Top controls styling */
 #top-controls {
     position: absolute;

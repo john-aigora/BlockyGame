@@ -11,5 +11,6 @@ export default [
       'no-undef': 'error'
     }
   },
-  { ignores: ['dist/', 'node_modules/', 'playwright-report/', 'test-results/'] }
+  // public/original/ is the byte-for-byte May 2025 museum build — never linted, never touched.
+  { ignores: ['dist/', 'node_modules/', 'playwright-report/', 'test-results/', 'public/original/'] }
 ];
