@@ -1,0 +1,53 @@
+{
+  "session_id": "elves-2026-07-25-best-version",
+  "version": "1.9.0",
+  "status": "staged",
+  "branch": "feat/best-version",
+  "local_only_mode": true,
+  "never_push": true,
+  "plan_path": "plans/README.md",
+  "survival_guide_path": "docs/elves/survival-guide.md",
+  "learnings_path": "docs/elves/learnings.md",
+  "execution_log_path": "docs/elves/execution-log.md",
+  "pr_number": null,
+  "node_toolchain": {
+    "path": "~/.local/elves-tools/node",
+    "version": "v22.23.1",
+    "path_export": "export PATH=\"$HOME/.local/elves-tools/node/bin:$PATH\""
+  },
+  "cobbler": {
+    "default_for_session": true,
+    "activated_by": "elves invocation",
+    "mode": "run",
+    "scope": "current Elves run"
+  },
+  "continuation_guard": {
+    "remaining_batches": 10,
+    "stop_allowed": true,
+    "stop_allowed_reason": "staging handoff — flips to false at launch",
+    "checkpoint_is_stop": false,
+    "next_required_action": "On launch: export node PATH, verify green, tag elves/pre-batch-1, execute Batch 1 (plans/001-tooling-baseline.md)"
+  },
+  "test_baseline": {
+    "passed": null,
+    "total": null,
+    "skipped": null,
+    "status": "pending",
+    "reason": "no test infrastructure until Batch 1 (plan 001); capture baseline after Batch 1 completes"
+  },
+  "current_batch": null,
+  "collision_tripwire": "f4d3ecc1ca0a292ed42b09beb63a01343211dd48",
+  "batches": [
+    { "id": 1, "name": "Tooling baseline", "plans": ["001"], "status": "pending" },
+    { "id": 2, "name": "Modularize + dedupe", "plans": ["002"], "status": "pending" },
+    { "id": 3, "name": "Frame-rate independence + game-clock timer", "plans": ["003"], "status": "pending" },
+    { "id": 4, "name": "Game-over correctness + camera/zoom/fog", "plans": ["004", "006"], "status": "pending" },
+    { "id": 5, "name": "Toroidal world + rendering hygiene", "plans": ["005", "007"], "status": "pending" },
+    { "id": 6, "name": "Start & death screens", "plans": ["008"], "status": "pending" },
+    { "id": 7, "name": "High scores + sound", "plans": ["009", "010"], "status": "pending" },
+    { "id": 8, "name": "Balance + mobile polish", "plans": ["011", "012"], "status": "pending" },
+    { "id": 9, "name": "Docs + deploy prep", "plans": ["013"], "status": "pending" },
+    { "id": 10, "name": "LBS movement spike", "plans": ["014"], "status": "pending" }
+  ],
+  "review_comments": []
+}

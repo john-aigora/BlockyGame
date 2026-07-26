@@ -1,0 +1,14 @@
+# Dependencies & build
+node_modules/
+dist/
+
+# Test artifacts
+test-results/
+playwright-report/
+
+# OS
+.DS_Store
+
+# Elves ephemeral artifacts
+.playwright-mcp/
+docs/audit/
