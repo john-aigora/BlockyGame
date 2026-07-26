@@ -80,10 +80,10 @@ also verified DENIED for this machine's account (`RBrownHOPE` has read-only acce
 
 ## Stop Gate
 
-- **Planned batches remaining:** 1
+- **Planned batches remaining:** 0
 - **Stop allowed right now:** no — run launched via /goal; Stop hook enforces completion of all 11 batches.
 - **Why:** batches remain.
-- **Next required action:** execute Batch 11 (plan 014 LBS spike); tag elves/pre-batch-11 first.
+- **Next required action:** Final Completion: readiness review → Elves Report → artifact cleanup → closeout.
 
 ### RESOLVED — Node.js toolchain (was a launch blocker)
 

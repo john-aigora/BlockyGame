@@ -1,4 +1,4 @@
-import { MAX_DRAG_DISTANCE, DEAD_ZONE_RADIUS } from './constants.js';
+import { MAX_DRAG_DISTANCE, DEAD_ZONE_RADIUS, MOVEMENT_MODE } from './constants.js';
 import { state } from './state.js';
 import { togglePause, startRun, resetGame } from './game.js';
 
@@ -34,9 +34,17 @@ export function onKeyDown(event) {
 
     const key = event.key.toLowerCase();
 
-    // Handle space bar for pause
+    // Handle space bar for pause.
+    // Plan 014 spike: in continuous mode Space is BOOST (held — handled by
+    // movement-continuous.js's own listeners), so pause moves to P. Classic
+    // mode keeps Space = pause exactly as before.
     if (key === ' ' || key === 'space') {
         event.preventDefault(); // Prevent page scroll
+        if (MOVEMENT_MODE === 'continuous') return; // Boost, not pause
+        if (!isRepeat) togglePause();
+        return;
+    }
+    if (MOVEMENT_MODE === 'continuous' && key === 'p') {
         if (!isRepeat) togglePause();
         return;
     }

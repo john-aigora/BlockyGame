@@ -45,3 +45,10 @@ export const initialCollectTime = 15; // MODIFIED from 10 to 15 seconds
 
 // Off-Screen Enemy Indicator
 export const MAX_ENEMY_INDICATORS = 10; // Max number of indicators to show
+
+// --- Movement mode flag (plan 014 design spike) ---
+// `?move=continuous` opts into the Little Big Snake-style prototype
+// (src/movement-continuous.js). Any other value — including no param at all —
+// selects 'classic', whose behavior is untouched by the spike.
+export const MOVEMENT_MODE =
+    new URLSearchParams(location.search).get('move') === 'continuous' ? 'continuous' : 'classic';

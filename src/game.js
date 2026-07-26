@@ -4,8 +4,9 @@ import {
     FOOD_POINTS, ENEMY_HEIGHT_FACTOR,
     BASE_PLAYER_SPEED, MOBILE_SPEED_MULTIPLIER,
     worldSize, initialFoodDensityArea,
-    enemyStartOffset
+    enemyStartOffset, MOVEMENT_MODE
 } from './constants.js';
+import { initContinuousMovement, resetContinuousMovement, updateContinuousMovement } from './movement-continuous.js';
 import { wrapPosition } from './worldmath.js';
 import { state } from './state.js';
 import { createPlayer, disposeCharacter } from './characters.js';
@@ -78,6 +79,10 @@ function init() {
 
     // NEW Touch Anywhere Event Listeners
     setupTouchControls();
+
+    // Plan 014 spike: `?move=continuous` swaps in the prototype movement
+    // scheme (cursor-steer + boost). Classic mode never reaches this module.
+    if (MOVEMENT_MODE === 'continuous') initContinuousMovement();
 
     // Auto-pause when the tab is hidden (the dt clamp already prevents
     // catch-up jumps; this puts the player in a fair, deliberate resume state).
@@ -160,6 +165,7 @@ function setupNewGame() {
     }
     hideMessage();
     resetEffects(); // Park all particles; reset squash/walk transients (plan 015)
+    if (MOVEMENT_MODE === 'continuous') resetContinuousMovement(); // Full energy, default heading (plan 014 spike)
 
     // Every new session — fresh boot or post-death restart — returns to the
     // start overlay; startRun() is the single "a run begins" entry point.
@@ -205,6 +211,10 @@ function update(dt) {
 
     // Player movement and other game updates (ground, light, camera, collectibles)
     if (state.gameActive) {
+        if (MOVEMENT_MODE === 'continuous') {
+            // Plan 014 spike: cursor-steered constant motion + boost.
+            updateContinuousMovement(dt);
+        } else {
         // Keyboard movement (can coexist or be removed)
         if (keys['arrowup']) state.player.position.z -= state.actualPlayerSpeed * dt; // USE actualPlayerSpeed
         if (keys['arrowdown']) state.player.position.z += state.actualPlayerSpeed * dt; // USE actualPlayerSpeed
@@ -215,6 +225,7 @@ function update(dt) {
         if (state.touchActive) {
             state.player.position.x += state.movementVector.x * state.actualPlayerSpeed * dt; // USE actualPlayerSpeed
             state.player.position.z += state.movementVector.y * state.actualPlayerSpeed * dt; // USE actualPlayerSpeed
+        }
         }
 
         // Player Wrapping Logic (preserves overshoot across the seam)

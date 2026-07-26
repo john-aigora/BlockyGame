@@ -18,6 +18,23 @@
 
 ---
 
+## Batch 11 complete: 2026-07-26 — ALL BATCHES DONE
+
+**Batch:** 11: LBS movement spike (plan 014) — subagent a1adc660048ea053b, coordinator-verified
+**Contract status:** all spike deliverables met (prototype + writeup + flag-off regression proof)
+
+**What changed:** `?move=continuous` prototype in src/movement-continuous.js — cursor-raycast steering (verified: face leads, no π correction needed), hold-Space boost ×1.5 with 100-energy meter (measured 9.95/s drain, 4.93/s regen vs 10/5 spec), touch heading persistence after finger lift, cyan boost trail reusing the particle pool; P = pause in continuous mode (Space taken by boost — flagged as an open question); classic default URL byte-identical. plans/design/lbs-movement-notes.md: run instructions, 6-question family scorecard, 7 open design questions, recommendation: **adapt, don't adopt-as-is** (needs retune of engagement/spawn/timer pressure + boost-vs-fleeing balance answer) — final call belongs to the family playtest.
+
+**Gates (agent + coordinator):** lint 0 · 39 passed flag-off · build clean. No prototype tests by design (disposable).
+
+**Review (light):** clean; the "touch persistence failure" was a harness artifact (desktop mouse branch correctly reclaims steering), properly diagnosed, no product change.
+
+**Regression attestation:** flag-off suite 39/39 green — classic behavior sacred and proven. Confidence HIGH.
+
+**Next:** Final Completion — final readiness review, Elves Report, artifact cleanup, closeout.
+
+---
+
 ## Batch 10 complete: 2026-07-26
 
 **Batch:** 10: Docs + deploy prep (plan 013) — executed directly by coordinator (doc-heavy, full context in hand)
