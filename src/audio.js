@@ -77,6 +77,17 @@ export const sfx = {
     // and faster than the start fanfare, so it reads as "level up", not "boot".
     milestone: () => { [659, 784, 988].forEach((f, i) => blip({ freq: f, dur: 0.1, vol: 0.18, delay: i * 0.08 })); },
     click: () => blip({ freq: 880, dur: 0.03, vol: 0.08 }),
+    // Panic tick: one soft, short click per displayed second while the
+    // collect countdown is in its last PANIC_TIME seconds (timers.js drives
+    // the cadence off the same shown-integer change that writes the DOM).
+    tick: () => blip({ freq: 1150, dur: 0.025, vol: 0.06 }),
+    // Danger heartbeat: one low lub-dub per call. The ~72bpm LOOP lives in
+    // ui.js on the game clock (dt-driven) — audio stays fire-and-forget
+    // one-shots, so pause and death stop the heart by not calling this.
+    heartbeat: () => {
+        blip({ freq: 68, endFreq: 46, type: 'sine', dur: 0.12, vol: 0.08 });
+        blip({ freq: 62, endFreq: 44, type: 'sine', dur: 0.1, vol: 0.055, delay: 0.16 });
+    },
 };
 
 // --- Background music (procedural chiptune loop) -----------------------

@@ -2,9 +2,10 @@ import * as THREE from 'three';
 import {
     worldSize,
     DUST_PARTICLES_PER_STEP, DUST_LIFE, DUST_SPEED, DUST_COLOR_FROM, DUST_COLOR_TO,
-    POPUP_RISE, POPUP_LIFE, GROWTH_FRAME_FACTOR
+    POPUP_RISE, POPUP_LIFE, GROWTH_FRAME_FACTOR, PANIC_TIME
 } from './constants.js';
 import { state } from './state.js';
+import { torusDelta, torusDistance } from './worldmath.js';
 import { COLLECTIBLE_MATERIAL } from './collectibles.js';
 import { HERO_GLOW_MATERIAL, ENEMY_PUPIL_HUNT_MATERIAL, ENEMY_PUPIL_SCARED_MATERIAL } from './characters.js';
 
@@ -67,6 +68,13 @@ const POPUP_POOL_SIZE = 8;
 const popups = []; // { sprite, texture, ctx2d, life, baseY }
 let popupCursor = 0; // Ring allocator, same policy as the particle pool
 
+// --- Panic food arrow (tension pass) ---
+// ONE shared blocky pyramid floating above the player during the collect
+// countdown's last PANIC_TIME seconds, pointing (torus-aware) at the
+// nearest food. Hidden whenever inactive; zero per-frame allocation.
+let foodArrow = null;
+const arrowDelta = new THREE.Vector3(); // Scratch for the torus direction
+
 export function initEffects() {
     reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (points) return; // Idempotent — resources live for the app's lifetime
@@ -112,6 +120,17 @@ export function initEffects() {
         state.scene.add(sprite);
         popups.push({ sprite, texture, ctx2d, life: 0, baseY: 0 });
     }
+
+    // Panic food arrow: a 4-sided cone reads as a blocky pyramid — on-theme.
+    // The tip is pre-rotated to +Z so a single rotation.y aims it. It wears
+    // the hero's breathing lime glow material: same visual language as the
+    // scarf/antenna, zero new materials. Created once here (boot), so the
+    // resource-pin tests never see it as growth.
+    const arrowGeometry = new THREE.ConeGeometry(0.34, 0.85, 4);
+    arrowGeometry.rotateX(Math.PI / 2); // Tip points +Z; rotation.y steers it
+    foodArrow = new THREE.Mesh(arrowGeometry, HERO_GLOW_MATERIAL);
+    foodArrow.visible = false;
+    state.scene.add(foodArrow);
 
     // Food reads as a glowing pickup: shared material, so ALL food pulses
     // in sync — one uniform update per frame, zero per-item cost.
@@ -297,6 +316,7 @@ export function resetEffects() {
     activeParticles = 0;
     squashTime = 0;
     pulseTime = 0;
+    if (foodArrow) foodArrow.visible = false;
     for (const p of popups) {
         p.life = 0;
         p.sprite.visible = false;
@@ -312,6 +332,7 @@ export function updateEffects(dt) {
     updatePopups(dt);
     updatePlayerScaleFx(dt);
     updateFoodGlow();
+    updateFoodArrow();
     // Hero glow accents (antenna tip + scarf) breathe at a gentle 0.5Hz —
     // one shared material, one uniform write per frame.
     HERO_GLOW_MATERIAL.emissiveIntensity = 0.6 + 0.25 * Math.sin(clock * Math.PI);
@@ -400,6 +421,42 @@ function updatePlayerScaleFx(dt) {
     // When the LAST timer just expired this frame, yf/xzf are exactly 1 —
     // this write IS the base-scale restore.
     state.player.scale.set(base * xzf, base * yf, base * xzf);
+}
+
+// Panic food arrow: while the collect countdown is at or under PANIC_TIME
+// (and the run is live), the shared pyramid bobs gently above the player's
+// head, aimed along the shortest torus path to the NEAREST food. It scales
+// with the camera's growth pull-back (like the score popups) so it stays
+// the same size on screen, and vanishes the moment the timer resets or the
+// run ends. The bob is object motion — allowed under reduced motion.
+function updateFoodArrow() {
+    if (!foodArrow || !state.player) return;
+    const active = state.gameActive &&
+        state.collectTimeLeft <= PANIC_TIME &&
+        state.collectibles.length > 0;
+    if (!active) {
+        if (foodArrow.visible) foodArrow.visible = false;
+        return;
+    }
+    let nearest = null;
+    let best = Infinity;
+    for (const c of state.collectibles) {
+        const d = torusDistance(state.player.position, c.position);
+        if (d < best) {
+            best = d;
+            nearest = c;
+        }
+    }
+    torusDelta(state.player.position, nearest.position, arrowDelta);
+    const frame = 1 + (state.playerScale - 1) * GROWTH_FRAME_FACTOR;
+    foodArrow.visible = true;
+    foodArrow.position.set(
+        state.player.position.x,
+        state.playerScale * 1.5 + (0.4 + 0.12 * Math.sin(clock * 3)) * frame,
+        state.player.position.z
+    );
+    foodArrow.rotation.y = Math.atan2(arrowDelta.x, arrowDelta.z); // +Z tip → shortest path
+    foodArrow.scale.setScalar(frame);
 }
 
 // All food pulses in sync via the ONE shared material — deliberate and cheap.

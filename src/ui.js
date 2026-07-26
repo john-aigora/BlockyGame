@@ -1,7 +1,8 @@
-import { MAX_ENEMY_INDICATORS } from './constants.js';
+import { MAX_ENEMY_INDICATORS, DANGER_RADIUS, DANGER_VIGNETTE_MAX, HEARTBEAT_BPM } from './constants.js';
 import { state } from './state.js';
 import { canKillSpecificEnemy } from './enemies.js';
 import { recordScore } from './hiscores.js';
+import { torusDistance } from './worldmath.js';
 import { unlockAudio, sfx, music, isMuted, setMuted } from './audio.js';
 
 // Cached DOM references, resolved once at init (plan 007) — the hot loop
@@ -9,8 +10,10 @@ import { unlockAudio, sfx, music, isMuted, setMuted } from './audio.js';
 export const el = {
     score: null,
     collectTime: null,
+    collectTimerDisplay: null,
     killIndicator: null,
     comboChip: null,
+    dangerVignette: null,
     messageBox: null,
     deathReason: null,
     finalScore: null,
@@ -25,6 +28,9 @@ export const el = {
 export function initUI() {
     el.score = document.getElementById('score');
     el.collectTime = document.getElementById('collect-time');
+    el.collectTimerDisplay = document.getElementById('collect-timer-display');
+    el.dangerVignette = document.getElementById('danger-vignette');
+    dangerReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     el.killIndicator = document.getElementById('kill-indicator');
     el.comboChip = document.getElementById('combo-chip');
     el.messageBox = document.getElementById('message-box');
@@ -150,10 +156,89 @@ export function endGame(reason) {
     if (!state.gameActive) return;
     state.gameActive = false;
     resetCombo(); // Death breaks the chain (and clears the chip behind the box)
+    resetTension(); // Panic pulse and danger vignette must not haunt the death screen
     music.stop(); // 0.3s fadeout — the death jingle plays over it
     sfx.death();
     const { list, rank } = recordScore(state.score);
     showDeathScreen(reason, list, rank);
+}
+
+// --- Tension systems (awesome pass) ---
+// The panic-timer CSS class and the danger vignette + heartbeat. All
+// transient, all zeroed together by resetTension (endGame + setupNewGame).
+
+let timerPanicOn = false;
+let dangerBreathClock = 0; // Wall-independent breath phase (advances with game dt)
+let dangerReducedMotion = false; // Resolved once in initUI
+let lastVignetteCss = null; // Skip same-value style writes in the hot loop
+
+// Toggles the 1Hz red pulse on the collect-timer display. Guarded so the
+// per-frame call from tickCollectClock touches classList only on changes.
+export function setTimerPanic(on) {
+    if (on === timerPanicOn || !el.collectTimerDisplay) return;
+    timerPanicOn = on;
+    el.collectTimerDisplay.classList.toggle('timer-panic', on);
+}
+
+// Danger pulse + heartbeat, called each update frame from game.js BEFORE
+// updateEnemies — so a death inside the enemy pass can zero the vignette
+// without this frame re-raising it afterwards. The vignette eases toward
+// DANGER_VIGNETTE_MAX while the nearest NON-killable enemy is within
+// DANGER_RADIUS (torus-aware), with a slow 0.4Hz breath on top (static
+// under reduced motion). The heartbeat thumps at HEARTBEAT_BPM only while
+// danger persists AND hunt mode is off — the hunt layer already owns the
+// music intensity; the heartbeat owns the dread.
+export function updateDangerPulse(dt) {
+    if (!state.gameActive || !state.player) return;
+    let nearest = Infinity;
+    let anyKillable = false;
+    for (const enemyGroup of state.enemies) {
+        if (canKillSpecificEnemy(enemyGroup)) {
+            anyKillable = true;
+            continue; // Killable enemies flee — they are prey, not danger
+        }
+        const d = torusDistance(enemyGroup.position, state.player.position);
+        if (d < nearest) nearest = d;
+    }
+    const inDanger = nearest < DANGER_RADIUS;
+
+    const target = inDanger ? DANGER_VIGNETTE_MAX : 0;
+    state.dangerOpacity += (target - state.dangerOpacity) * (1 - Math.exp(-5 * dt));
+    if (!inDanger && state.dangerOpacity < 0.003) state.dangerOpacity = 0; // Settle instead of asymptote
+    // Reduced motion: static faint opacity (the eased base alone, no breath)
+    let shown = state.dangerOpacity;
+    if (!dangerReducedMotion && shown > 0) {
+        dangerBreathClock += dt;
+        // 0.4Hz breath riding the eased base; peak stays DANGER_VIGNETTE_MAX
+        shown *= 0.8 + 0.2 * Math.sin(dangerBreathClock * Math.PI * 0.8);
+    }
+    const css = shown.toFixed(3);
+    if (el.dangerVignette && css !== lastVignetteCss) {
+        lastVignetteCss = css;
+        el.dangerVignette.style.opacity = css;
+    }
+
+    if (inDanger && !anyKillable) {
+        state.heartbeatClock -= dt;
+        if (state.heartbeatClock <= 0) {
+            sfx.heartbeat();
+            state.heartbeatClock += 60 / HEARTBEAT_BPM;
+        }
+    } else {
+        state.heartbeatClock = 0; // Re-entering danger thumps immediately
+    }
+}
+
+// Zeroes every tension transient — the single reset path, called by endGame
+// and by setupNewGame so neither the death screen nor a fresh run inherits
+// a pulsing timer or a lingering red frame.
+export function resetTension() {
+    setTimerPanic(false);
+    state.dangerOpacity = 0;
+    state.heartbeatClock = 0;
+    dangerBreathClock = 0;
+    lastVignetteCss = null;
+    if (el.dangerVignette) el.dangerVignette.style.opacity = '0';
 }
 
 // Hides the message box.

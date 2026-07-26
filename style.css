@@ -122,6 +122,46 @@ canvas {
     /* Bright Yellow */
 }
 
+/* Panic timer (tension pass): the last PANIC_TIME seconds of the collect
+   countdown pulse the timer red. One smooth pulse per second — 1Hz, far
+   under the 3-flash photosensitivity limit. timers.js toggles the class. */
+@keyframes timer-panic-pulse {
+
+    0%,
+    100% {
+        color: #FFEB3B;
+        transform: scale(1);
+    }
+
+    50% {
+        color: #FF1744;
+        /* Danger red — same red as the hunter pupils and vignette */
+        transform: scale(1.06);
+    }
+}
+
+#collect-timer-display.timer-panic {
+    animation: timer-panic-pulse 1s ease-in-out infinite;
+}
+
+/* Danger vignette (tension pass): a red radial glow hugging the frame when
+   a non-killable enemy stalks close. ui.js drives opacity per frame (eased
+   toward 0.22 max, slow breathing) — this rule only paints the gradient.
+   The transparent center keeps gameplay fully readable. */
+#danger-vignette {
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    /* Above the canvas, below #top-controls (100) and overlays */
+    pointer-events: none;
+    opacity: 0;
+    border-radius: 5px;
+    background: radial-gradient(ellipse at center,
+            rgba(255, 23, 68, 0) 42%,
+            rgba(255, 23, 68, 0.65) 78%,
+            rgba(255, 23, 68, 1) 100%);
+}
+
 /* Styling for game instructions text */
 #instructions {
     margin-top: 10px;
@@ -510,6 +550,13 @@ canvas {
     .game-button:hover,
     .game-button:active {
         transform: none;
+    }
+
+    /* Panic still reads — as a static urgency color, not a pulse. The
+       vignette's breathing is likewise disabled in ui.js (static opacity). */
+    #collect-timer-display.timer-panic {
+        animation: none;
+        color: #FF1744;
     }
 }
 

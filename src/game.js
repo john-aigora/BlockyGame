@@ -11,12 +11,12 @@ import { initContinuousMovement, resetContinuousMovement, updateContinuousMoveme
 import { wrapPosition, torusDeltaComponent } from './worldmath.js';
 import { state } from './state.js';
 import { createPlayer, disposeCharacter } from './characters.js';
-import { createEnemy, updateEnemies, playerBox, scratchBox } from './enemies.js';
+import { createEnemy, updateEnemies, playerBox, scratchBox, beginMaterialize } from './enemies.js';
 import { spawnNearPlayer, spawnAnywhere } from './collectibles.js';
 import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoomIn, zoomOut, updateGroundScroll } from './world.js';
 import { initEffects, updateEffects, resetEffects, onCollect, onGrowthMilestone } from './effects.js';
 import { keys, keyboardVector, onKeyDown, onKeyUp, setupTouchControls } from './input.js';
-import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo } from './ui.js';
+import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension } from './ui.js';
 import { resetCollectClock, tickCollectClock, tickComboClock } from './timers.js';
 import { unlockAudio, sfx, music } from './audio.js';
 
@@ -112,6 +112,7 @@ function setupNewGame() {
     state.playerScale = 1.0; // Player's initial scale (acts as height for 1x1x1 geometry)
     applySpeedMultiplier(); // playerScale reset → drop any size speed bonus from the last run
     resetCombo(); // A mid-run restart must not carry a live combo into the new run
+    resetTension(); // Nor a pulsing panic timer, red vignette, or racing heartbeat
     resetCameraZoom(); // New runs always start at the default framing
     updateScoreDisplay();
 
@@ -155,6 +156,9 @@ function setupNewGame() {
         state.enemies[0].position.x = state.player.position.x + enemyStartOffset;
         state.enemies[0].position.z = state.player.position.z + enemyStartOffset;
     }
+    // Spawn telegraph (tension pass): the boot enemy materializes too — it
+    // starts scaling in on the first unpaused frame, right as the run begins.
+    beginMaterialize(firstEnemy);
 
     // Calculate initial food count based on density
     const initialFoodCount = Math.floor((worldSize * worldSize) / initialFoodDensityArea);
@@ -211,6 +215,12 @@ function update(dt) {
 
     // --- Off-Screen Enemy Indicator Logic ---
     updateOffscreenIndicators();
+
+    // Danger vignette + heartbeat (tension pass). Runs BEFORE updateEnemies:
+    // it reads last frame's positions (one frame of latency is invisible at
+    // these speeds), and a death inside the enemy pass can then zero the
+    // vignette without this frame re-raising it afterwards.
+    updateDangerPulse(dt);
 
     // Enemy AI, movement, and player-collision handling
     updateEnemies(dt);

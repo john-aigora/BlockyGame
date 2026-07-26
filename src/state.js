@@ -22,6 +22,8 @@ export const state = {
   killFlashClock: 0, // Seconds accumulated toward the next kill-indicator flash toggle
   comboCount: 0, // Current kill-combo multiplier (0/1 = no combo; capped at COMBO_MAX)
   comboTimeLeft: 0, // Game-clock seconds left in the combo window (ticked in timers.js)
+  dangerOpacity: 0, // Eased base opacity of the danger vignette (ui.js drives it toward DANGER_VIGNETTE_MAX)
+  heartbeatClock: 0, // Game-clock seconds until the next danger heartbeat (0 = fire on danger entry)
   animationFrameId: null, // requestAnimationFrame handle
 
   // Speed Multiplier Variables

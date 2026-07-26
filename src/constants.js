@@ -15,6 +15,14 @@ export const COMBO_WINDOW = 4; // seconds after a kill in which the next kill es
 export const COMBO_MAX = 5; // combo multiplier cap (x1..x5)
 export const MILESTONE_STEP = 1.0; // playerScale interval that fires a growth-milestone celebration
 
+// Tension systems (awesome pass): make danger and urgency legible.
+export const PANIC_TIME = 5; // Collect-countdown seconds at/below which panic engages (red pulse, tick sfx, food arrow)
+export const DANGER_RADIUS = 9; // A non-killable enemy within this distance = danger (vignette + heartbeat)
+export const DANGER_VIGNETTE_MAX = 0.22; // Peak opacity of the red danger vignette — subtle, must never obscure play
+export const HEARTBEAT_BPM = 72; // Danger heartbeat tempo (one low lub-dub per beat, very quiet)
+export const SPAWN_MATERIALIZE_TIME = 0.5; // Seconds a newly spawned enemy takes to scale in (no move/collide while forming)
+export const SPAWN_MATERIALIZE_START_SCALE = 0.05; // Fraction of full size a materializing enemy starts at
+
 // Speed Multiplier Variables
 export const speedMultipliers = [1.0, 1.5, 2.0, 3.0, 5.0, 0.5]; // ADDED 5.0x, re-ordered
 

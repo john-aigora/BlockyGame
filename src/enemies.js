@@ -3,7 +3,8 @@ import {
     enemyBaseHeight, worldBoundary, engagementRadius, orbitStrengthFactor,
     enemyRandomDriftFactor, AVOID_SPEED_FACTOR, BASE_ENEMY_SPAWN_DISTANCE, SPAWN_DISTANCE_SCALE_FACTOR,
     KILL_POINTS, MAX_ENEMIES, ENEMIES_PER_KILL, ENEMY_HEIGHT_FACTOR,
-    SIZE_BOUNTY_PER_UNIT, COMBO_WINDOW, COMBO_MAX
+    SIZE_BOUNTY_PER_UNIT, COMBO_WINDOW, COMBO_MAX,
+    SPAWN_MATERIALIZE_TIME, SPAWN_MATERIALIZE_START_SCALE
 } from './constants.js';
 import { state } from './state.js';
 import { createCharacter, disposeCharacter, shadeColor, CAP_LIGHTEN } from './characters.js';
@@ -11,7 +12,7 @@ import { spawnAtPosition } from './collectibles.js';
 import { endGame, updateScoreDisplay, showComboChip } from './ui.js';
 import { wrapPosition, torusDelta, torusDistance } from './worldmath.js';
 import { sfx } from './audio.js';
-import { onEnemyKilled, spawnScorePopup } from './effects.js';
+import { onEnemyKilled, spawnScorePopup, spawnBurst } from './effects.js';
 import { triggerKillShake } from './world.js';
 
 // Module-level scratch vectors — reused every frame to avoid per-frame allocation.
@@ -53,9 +54,32 @@ export function canKillSpecificEnemy(enemyGroup) {
     // The previous logic was: playerActualHeight > enemy.scale.y * enemyBaseHeight.
     // This refers to the enemy's main cube height. Let's stick to that for now for consistency in gameplay feel,
     // comparing player height against the scaled height of the enemy's main body part.
-    const enemyScaledBodyHeight = enemyBaseHeight * enemyGroup.scale.y;
+    // A MATERIALIZING enemy is judged by its FULL height (materializeTarget):
+    // the scale-in is a spawn telegraph, not a real size — without this the
+    // shrunken spawn would flash "KILL!" and paint yellow indicators for a
+    // foe that towers over the player half a second later.
+    const scaleY = enemyGroup.userData.materializeTarget ?? enemyGroup.scale.y;
+    const enemyScaledBodyHeight = enemyBaseHeight * scaleY;
     return playerActualHeight > enemyScaledBodyHeight;
 }
+
+// --- Spawn telegraph (tension pass) ---
+// Call AFTER the spawner has set the enemy's final scale and position: the
+// enemy scales in from SPAWN_MATERIALIZE_START_SCALE to full size over
+// SPAWN_MATERIALIZE_TIME (ease-out), with a burst of its body color on its
+// first live frame (fired from updateEnemies so it survives resetEffects
+// and lands after the seamless-torus re-image). While materializing the
+// enemy neither moves nor collides.
+export function beginMaterialize(enemyGroup) {
+    const ud = enemyGroup.userData;
+    ud.materializeTarget = enemyGroup.scale.x;
+    ud.materializing = SPAWN_MATERIALIZE_TIME;
+    ud.materializeBurstPending = true;
+    enemyGroup.scale.setScalar(ud.materializeTarget * SPAWN_MATERIALIZE_START_SCALE);
+}
+
+// Scratch origin for the materialize burst — never allocated per spawn.
+const materializeOrigin = { x: 0, y: 0, z: 0 };
 
 // --- Enemy Update (called every frame from update()) ---
 // Handles enemy coloring, AI movement (flee/chase/orbit + random drift),
@@ -86,6 +110,43 @@ export function updateEnemies(dt) {
             if (bodyMesh) bodyMesh.material.color.setHex(0x03A9F4); // Electric Blue otherwise
             if (capMaterial) capMaterial.color.setHex(NORMAL_CAP_COLOR);
             enemyGroup.userData.killable = false;
+        }
+
+        // --- Spawn telegraph: materialize before acting (tension pass) ---
+        // Colors above already ran (canKillSpecificEnemy judges by the FULL
+        // size), so the forming enemy wears its true colors; everything
+        // below — AI, movement, and the player-collision AABB test — is
+        // skipped until it finishes scaling in.
+        const ud = enemyGroup.userData;
+        if (ud.materializing !== undefined) {
+            if (ud.materializeBurstPending) {
+                // First live frame: puff of the body color at the spawn spot
+                // (post-re-image, so it is visible even across the seam).
+                ud.materializeBurstPending = false;
+                materializeOrigin.x = enemyGroup.position.x;
+                materializeOrigin.y = (ud.bodyBaseY ?? 0.9) * ud.materializeTarget;
+                materializeOrigin.z = enemyGroup.position.z;
+                spawnBurst(materializeOrigin, {
+                    count: 18,
+                    colorFrom: bodyMesh ? bodyMesh.material.color.getHex() : 0x03A9F4,
+                    speed: 3.5,
+                    upBias: 2,
+                    life: 0.5,
+                    gravity: 5
+                });
+            }
+            ud.materializing -= dt;
+            const t = Math.min(1, 1 - ud.materializing / SPAWN_MATERIALIZE_TIME);
+            const eased = 1 - (1 - t) * (1 - t); // Ease-out: fast arrival, soft landing
+            enemyGroup.scale.setScalar(
+                ud.materializeTarget * (SPAWN_MATERIALIZE_START_SCALE + (1 - SPAWN_MATERIALIZE_START_SCALE) * eased)
+            );
+            if (ud.materializing <= 0) {
+                enemyGroup.scale.setScalar(ud.materializeTarget);
+                delete ud.materializing;
+                delete ud.materializeTarget;
+            }
+            continue; // No movement, no collision until fully formed
         }
 
         // --- Enemy AI: Movement Logic ---
@@ -244,6 +305,7 @@ export function spawnNewEnemies() {
         enemy.position.x = state.player.position.x + Math.cos(angle) * spawnDistance;
         enemy.position.z = state.player.position.z + Math.sin(angle) * spawnDistance;
         wrapPosition(enemy.position); // A capped distance can still cross the seam near an edge
+        beginMaterialize(enemy); // Scale-in telegraph: no pop-in, no instant threat
     }
 }
 
