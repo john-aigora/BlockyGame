@@ -1,116 +1,169 @@
-// Generates intro/outro music beds with Google's Lyria RealTime model
+// Generates the film's intro/outro music beds with Google's Lyria 3 clip model
 // (Gemini API, @google/genai SDK) — ONLY if video/.env provides GEMINI_API_KEY.
 //
 // Usage:  node scripts/lyria.js
-// Writes: public/audio/intro-bed.wav (~11s), public/audio/outro-bed.wav (~11s)
+// Writes: public/audio/intro-bed.<mp3|wav>  (upbeat retro chiptune arcade intro)
+//         public/audio/outro-bed.<mp3|wav>  (triumphant/uplifting resolve)
 // Exit:   0 on success, 2 if no key configured, 1 on API failure.
 //         The film composition falls back to the game's own music when the
 //         beds are absent — Lyria is an enhancement, never a blocker.
 //
-// Lyria RealTime streams raw PCM chunks (48kHz, stereo, 16-bit) over a live
-// session; we collect ~11s per bed and wrap them in a WAV header. The key is
-// read from .env and never printed.
-const path = require('path');
-const fs = require('fs');
+// SDK call shape (probed live, July 2026): the Lyria 3 *clip* model is driven
+// through the ordinary generateContent surface with an AUDIO response modality —
+//   ai.models.generateContent({
+//     model: 'lyria-3-clip-preview',
+//     contents: '<prompt>',
+//     config: { responseModalities: ['AUDIO'] },
+//   })
+// The clip model always returns a single ~30s instrumental clip as one
+// inlineData part (mimeType audio/mpeg, i.e. MP3; base64). We decode and save
+// it; the film uses the leading portion of each clip via the composition's
+// Sequence windows + volume envelopes. (The newer ai.interactions.create()
+// surface exists in the SDK but its 1.x schema is rejected by the API — it now
+// demands SDK >= 2.0.0 — so generateContent is both the simplest and the
+// working path.) The API key is read from .env and never printed.
+import { GoogleGenAI } from '@google/genai';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { resolve, dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const VIDEO_DIR = path.resolve(__dirname, '..');
-const OUT_DIR = path.join(VIDEO_DIR, 'public', 'audio');
-const SR = 48000;
-const CHANNELS = 2;
-const BYTES_PER_SEC = SR * CHANNELS * 2;
-const TARGET_SECONDS = 11;
+const here = dirname(fileURLToPath(import.meta.url));
+const VIDEO_DIR = resolve(here, '..');
+const OUT_DIR = join(VIDEO_DIR, 'public', 'audio');
 
 function readKey() {
-  const envPath = path.join(VIDEO_DIR, '.env');
-  if (!fs.existsSync(envPath)) return null;
-  for (const line of fs.readFileSync(envPath, 'utf8').split('\n')) {
+  const envPath = join(VIDEO_DIR, '.env');
+  if (!existsSync(envPath)) return null;
+  for (const line of readFileSync(envPath, 'utf8').split('\n')) {
     const m = line.match(/^\s*GEMINI_API_KEY\s*=\s*"?([^"\s]+)"?\s*$/);
     if (m) return m[1];
   }
   return null;
 }
 
-function writeWav(dest, pcm) {
+// Wrap raw 16-bit PCM in a minimal WAV header (used only if Lyria ever returns
+// audio/l16 raw PCM instead of MP3).
+function wrapPcmToWav(pcm, sampleRate, channels) {
   const header = Buffer.alloc(44);
+  const byteRate = sampleRate * channels * 2;
   header.write('RIFF', 0);
   header.writeUInt32LE(36 + pcm.length, 4);
   header.write('WAVE', 8);
   header.write('fmt ', 12);
   header.writeUInt32LE(16, 16);
   header.writeUInt16LE(1, 20);
-  header.writeUInt16LE(CHANNELS, 22);
-  header.writeUInt32LE(SR, 24);
-  header.writeUInt32LE(BYTES_PER_SEC, 28);
-  header.writeUInt16LE(CHANNELS * 2, 32);
+  header.writeUInt16LE(channels, 22);
+  header.writeUInt32LE(sampleRate, 24);
+  header.writeUInt32LE(byteRate, 28);
+  header.writeUInt16LE(channels * 2, 32);
   header.writeUInt16LE(16, 34);
   header.write('data', 36);
   header.writeUInt32LE(pcm.length, 40);
-  fs.writeFileSync(dest, Buffer.concat([header, pcm]));
+  return Buffer.concat([header, pcm]);
 }
 
-async function generateBed(ai, { name, prompt, bpm }) {
-  const chunks = [];
-  let bytes = 0;
-  let failed = null;
-  let resolveDone;
-  const done = new Promise((r) => { resolveDone = r; });
+// Rough MP3 duration by scanning frame headers (no ffmpeg dependency).
+function mp3DurationSeconds(buf) {
+  const BR = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320];
+  const SR = [44100, 48000, 32000];
+  let i = 0;
+  let samples = 0;
+  let sr = 48000;
+  while (i < buf.length - 4) {
+    if (buf[i] === 0xff && (buf[i + 1] & 0xe0) === 0xe0) {
+      const brIdx = (buf[i + 2] & 0xf0) >> 4;
+      const srIdx = (buf[i + 2] & 0x0c) >> 2;
+      const pad = (buf[i + 2] & 0x02) >> 1;
+      if (brIdx === 0 || brIdx === 15 || srIdx === 3) { i++; continue; }
+      const bitrate = BR[brIdx] * 1000;
+      sr = SR[srIdx];
+      const frameLen = Math.floor((144 * bitrate) / sr) + pad;
+      if (frameLen < 4) { i++; continue; }
+      samples += 1152;
+      i += frameLen;
+    } else {
+      i++;
+    }
+  }
+  return samples / sr;
+}
 
-  const session = await ai.live.music.connect({
-    model: 'models/lyria-realtime-exp',
-    callbacks: {
-      onmessage: (msg) => {
-        const audio = msg?.serverContent?.audioChunks;
-        if (audio) {
-          for (const c of audio) {
-            const buf = Buffer.from(c.data, 'base64');
-            chunks.push(buf);
-            bytes += buf.length;
-          }
-          if (bytes >= TARGET_SECONDS * BYTES_PER_SEC) resolveDone();
-        }
-      },
-      onerror: (e) => { failed = e?.message ?? String(e); resolveDone(); },
-      onclose: () => resolveDone(),
-    },
+async function generateBed(ai, { name, prompt }) {
+  const res = await ai.models.generateContent({
+    model: 'lyria-3-clip-preview',
+    contents: prompt,
+    config: { responseModalities: ['AUDIO'] },
   });
+  const parts = res?.candidates?.[0]?.content?.parts ?? [];
+  const audio = parts.find((p) => p.inlineData?.mimeType?.startsWith('audio/'));
+  if (!audio) {
+    const kinds = parts.map((p) => (p.inlineData?.mimeType ? p.inlineData.mimeType : Object.keys(p).join('+')));
+    throw new Error(`${name}: no audio part returned (got: ${kinds.join(', ') || 'nothing'})`);
+  }
+  const mime = audio.inlineData.mimeType;
+  const raw = Buffer.from(audio.inlineData.data, 'base64');
 
-  try {
-    await session.setWeightedPrompts({ weightedPrompts: [{ text: prompt, weight: 1.0 }] });
-    await session.setMusicGenerationConfig({ musicGenerationConfig: { bpm, temperature: 1.0 } });
-    await session.play();
-    const timeout = setTimeout(() => { failed = failed ?? 'timed out after 90s'; resolveDone(); }, 90000);
-    await done;
-    clearTimeout(timeout);
-  } finally {
-    try { await session.stop?.(); } catch { /* already closed */ }
-    try { session.close?.(); } catch { /* already closed */ }
+  let ext;
+  let bytes = raw;
+  let durationSec;
+  let sampleRate;
+  if (mime.includes('mpeg') || mime.includes('mp3')) {
+    ext = 'mp3';
+    durationSec = mp3DurationSeconds(raw);
+    sampleRate = 48000; // Lyria clip default
+  } else if (mime.includes('wav')) {
+    ext = 'wav';
+    sampleRate = raw.readUInt32LE(24);
+    durationSec = (raw.length - 44) / (sampleRate * 2 * 2);
+  } else if (mime.includes('l16') || mime.includes('L16') || mime.includes('pcm')) {
+    const rateMatch = mime.match(/rate=(\d+)/);
+    sampleRate = rateMatch ? Number(rateMatch[1]) : 48000;
+    const channels = 2;
+    bytes = wrapPcmToWav(raw, sampleRate, channels);
+    ext = 'wav';
+    durationSec = raw.length / (sampleRate * channels * 2);
+  } else {
+    ext = 'bin';
+    durationSec = 0;
+    sampleRate = 0;
   }
 
-  if (failed) throw new Error(`${name}: ${failed}`);
-  if (bytes < 4 * BYTES_PER_SEC) throw new Error(`${name}: only got ${(bytes / BYTES_PER_SEC).toFixed(1)}s of audio`);
-  const pcm = Buffer.concat(chunks).subarray(0, TARGET_SECONDS * BYTES_PER_SEC);
-  const dest = path.join(OUT_DIR, `${name}.wav`);
-  writeWav(dest, pcm);
-  console.log(`SAVED ${dest}  ${(pcm.length / 1024 / 1024).toFixed(1)} MB  (~${TARGET_SECONDS}s)`);
+  const dest = join(OUT_DIR, `${name}.${ext}`);
+  writeFileSync(dest, bytes);
+  console.log(
+    `SAVED ${name}.${ext}  mime=${mime}  ${(bytes.length / 1024).toFixed(0)}KB  ~${durationSec.toFixed(1)}s  ${sampleRate}Hz`,
+  );
+  return { name, ext, mime, durationSec, sampleRate };
 }
 
-(async () => {
-  const key = readKey();
-  if (!key) {
-    console.log('No GEMINI_API_KEY in video/.env — skipping Lyria (film falls back to game music).');
-    process.exit(2);
-  }
-  fs.mkdirSync(OUT_DIR, { recursive: true });
-  const { GoogleGenAI } = require('@google/genai');
-  const ai = new GoogleGenAI({ apiKey: key, apiVersion: 'v1alpha' });
+const key = readKey();
+if (!key) {
+  console.log('No GEMINI_API_KEY in video/.env — skipping Lyria (film falls back to game music).');
+  process.exit(2);
+}
+mkdirSync(OUT_DIR, { recursive: true });
+const ai = new GoogleGenAI({ apiKey: key });
+
+try {
   await generateBed(ai, {
     name: 'intro-bed',
-    prompt: 'upbeat retro chiptune arcade intro, energetic, 8-bit, bright, no vocals',
-    bpm: 128,
+    prompt:
+      'Upbeat retro chiptune arcade intro music. Energetic 8-bit / 16-bit video-game ' +
+      'style, bright square-wave lead, driving arcade bassline, punchy and immediately ' +
+      'exciting from the first beat. Fast tempo, major key, playful and heroic. ' +
+      'Purely instrumental, no vocals, no speech.',
   });
   await generateBed(ai, {
     name: 'outro-bed',
-    prompt: 'triumphant retro chiptune arcade outro, warm, victorious, 8-bit, no vocals',
-    bpm: 112,
+    prompt:
+      'Triumphant, uplifting retro chiptune outro music that resolves to a warm, ' +
+      'victorious finish. 8-bit / 16-bit arcade style, anthemic square-wave melody, ' +
+      'bright arpeggios, a sense of achievement and forward progress, resolving on a ' +
+      'satisfying major chord. Mid-fast tempo, celebratory. Purely instrumental, no ' +
+      'vocals, no speech.',
   });
-})().catch((e) => { console.error('LYRIA FAILED:', e.message); process.exit(1); });
+  console.log('LYRIA OK');
+} catch (e) {
+  console.error('LYRIA FAILED:', String(e?.message ?? e).slice(0, 400));
+  process.exit(1);
+}

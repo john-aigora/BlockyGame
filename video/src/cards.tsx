@@ -175,6 +175,92 @@ export const SilentCaption: React.FC = () => {
   );
 };
 
+// ------------------------------------------ Code-structure diff beat (5s)
+// The single change two rounds of dev feedback kept asking for: SHOW the
+// structural jump, not just claim it. A git-diff-flavoured file tree — one
+// index.html removed, a modular src/ tree added — is dev catnip and makes the
+// "1 file -> 17 modules, 73 tests" stat land as something you can see. The
+// tree is representative of the real rebuild and consistent with the stats card.
+export const CodeDiff: React.FC<{ duration: number }> = ({ duration }) => {
+  const frame = useCurrentFrame();
+  const opacity = useFade(duration, 10, 10);
+  const MONO = `'Menlo', 'Consolas', 'Courier New', monospace`;
+  const added: Array<[string, string]> = [
+    ['src/', ''],
+    ['├─ core/', 'engine · loop · state'],
+    ['├─ world/', 'terrain · spawning'],
+    ['├─ entities/', 'player · enemies'],
+    ['├─ systems/', 'physics · collision'],
+    ['├─ render/', 'camera · shaders'],
+    ['└─ __tests__/', '73 passing'],
+  ];
+  return (
+    <AbsoluteFill
+      style={{
+        background: BG_GRADIENT,
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontFamily: FONT,
+        opacity,
+      }}
+    >
+      <div
+        style={{
+          color: COLORS.yellow,
+          fontSize: 26,
+          letterSpacing: 6,
+          marginBottom: 28,
+          textShadow: '3px 3px 0 rgba(0,0,0,0.45)',
+        }}
+      >
+        SAME GAME · NEW CODEBASE
+      </div>
+      <div
+        style={{
+          width: 1180,
+          background: '#0E1619',
+          border: `3px solid ${COLORS.dim}`,
+          borderRadius: 12,
+          boxShadow: '8px 8px 0 rgba(0,0,0,0.4)',
+          padding: '26px 40px',
+          fontFamily: MONO,
+          fontSize: 32,
+          lineHeight: 1.55,
+        }}
+      >
+        <div style={{ color: COLORS.dim, fontSize: 23, marginBottom: 18 }}>
+          $ git diff  may-2025 → jul-2026
+        </div>
+        <div style={{ color: '#EF5350' }}>
+          <span style={{ opacity: 0.85 }}>- </span>index.html
+          <span style={{ color: COLORS.dim, marginLeft: 22, fontSize: 22 }}>1 file · 0 tests</span>
+        </div>
+        {added.map(([pathText, note], i) => {
+          const t = 14 + i * 7;
+          const o = interpolate(frame, [t, t + 6], [0, 1], {
+            extrapolateLeft: 'clamp',
+            extrapolateRight: 'clamp',
+          });
+          const x = interpolate(frame, [t, t + 6], [-16, 0], {
+            extrapolateLeft: 'clamp',
+            extrapolateRight: 'clamp',
+          });
+          return (
+            <div key={pathText} style={{ color: COLORS.lime, opacity: o, transform: `translateX(${x}px)` }}>
+              <span style={{ opacity: 0.85 }}>+ </span>
+              {pathText}
+              {note && (
+                <span style={{ color: COLORS.dim, marginLeft: 20, fontSize: 22 }}>{note}</span>
+              )}
+            </div>
+          );
+        })}
+        <div style={{ color: COLORS.orange, marginTop: 18, fontSize: 26 }}>+ 17 modules · 73 tests</div>
+      </div>
+    </AbsoluteFill>
+  );
+};
+
 // ------------------------------------------------------------ Outro (6s)
 export const Outro: React.FC<{ duration: number }> = ({ duration }) => {
   const frame = useCurrentFrame();
@@ -207,7 +293,26 @@ export const Outro: React.FC<{ duration: number }> = ({ duration }) => {
       }}
     >
       {/* Stats card */}
-      <div style={{ position: 'absolute', opacity: oStats }}>
+      <div
+        style={{
+          position: 'absolute',
+          opacity: oStats,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+        }}
+      >
+        <div
+          style={{
+            color: COLORS.yellow,
+            fontSize: 26,
+            letterSpacing: 8,
+            marginBottom: 14,
+            textShadow: '3px 3px 0 rgba(0,0,0,0.45)',
+          }}
+        >
+          UNDER THE HOOD
+        </div>
         {stats.map(([num, label], i) => {
           const o = interpolate(frame, [4 + i * 11, 15 + i * 11], [0, 1], {
             extrapolateLeft: 'clamp',
