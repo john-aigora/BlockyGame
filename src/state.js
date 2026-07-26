@@ -15,6 +15,7 @@ export const state = {
   // Game state
   score: 0,
   gameActive: false,
+  onStartScreen: true, // True while the start overlay is up (boot / post-death menu)
   playerScale: 1, // Track player's current scale
   isPaused: false, // Track if game is paused
   killIndicatorVisible: true, // For flashing kill indicator (starts visible)

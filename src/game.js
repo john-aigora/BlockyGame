@@ -12,7 +12,7 @@ import { createEnemy, updateEnemies, playerBox, scratchBox } from './enemies.js'
 import { spawnNearPlayer, spawnAnywhere } from './collectibles.js';
 import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoomIn, zoomOut } from './world.js';
 import { keys, onKeyDown, onKeyUp, setupTouchControls } from './input.js';
-import { el, initUI, hideMessage, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators } from './ui.js';
+import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators } from './ui.js';
 import { resetCollectClock, tickCollectClock } from './timers.js';
 
 // --- Simulation Clock ---
@@ -61,6 +61,10 @@ function init() {
 
     // Add event listeners for pause and restart buttons
     document.getElementById('pause-button').addEventListener('click', togglePause);
+    // Start overlay: button, or any pointer press on the overlay itself.
+    // (Any key while the overlay is up also starts — see onKeyDown.)
+    el.startButton.addEventListener('click', startRun);
+    el.startOverlay.addEventListener('pointerdown', startRun);
     document.getElementById('speed-cycle-button').addEventListener('click', cycleSpeed);
     document.getElementById('zoom-in-button').addEventListener('click', zoomIn);
     document.getElementById('zoom-out-button').addEventListener('click', zoomOut);
@@ -96,10 +100,13 @@ function setupNewGame() {
     resetCameraZoom(); // New runs always start at the default framing
     updateScoreDisplay();
 
-    // Set initial state for the pause button
+    // The start overlay owns the boot UX (isPaused stays true until
+    // startRun), so the pause button reads "Pause" — ready for the run
+    // that begins when the overlay is dismissed. togglePause() manages
+    // the text from then on.
     if (el.pauseButton) {
-        el.pauseButton.textContent = 'Resume';
-        el.pauseButton.classList.add('paused');
+        el.pauseButton.textContent = 'Pause';
+        el.pauseButton.classList.remove('paused');
     }
 
     // Collectibles use shared resources — scene.remove is the whole cleanup.
@@ -145,9 +152,22 @@ function setupNewGame() {
     }
     hideMessage();
 
+    // Every new session — fresh boot or post-death restart — returns to the
+    // start overlay; startRun() is the single "a run begins" entry point.
+    showStartOverlay();
+
     // Initialize the collect countdown; it only ticks while the game is
     // unpaused (driven by dt in update()).
     resetCollectClock();
+}
+
+// --- Start Run ---
+// THE single entry point for "a run begins" (start button, any key, or a
+// pointer press on the overlay — plan 010 hooks its AudioContext resume
+// here). Idempotent: once the overlay is gone and the clock runs, it no-ops.
+export function startRun() {
+    hideStartOverlay();
+    if (state.isPaused) togglePause(); // Starts the clock and sets button text
 }
 
 // --- Game Logic Update Function ---
@@ -236,8 +256,9 @@ function animate(now) {
 }
 
 // --- Game Reset Function ---
-// Called when the "Play Again" button is clicked.
-function resetGame() {
+// Called by the "Play Again" / "Restart" buttons and by Space/Enter on the
+// death screen (input.js). Returns to the start overlay via setupNewGame.
+export function resetGame() {
     setupNewGame(); // Re-initialize game state
 }
 

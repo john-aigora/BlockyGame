@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { startGame } from './helpers.js';
 
 // Rendering & resource hygiene (plan 007): shared GPU resources (no geometry
 // growth across the food cycle), device pixel ratio applied, and a kill-flash
@@ -46,7 +47,7 @@ test('kill indicator flashes at ~1Hz when an enemy is killable', async ({ page }
     s.playerScale = 10; // Taller than every enemy → killable state
     s.player.scale.set(10, 10, 10);
   });
-  await page.locator('#pause-button').click(); // Unpause so the indicator updates
+  await startGame(page); // Begin the run so the indicator updates
   await expect(page.locator('#kill-indicator')).toBeVisible();
 
   const opacities = [];

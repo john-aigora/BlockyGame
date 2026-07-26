@@ -1,20 +1,43 @@
 import { MAX_DRAG_DISTANCE, DEAD_ZONE_RADIUS } from './constants.js';
 import { state } from './state.js';
-import { togglePause } from './game.js';
+import { togglePause, startRun, resetGame } from './game.js';
 
 export const keys = {}; // Object to keep track of currently pressed keys
 
 // --- Event Handlers ---
 // Handles key press down events.
 export function onKeyDown(event) {
-    if (!state.gameActive) return; // Ignore input if game is over
+    // Held-key auto-repeat must not re-trigger state transitions (start,
+    // restart, pause) — a held Space would otherwise strobe through them.
+    const isRepeat = event.repeat;
+
+    // Start overlay owns the keyboard while visible: any plain key starts
+    // the run (browser shortcuts with modifiers are left alone).
+    if (state.onStartScreen) {
+        if (isRepeat || event.metaKey || event.ctrlKey || event.altKey) return;
+        event.preventDefault();
+        startRun();
+        return;
+    }
+
+    // Game over: Space/Enter returns to the start overlay; everything else
+    // is ignored. This guard runs BEFORE the pause handling below, so the
+    // same press can never also toggle pause — by the time gameActive is
+    // true again, this handler has already returned.
+    if (!state.gameActive) {
+        if (!isRepeat && (event.code === 'Space' || event.code === 'Enter')) {
+            event.preventDefault();
+            resetGame(); // Returns to the start overlay
+        }
+        return;
+    }
 
     const key = event.key.toLowerCase();
 
     // Handle space bar for pause
     if (key === ' ' || key === 'space') {
         event.preventDefault(); // Prevent page scroll
-        togglePause();
+        if (!isRepeat) togglePause();
         return;
     }
 

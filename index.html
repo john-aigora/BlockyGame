@@ -11,9 +11,19 @@
 
 <body>
     <div id="game-container">
+        <div id="start-overlay">
+            <h1>BLOCKY COLLECTOR 3D</h1>
+            <p class="tagline">Collect. Grow. Hunt the yellow ones.</p>
+            <button id="start-button" class="game-button">&#9654; START</button>
+            <p class="start-hint">or press any key</p>
+        </div>
         <div id="message-box" class="message-box">
-            <p id="message-text"></p>
+            <h2 id="death-title">GAME OVER</h2>
+            <p id="death-reason"></p>
+            <p class="final-score">Score: <span id="final-score">0</span></p>
+            <div id="hiscore-slot"></div>
             <button id="restart-button">Play Again</button>
+            <p class="start-hint">or press Space</p>
         </div>
         <div id="top-controls">
             <button id="pause-button" class="game-button">Pause</button>

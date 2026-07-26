@@ -18,6 +18,23 @@
 
 ---
 
+## Batch 6 complete: 2026-07-26
+
+**Batch:** 6: Start & death screens (plan 008) — subagent a017d6d3bded610d8, coordinator-verified
+**Contract status:** all plan-008 done criteria met
+
+**What changed:** #start-overlay (title/tagline/START/any-key hint, z110 over corner buttons) with single startRun() entry point; structured death screen (title/reason/#final-score/empty #hiscore-slot for 009); Space/Enter restart when dead → back to start overlay; setupNewGame always returns to the overlay. All 6 spec files now start runs via shared tests/helpers.js startGame(); boot/game-over assertions legitimately rewritten per plan. 22 tests (+2: any-key start, keyboard restart).
+
+**Gates (agent + coordinator):** lint 0 · 22 passed · build 574ms · `message-text` fully gone.
+
+**Review (light):** deviations sound (modifier-key guard). **Bug found & fixed per user rule:** held-key auto-repeat would strobe start/pause/restart across states (pre-existing rapid pause-toggle on held Space) — `event.repeat` guards added on all three transition branches. Root cause, not band-aid.
+
+**Regression attestation:** baseline 20→22 (+2, 0 removed; 2 assertions rewritten for legitimate UX change, guarantees preserved). Confidence HIGH.
+
+**Next:** Batch 7 (plans 009 high scores + 010 sound & music). Tag elves/pre-batch-7.
+
+---
+
 ## Batch 5 complete: 2026-07-26
 
 **Batch:** 5: Toroidal world (005) + rendering hygiene (007) — subagent a977878ab92bd4030, coordinator-verified

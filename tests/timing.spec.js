@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { startGame } from './helpers.js';
 
 test.beforeEach(async ({ page }) => {
   page.on('pageerror', (err) => { throw new Error(`Page error: ${err.message}`); });
@@ -6,7 +7,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('pausing and resuming does not refill the collect countdown', async ({ page }) => {
-  await page.locator('#pause-button').click(); // start (game boots paused)
+  await startGame(page); // Dismiss the start overlay and begin the run
   await expect
     .poll(async () => Number(await page.locator('#collect-time').textContent()), { timeout: 10000 })
     .toBeLessThanOrEqual(12);
@@ -18,7 +19,7 @@ test('pausing and resuming does not refill the collect countdown', async ({ page
 });
 
 test('hiding the tab auto-pauses a running game', async ({ page }) => {
-  await page.locator('#pause-button').click(); // start
+  await startGame(page);
   expect(await page.evaluate(() => window.__game.state.isPaused)).toBe(false);
   // Emulate the tab being hidden: override document.hidden and fire the event
   await page.evaluate(() => {
@@ -34,7 +35,7 @@ test('hiding the tab auto-pauses a running game', async ({ page }) => {
 });
 
 test('ArrowUp moves the player at roughly actualPlayerSpeed units/second', async ({ page }) => {
-  await page.locator('#pause-button').click(); // start
+  await startGame(page);
   await page.keyboard.down('ArrowUp');
   const start = await page.evaluate(() => ({
     z: window.__game.state.player.position.z,

@@ -1,9 +1,11 @@
 import { test, expect } from '@playwright/test';
+import { startGame } from './helpers.js';
 
 // Toroidal world correctness (plan 005): wrapping preserves overshoot, all
 // food spawns land inside the world, and enemy AI takes the short way across
-// the wrap seam. Pattern: pause (the game boots paused), set positions via
-// evaluate, unpause, sample — with generous bounds for the random drift.
+// the wrap seam. Pattern: set positions via evaluate while the game sits on
+// the start overlay (paused), start the run, sample — with generous bounds
+// for the random drift.
 
 test.beforeEach(async ({ page }) => {
   page.on('pageerror', (err) => { throw new Error(`Page error: ${err.message}`); });
@@ -31,7 +33,7 @@ test('all food spawns stay inside the world even with the player at the edge', a
 });
 
 test('player wrap preserves overshoot (no snap to the edge)', async ({ page }) => {
-  await page.locator('#pause-button').click(); // Unpause (game boots paused)
+  await startGame(page); // Begin the run (game boots on the start overlay)
   await page.evaluate(() => { window.__game.state.player.position.x = 100.4; });
   await page.waitForTimeout(100); // Let at least one update frame run
   const x = await page.evaluate(() => window.__game.state.player.position.x);
@@ -52,7 +54,7 @@ test('enemy AI chases the short way across the wrap seam', async ({ page }) => {
     enemy.randomVelocity.set(0, 0, 0);
     enemy.timeToChangeRandomVelocity = 999;
   });
-  await page.locator('#pause-button').click(); // Unpause
+  await startGame(page); // Begin the run
   await page.waitForTimeout(1000);
   const finalX = await page.evaluate(() => window.__game.state.enemies[0].position.x);
   // The (non-killable) enemy must move toward +x / the seam, not the long

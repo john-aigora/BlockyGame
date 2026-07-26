@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { startGame } from './helpers.js';
 
 test.beforeEach(async ({ page }) => {
   page.on('pageerror', (err) => { throw new Error(`Page error: ${err.message}`); });
@@ -7,6 +8,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('zoom out clamps at ZOOM_MAX and the scene stays inside the fog', async ({ page }) => {
+  await startGame(page); // The overlay covers the corner buttons until a run starts
   for (let i = 0; i < 12; i++) {
     await page.locator('#zoom-out-button').click();
   }
@@ -23,6 +25,7 @@ test('zoom out clamps at ZOOM_MAX and the scene stays inside the fog', async ({ 
 });
 
 test('zoom in clamps at ZOOM_MIN', async ({ page }) => {
+  await startGame(page);
   for (let i = 0; i < 12; i++) {
     await page.locator('#zoom-out-button').click();
   }
@@ -35,10 +38,13 @@ test('zoom in clamps at ZOOM_MIN', async ({ page }) => {
 });
 
 test('restart resets zoom to the default framing', async ({ page }) => {
+  await startGame(page);
   for (let i = 0; i < 12; i++) {
     await page.locator('#zoom-out-button').click();
   }
   await page.locator('#restart-game-button').click();
+  // Restart returns to the start overlay with the default framing restored.
+  await expect(page.locator('#start-overlay')).toBeVisible();
   const zoomLevel = await page.evaluate(() => window.__game.state.zoomLevel);
   expect(zoomLevel).toBe(1);
 });

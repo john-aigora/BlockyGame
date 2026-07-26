@@ -91,6 +91,53 @@ canvas {
     /* Off-White */
 }
 
+/* Start overlay (plan 008): covers the whole game container, above the
+   corner buttons (#top-controls is z-index 100) so nothing is clickable
+   through it. Doubles as the post-death "menu". */
+#start-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 110;
+    background-color: rgba(0, 0, 0, 0.75);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    border-radius: 5px;
+    padding: 0 20px;
+    box-sizing: border-box;
+}
+
+#start-overlay h1 {
+    font-size: 1.6em;
+    color: #FF4500;
+    /* Bright Orange-Red accent (matches kill indicator) */
+    text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.8);
+    margin: 0 0 15px;
+}
+
+#start-overlay .tagline {
+    font-size: 0.75em;
+    color: #ECEFF1;
+    margin: 0 0 25px;
+}
+
+/* The start button reuses .game-button visuals but sits in the flex flow
+   (the class is position: absolute for the corner buttons). */
+#start-button {
+    position: static;
+    min-height: 48px;
+    font-size: 16px;
+    padding: 12px 24px;
+}
+
+.start-hint {
+    font-size: 0.6em;
+    color: #B0BEC5;
+    margin: 15px 0 0;
+}
+
 /* Styling for the message box (game over, etc.) */
 .message-box {
     position: absolute;
@@ -117,6 +164,31 @@ canvas {
     /* Responsive width within its container */
     max-width: 400px;
     /* Max width for the message box */
+}
+
+/* Structured death-screen children (plan 008) */
+#death-title {
+    color: #FF4500;
+    /* Same accent as the start title */
+    font-size: 1.1em;
+    margin: 0 0 12px;
+}
+
+#death-reason {
+    font-size: 0.55em;
+    margin: 0 0 12px;
+}
+
+.final-score {
+    font-size: 0.8em;
+    color: #FFEB3B;
+    /* Bright Yellow (matches the collect timer) */
+    margin: 0 0 5px;
+}
+
+/* Plan 009 mounts the high-score board here; empty and invisible for now. */
+#hiscore-slot {
+    margin: 0;
 }
 
 /* Styling for the button inside the message box */

@@ -9,7 +9,10 @@ export const el = {
     collectTime: null,
     killIndicator: null,
     messageBox: null,
-    messageText: null,
+    deathReason: null,
+    finalScore: null,
+    startOverlay: null,
+    startButton: null,
     pauseButton: null,
     speedButton: null
 };
@@ -19,16 +22,34 @@ export function initUI() {
     el.collectTime = document.getElementById('collect-time');
     el.killIndicator = document.getElementById('kill-indicator');
     el.messageBox = document.getElementById('message-box');
-    el.messageText = document.getElementById('message-text');
+    el.deathReason = document.getElementById('death-reason');
+    el.finalScore = document.getElementById('final-score');
+    el.startOverlay = document.getElementById('start-overlay');
+    el.startButton = document.getElementById('start-button');
     el.pauseButton = document.getElementById('pause-button');
     el.speedButton = document.getElementById('speed-cycle-button');
 }
 
-// --- UI and Message Functions ---
-// Displays a message (usually game over) in the message box.
-export function showMessage(message) {
-    el.messageText.textContent = message;
-    el.messageBox.style.display = 'block'; // Make the message box visible
+// --- Start Overlay Functions (plan 008) ---
+// The overlay owns the boot (and post-death) UX: while it is visible the
+// game sits paused underneath and any key / click / tap starts the run.
+export function showStartOverlay() {
+    el.startOverlay.style.display = 'flex';
+    state.onStartScreen = true;
+}
+
+export function hideStartOverlay() {
+    el.startOverlay.style.display = 'none';
+    state.onStartScreen = false;
+}
+
+// --- Death Screen Functions ---
+// Fills the structured death screen (title is static "GAME OVER" markup;
+// #hiscore-slot stays empty until plan 009 mounts the leaderboard).
+export function showDeathScreen(reason) {
+    el.deathReason.textContent = reason;
+    el.finalScore.textContent = state.score;
+    el.messageBox.style.display = 'block'; // Make the death screen visible
 }
 
 // Ends the current run. This is the ONLY legal way to end a game — every
@@ -37,7 +58,7 @@ export function showMessage(message) {
 export function endGame(reason) {
     if (!state.gameActive) return;
     state.gameActive = false;
-    showMessage(`GAME OVER! ${reason} Final Score: ${state.score}`);
+    showDeathScreen(reason);
 }
 
 // Hides the message box.
