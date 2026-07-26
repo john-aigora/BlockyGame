@@ -9,6 +9,7 @@ test('game boots: canvas renders, score 0, starts paused', async ({ page }) => {
   await expect(page.locator('#game-container canvas')).toBeVisible();
   await expect(page.locator('#score')).toHaveText('0');
   await expect(page.locator('#pause-button')).toBeVisible();
+  await page.waitForFunction(() => window.__game?.state?.enemies?.length >= 1);
 });
 
 test('unpausing starts the collect countdown', async ({ page }) => {

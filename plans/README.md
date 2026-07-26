@@ -15,7 +15,7 @@ row when done.
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
 | 001 | Tooling baseline (Vite, npm three@0.128.0, ESLint, Playwright smoke) | P1 | M | — | DONE |
-| 002 | Modularize game.js, character factory dedupe, dead-code removal | P1 | M | 001 | TODO |
+| 002 | Modularize game.js, character factory dedupe, dead-code removal | P1 | M | 001 | DONE |
 | 003 | Frame-rate independence + game-clock collect timer (kills pause exploit, tab-switch death) | P1 | M | 002 | TODO |
 | 004 | Stop the world on game over; safe enemy-kill iteration | P1 | S | 003 | TODO |
 | 005 | Toroidal world correctness (fixes "shaking" + "teleporting" enemies, unreachable food) | P1 | M | 004 | TODO |

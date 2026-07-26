@@ -7,7 +7,7 @@ export default [
     files: ['src/**/*.js', 'tests/**/*.js', '*.config.js'],
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
     rules: {
-      'no-unused-vars': 'warn',
+      'no-unused-vars': 'error',
       'no-undef': 'error'
     }
   },

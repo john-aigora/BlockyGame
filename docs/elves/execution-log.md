@@ -18,6 +18,25 @@
 
 ---
 
+## Batch 2 complete: 2026-07-25
+
+**Batch:** 2: Modularize + dedupe (plan 002) — implemented by subagent a026c0be1207de492, verified by coordinator
+**Contract status:** all plan-002 done criteria met
+
+**What changed:** src/game.js (1010 → 271 lines, orchestrator only) split into constants/state/characters/enemies/collectibles/world/input/ui/timers modules; createPlayer+createEnemy merged into one `createCharacter` factory; three spawners → one `spawnCollectible(pickPosition)` + wrappers; ALL six dead vars deleted (enemy, targetCollectiblesOnScreen, canKillEnemy, enemySpeed, animationFrameId, unused catch param — each verified dead before deletion); lint tightened to no-unused-vars:error; `window.__game = { state }` test handle added; boot smoke test gained the enemies-spawned assertion.
+
+**Gates (agent + coordinator re-verified):** lint exit 0 zero warnings · 4 tests passed (agent ran suite after every extraction step, 7 green runs) · build 608ms.
+
+**Review (light):** coordinator read the agent's structured report + new src/game.js; deviations all sound (branch name, dead-var handling during extraction, canKillSpecificEnemy placed with enemies.js). Known-bug inventory from the agent (frame coupling, splice-in-loop, wrap clamps, unclamped spawns) matches plans 003-005 exactly — nothing new, nothing baked in worse. Accepted deliberate function-declaration cycles (game↔input, ui↔enemies).
+
+**Decisions made:** kept the boot assertion inside the existing boot test (4 tests, not 5 — the plan's "5 tests" phrasing counted the assertion; equivalent coverage).
+
+**Regression attestation:** pure refactor; smoke suite green at every step; test baseline 4/4/0 unchanged. Confidence HIGH — behavior-identical by construction and by gate.
+
+**Next:** Batch 3 (plan 003 — deltaTime). Tag elves/pre-batch-3.
+
+---
+
 ## Batch 1 complete: 2026-07-25
 
 **Batch:** 1: Tooling baseline (plan 001)
