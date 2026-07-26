@@ -18,6 +18,23 @@
 
 ---
 
+## Batch 9 complete: 2026-07-26
+
+**Batch:** 9: Visual juice pass (plan 015, user-mandated creative latitude) — subagent a2041d3725a2177be, coordinator-verified incl. visual screenshot review
+**Contract status:** all done criteria met; shipped 8 effects (minimum was 4)
+
+**Shipped:** pooled 512-particle engine (one shared vertex-colored Points, additive); collect burst + squash-stretch; enemy death explosion (body-color→lime, sells "enemy becomes food"); **living ground grid** (procedural Tron-style canvas tile, world-anchored via texture offset — motion finally legible); distance-driven walk animation (diagonal leg pairs, scale-aware stride); synced food glow + rotation/bob; kill-mode pulsing aura (0.6Hz — photosensitivity-safe) + flee wobble; sky gradient matched to fog; UI polish (score pop, death fade-in, button glow states) with prefers-reduced-motion honored.
+
+**Gates (agent + coordinator):** lint 0 · 39 passed (+2 effects) · build 617ms · zero asset files · perf: render.calls 60 (<120 guardrail), geometries pinned 12→12 across 50 bursts.
+
+**Review (light + visual):** coordinator inspected screenshots — the grid floor + atmosphere is transformative; explosion + lime score pop read great. Agent's honest self-review noted collect burst subtlety and walk animation being invisible when zoomed out — acceptable trades for readability; logged for family tuning. Screenshots in scratchpad batch9-shots/ for the report.
+
+**Regression attestation:** baseline 37→39 (+2, 0 removed); all prior suites green first-run. Confidence HIGH.
+
+**Next:** Batch 10 (plan 013 — docs + deploy prep). Tag elves/pre-batch-10.
+
+---
+
 ## Batch 8 complete: 2026-07-26
 
 **Batch:** 8: Balance (011) + mobile polish (012) — subagent a0f0ec5421259589c, coordinator-verified

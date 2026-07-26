@@ -70,6 +70,10 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
     bodyMesh.castShadow = true;
     bodyMesh.position.y = legHeight + (baseSize / 2); // Center of body above legs
     group.add(bodyMesh);
+    // Tags for the walk animation (plan 015): effects.js drives leg swing and
+    // a stride bounce without any per-frame traversal or name lookups.
+    group.userData.bodyMesh = bodyMesh;
+    group.userData.bodyBaseY = bodyMesh.position.y;
 
     // --- Leg Meshes (x4) ---
     const legPositions = [
@@ -79,11 +83,14 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
         { x: baseSize / 2 - legWidth / 2 - legWidth * 0.5, z: baseSize / 2 - legWidth / 2 - legWidth * 0.5 }   // Back-right
     ];
 
-    legPositions.forEach(pos => {
+    // Legs are tagged in order FL, FR, BL, BR — effects.js swings diagonal
+    // pairs in antiphase for the walk cycle (plan 015).
+    group.userData.legs = legPositions.map(pos => {
         const leg = new THREE.Mesh(geoms.leg, bodyMaterial); // Legs use body material
         leg.castShadow = true;
         leg.position.set(pos.x, legHeight / 2, pos.z); // Leg base at y=0 of leg, so center at legHeight/2
         group.add(leg);
+        return leg;
     });
 
     // --- Eye Meshes (x2) ---

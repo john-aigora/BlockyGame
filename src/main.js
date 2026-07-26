@@ -4,6 +4,7 @@ import { spawnNearPlayer, spawnAtPosition } from './collectibles.js';
 import { spawnNewEnemies } from './enemies.js';
 import { onTouchStart, onTouchMove, onTouchEndOrCancel } from './input.js';
 import { sfx, isMuted, audioState, music } from './audio.js';
+import { spawnBurst, effectsInfo } from './effects.js';
 
 // Read-only debug/test handle; production code must never read it.
 // `debug` exposes spawners for the Playwright suites (world/resources/
@@ -20,6 +21,8 @@ window.__game = {
         sfx,
         isMuted,
         audioState,
-        musicActive: () => music.isActive()
+        musicActive: () => music.isActive(),
+        spawnBurst, // Particle pool-discipline checks (effects spec)
+        effectsInfo // { reducedMotion, activeParticles, poolSize }
     }
 };

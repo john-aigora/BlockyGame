@@ -22,22 +22,22 @@
     "scope": "current Elves run"
   },
   "continuation_guard": {
-    "remaining_batches": 3,
+    "remaining_batches": 2,
     "stop_allowed": false,
     "stop_allowed_reason": "run launched via /goal; 11 batches remain",
     "checkpoint_is_stop": false,
-    "next_required_action": "Tag elves/pre-batch-9, execute Batch 9 (plan 015)"
+    "next_required_action": "Tag elves/pre-batch-10, execute Batch 10 (plan 013)"
   },
   "test_baseline": {
-    "passed": 37,
-    "total": 37,
+    "passed": 39,
+    "total": 39,
     "skipped": 0,
     "status": "captured",
     "reason": null
   },
   "current_batch": {
-    "id": 9,
-    "name": "Visual juice pass (user-mandated)",
+    "id": 10,
+    "name": "Docs + deploy prep",
     "status": "pending"
   },
   "collision_tripwire": "f4d3ecc1ca0a292ed42b09beb63a01343211dd48",
@@ -124,7 +124,8 @@
       "plans": [
         "015"
       ],
-      "status": "pending"
+      "status": "complete",
+      "rollback_tag": "elves/pre-batch-9"
     },
     {
       "id": 10,

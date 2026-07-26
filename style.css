@@ -90,6 +90,30 @@ canvas {
 #score {
     color: #ECEFF1;
     /* Off-White */
+    display: inline-block;
+    /* transform (the pop animation) needs a box */
+}
+
+/* Score pop (plan 015): a quick lime-flavored scale bump on every score
+   increase. Single 0.35s play per point — no loop, no strobe. */
+@keyframes score-pop {
+    0% {
+        transform: scale(1);
+    }
+
+    35% {
+        transform: scale(1.4);
+        color: #76FF03;
+        /* Lime — the color of the food that earned it */
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+#score.score-pop {
+    animation: score-pop 0.35s ease-out;
 }
 
 /* Specific styling for the "Collect In" timer display */
@@ -179,6 +203,20 @@ canvas {
     /* Responsive width within its container */
     max-width: 400px;
     /* Max width for the message box */
+    /* Fade-in (plan 015): plays each time display flips none → block */
+    animation: box-appear 0.35s ease-out;
+}
+
+@keyframes box-appear {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.92);
+    }
+
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
 }
 
 /* Structured death-screen children (plan 008) */
@@ -298,14 +336,25 @@ canvas {
     box-shadow: 0 0 10px rgba(255, 69, 0, 0.5);
 }
 
+/* Hover/active polish (plan 015): a lime edge-glow on hover and a clear
+   pressed state, consistent across every control. */
 .game-button:hover {
     background-color: #4CAF50;
     /* Darker Muted Green */
     transform: scale(1.05);
+    border-color: #76FF03;
+    box-shadow: 0 0 14px rgba(118, 255, 3, 0.55);
 }
 
 .game-button:active {
     transform: scale(0.95);
+    border-color: #FFEB3B;
+    box-shadow: 0 0 8px rgba(255, 235, 59, 0.6);
+}
+
+.game-button:focus-visible {
+    outline: 2px solid #76FF03;
+    outline-offset: 2px;
 }
 
 /* Specific positioning for each button in corners */
@@ -405,6 +454,22 @@ canvas {
     transform-origin: center center;
     display: none;
     /* Hidden by default */
+}
+
+/* Accessibility (plan 015): no screen-space animation for users who asked
+   the OS for reduced motion. Object motion in the 3D scene is handled
+   separately in src/effects.js. */
+@media (prefers-reduced-motion: reduce) {
+
+    #score.score-pop,
+    .message-box {
+        animation: none;
+    }
+
+    .game-button:hover,
+    .game-button:active {
+        transform: none;
+    }
 }
 
 /* Media Query for Mobile Screen Adjustments (plan 012): edge-to-edge game

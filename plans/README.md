@@ -28,7 +28,7 @@ row when done.
 | 012 | Mobile polish: touch/UI conflicts, responsive layout, honest device detection | P2 | M | 002, 008 | DONE |
 | 013 | Docs truth pass + favicon/meta + Vercel deployment | P2 | S | 001 (hard); 002-012 (soft — run LAST) | TODO |
 | 014 | SPIKE: Little Big Snake continuous movement + boost, behind `?move=continuous` | P3 | M | 003, 012 | TODO |
-| 015 | Visual "juice" pass — particles, walk animation, living ground, glow (user-mandated creative latitude) | P2 | M | 007 | TODO |
+| 015 | Visual "juice" pass — particles, walk animation, living ground, glow (user-mandated creative latitude) | P2 | M | 007 | DONE |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
 

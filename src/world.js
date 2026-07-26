@@ -9,11 +9,103 @@ import { state } from './state.js';
 // --- World Creation ---
 // Builds the scene, camera, renderer, lights, and ground plane.
 // Returns the directional light so init() can point it at the player.
+// --- Procedural sky (plan 015) ---
+// Vertical gradient canvas: deep near-black teal at the zenith easing to a
+// brighter teal at the horizon. The fog color matches the horizon color so
+// the ground plane dissolves seamlessly into the sky.
+const HORIZON_COLOR = 0x00695C;
+
+function makeSkyTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 2;
+    canvas.height = 512;
+    const ctx = canvas.getContext('2d');
+    const grad = ctx.createLinearGradient(0, 0, 0, 512);
+    grad.addColorStop(0, '#011E1A'); // Zenith: deep teal-black
+    grad.addColorStop(0.55, '#02423A');
+    grad.addColorStop(1, '#00695C'); // Horizon: matches the fog color
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 2, 512);
+    return new THREE.CanvasTexture(canvas);
+}
+
+// --- Living ground (plan 015) ---
+// Procedural canvas tile: subtle darker-teal grid lines with faint glowing
+// intersections on the base teal. Drawn once; tiled via RepeatWrapping.
+// GROUND_TILE is the world-space size of one canvas tile (4x4 grid cells of
+// 4 units each). The grid stays FIXED IN THE WORLD even though the ground
+// plane follows the player — updateGroundScroll offsets the texture by the
+// player position, which is what makes movement visible on empty stretches.
+const GROUND_TILE = 16; // world units per canvas tile
+let groundTexture = null;
+
+function makeGroundTexture(renderer) {
+    const size = 512; // 4x4 cells → 128px per 4-unit cell
+    const cell = 128;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#004D40'; // Base teal — palette identity preserved
+    ctx.fillRect(0, 0, size, size);
+    // Grid lines: a darker teal, thin, low-contrast (readability first)
+    ctx.strokeStyle = 'rgba(0, 30, 24, 0.55)';
+    ctx.lineWidth = 3;
+    for (let i = 0; i <= 4; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * cell + 0.5, 0);
+        ctx.lineTo(i * cell + 0.5, size);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, i * cell + 0.5);
+        ctx.lineTo(size, i * cell + 0.5);
+        ctx.stroke();
+    }
+    // Faint glow dots at intersections — reads as an arcade grid floor
+    for (let gx = 0; gx <= 4; gx++) {
+        for (let gy = 0; gy <= 4; gy++) {
+            const dot = ctx.createRadialGradient(gx * cell, gy * cell, 0, gx * cell, gy * cell, 14);
+            dot.addColorStop(0, 'rgba(0, 121, 107, 0.75)');
+            dot.addColorStop(1, 'rgba(0, 121, 107, 0)');
+            ctx.fillStyle = dot;
+            ctx.beginPath();
+            ctx.arc(gx * cell, gy * cell, 14, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+    // Very subtle per-cell tone variation so the floor isn't flat
+    for (let gx = 0; gx < 4; gx++) {
+        for (let gy = 0; gy < 4; gy++) {
+            if ((gx + gy) % 2 === 0) continue;
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.02)';
+            ctx.fillRect(gx * cell, gy * cell, cell, cell);
+        }
+    }
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(worldSize / GROUND_TILE, worldSize / GROUND_TILE);
+    texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    return texture;
+}
+
+// The ground plane recenters on the player every frame; sliding the texture
+// offset by the player position keeps the grid pattern fixed in WORLD space
+// (offset math derived from the plane's -PI/2 X rotation: u tracks +x,
+// v tracks -z). Called from the ground-follow block in game.js.
+export function updateGroundScroll() {
+    if (!groundTexture || !state.player) return;
+    groundTexture.offset.set(
+        state.player.position.x / GROUND_TILE,
+        -state.player.position.z / GROUND_TILE
+    );
+}
+
 export function createWorld() {
     // 1. Scene: The container for all 3D objects.
     state.scene = new THREE.Scene();
-    state.scene.background = new THREE.Color(0x004D40); // Dark Teal background
-    state.scene.fog = new THREE.Fog(0x004D40, 20, 100); // Fog for depth perception
+    state.scene.background = makeSkyTexture(); // Gradient sky (plan 015)
+    state.scene.fog = new THREE.Fog(HORIZON_COLOR, 20, 100); // Fog for depth perception, tuned to the horizon
 
     // 2. Camera: Defines the viewpoint.
     // PerspectiveCamera(fov, aspect_ratio, near_clipping_plane, far_clipping_plane)
@@ -50,7 +142,9 @@ export function createWorld() {
 
     // 5. Ground Plane: The surface the player and objects are on.
     const groundGeometry = new THREE.PlaneGeometry(worldSize, worldSize);
-    const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x004D40, side: THREE.DoubleSide }); // Dark Teal
+    groundTexture = makeGroundTexture(state.renderer);
+    // White base color: the teal lives in the texture (color would multiply it)
+    const groundMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, map: groundTexture, side: THREE.DoubleSide });
     state.ground = new THREE.Mesh(groundGeometry, groundMaterial);
     state.ground.rotation.x = -Math.PI / 2; // Rotate to be flat on XZ plane
     state.ground.receiveShadow = true; // Ground can receive shadows

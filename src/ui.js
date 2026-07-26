@@ -128,9 +128,17 @@ export function hideMessage() {
     el.messageBox.style.display = 'none'; // Make the message box invisible
 }
 
-// Score / timer DOM writes.
+// Score / timer DOM writes. Score INCREASES get a pop animation (plan 015);
+// resets to 0 on a new game don't. The remove/reflow/add dance retriggers
+// the CSS animation on rapid scoring; reduced-motion users get no pop (CSS).
 export function updateScoreDisplay() {
+    const prev = Number(el.score.textContent);
     el.score.textContent = state.score;
+    if (state.score > prev) {
+        el.score.classList.remove('score-pop');
+        void el.score.offsetWidth; // Forces a reflow so the animation restarts
+        el.score.classList.add('score-pop');
+    }
 }
 
 export function updateCollectTimeDisplay() {

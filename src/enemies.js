@@ -10,6 +10,7 @@ import { spawnAtPosition } from './collectibles.js';
 import { endGame, updateScoreDisplay } from './ui.js';
 import { wrapPosition, torusDelta, torusDistance } from './worldmath.js';
 import { sfx } from './audio.js';
+import { onEnemyKilled } from './effects.js';
 
 // Module-level scratch vectors — reused every frame to avoid per-frame allocation.
 const tmpVec = new THREE.Vector3();
@@ -67,8 +68,10 @@ export function updateEnemies(dt) {
 
         if (canKillSpecificEnemy(enemyGroup)) {
             if (bodyMesh) bodyMesh.material.color.setHex(0xFFEB3B); // Bright Yellow if killable
+            enemyGroup.userData.killable = true; // effects.js drives the aura/wobble off this
         } else {
             if (bodyMesh) bodyMesh.material.color.setHex(0x03A9F4); // Electric Blue otherwise
+            enemyGroup.userData.killable = false;
         }
 
         // --- Enemy AI: Movement Logic ---
@@ -150,6 +153,15 @@ export function updateEnemies(dt) {
 // larger enemies. The single kill path — future kill causes must call this too.
 export function killEnemy(enemyGroup, index) {
     const enemyDeathPosition = enemyGroup.position.clone(); // Get position before removing
+
+    // Death explosion (plan 015): burst in the enemy's CURRENT body color
+    // (yellow, since it was killable) transitioning to food-lime — the
+    // visual sentence "enemy becomes food". Origin at the body's center.
+    const bodyMesh = enemyGroup.getObjectByName('body');
+    const burstColor = bodyMesh ? bodyMesh.material.color.getHex() : 0xFFEB3B;
+    enemyDeathPosition.y = (enemyGroup.userData.bodyBaseY ?? 0.9) * enemyGroup.scale.y;
+    onEnemyKilled(enemyDeathPosition, burstColor, enemyGroup.scale.y);
+    enemyDeathPosition.y = 0; // Food still spawns at ground level below
 
     state.scene.remove(enemyGroup);
     disposeCharacter(enemyGroup); // Release the per-instance body material

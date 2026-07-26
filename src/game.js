@@ -11,7 +11,8 @@ import { state } from './state.js';
 import { createPlayer, disposeCharacter } from './characters.js';
 import { createEnemy, updateEnemies, playerBox, scratchBox } from './enemies.js';
 import { spawnNearPlayer, spawnAnywhere } from './collectibles.js';
-import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoomIn, zoomOut } from './world.js';
+import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoomIn, zoomOut, updateGroundScroll } from './world.js';
+import { initEffects, updateEffects, resetEffects, onCollect } from './effects.js';
 import { keys, onKeyDown, onKeyUp, setupTouchControls } from './input.js';
 import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators } from './ui.js';
 import { resetCollectClock, tickCollectClock } from './timers.js';
@@ -51,6 +52,7 @@ function init() {
     applySpeedMultiplier(); // Apply initial speed multiplier
 
     const directionalLight = createWorld();
+    initEffects(); // Particle pool + food glow (plan 015) — needs the scene
 
     // 6. Player and Enemy Objects
     createPlayer();
@@ -157,6 +159,7 @@ function setupNewGame() {
         keys[key] = false;
     }
     hideMessage();
+    resetEffects(); // Park all particles; reset squash/walk transients (plan 015)
 
     // Every new session — fresh boot or post-death restart — returns to the
     // start overlay; startRun() is the single "a run begins" entry point.
@@ -220,6 +223,9 @@ function update(dt) {
         if (state.ground) {
             state.ground.position.x = state.player.position.x;
             state.ground.position.z = state.player.position.z;
+            // The plane moved with the player — slide the grid texture the
+            // other way so the pattern stays fixed in the world (plan 015).
+            updateGroundScroll();
         }
 
         // Update directional light to follow player
@@ -237,6 +243,7 @@ function update(dt) {
             const collectible = state.collectibles[i];
             scratchBox.setFromObject(collectible);
             if (playerBox.intersectsBox(scratchBox)) {
+                onCollect(collectible.position); // Lime burst + squash-stretch (plan 015)
                 state.scene.remove(collectible);
                 state.collectibles.splice(i, 1);
                 state.score += FOOD_POINTS;
@@ -261,6 +268,9 @@ function animate(now) {
     lastFrameTime = now;
     if (!state.isPaused) {
         update(dt);
+        // Visual effects run on the same clock but OUTSIDE the gameActive
+        // gate: a death explosion must finish behind the death screen.
+        updateEffects(dt);
     }
     // Camera follow and rendering run every frame regardless of pause or
     // game over — the frozen scene must stay visible behind the message box.

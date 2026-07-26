@@ -7,13 +7,18 @@ import { wrapPosition } from './worldmath.js';
 // lifetime and never disposed (plan 007). Per-spawn allocation would leak
 // GPU memory since removal is scene.remove only.
 const COLLECTIBLE_GEOMETRY = new THREE.BoxGeometry(0.7, 0.7, 0.7); // Smaller cube
-const COLLECTIBLE_MATERIAL = new THREE.MeshStandardMaterial({ color: 0x76FF03 }); // Lime Green for collectibles (food)
+// Exported for effects.js (plan 015): the food glow pulse animates
+// emissiveIntensity on this ONE shared material — all food pulses in sync.
+export const COLLECTIBLE_MATERIAL = new THREE.MeshStandardMaterial({ color: 0x76FF03 }); // Lime Green for collectibles (food)
 
 // Builds a collectible mesh (small lime-green cube) on the shared resources.
 function buildCollectible() {
     const collectible = new THREE.Mesh(COLLECTIBLE_GEOMETRY, COLLECTIBLE_MATERIAL);
     collectible.castShadow = true;
     collectible.receiveShadow = true; // Though small, good practice
+    // Per-item phase so the rotate/bob idle animation (effects.js) doesn't
+    // move every cube in visible lockstep.
+    collectible.userData.phase = Math.random() * Math.PI * 2;
     return collectible;
 }
 
