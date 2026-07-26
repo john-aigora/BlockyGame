@@ -14,6 +14,7 @@ import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoo
 import { keys, onKeyDown, onKeyUp, setupTouchControls } from './input.js';
 import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators } from './ui.js';
 import { resetCollectClock, tickCollectClock } from './timers.js';
+import { unlockAudio, sfx, music } from './audio.js';
 
 // --- Simulation Clock ---
 // dt (seconds) drives all movement and timers; MAX_DELTA clamps tab-switch
@@ -56,18 +57,18 @@ function init() {
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('keyup', onKeyUp);
     window.addEventListener('resize', onWindowResize);
-    document.getElementById('restart-button').addEventListener('click', resetGame);
-    document.getElementById('restart-game-button').addEventListener('click', resetGame);
+    document.getElementById('restart-button').addEventListener('click', () => { sfx.click(); resetGame(); });
+    document.getElementById('restart-game-button').addEventListener('click', () => { sfx.click(); resetGame(); });
 
     // Add event listeners for pause and restart buttons
-    document.getElementById('pause-button').addEventListener('click', togglePause);
+    document.getElementById('pause-button').addEventListener('click', () => { sfx.click(); togglePause(); });
     // Start overlay: button, or any pointer press on the overlay itself.
     // (Any key while the overlay is up also starts — see onKeyDown.)
     el.startButton.addEventListener('click', startRun);
     el.startOverlay.addEventListener('pointerdown', startRun);
-    document.getElementById('speed-cycle-button').addEventListener('click', cycleSpeed);
-    document.getElementById('zoom-in-button').addEventListener('click', zoomIn);
-    document.getElementById('zoom-out-button').addEventListener('click', zoomOut);
+    document.getElementById('speed-cycle-button').addEventListener('click', () => { sfx.click(); cycleSpeed(); });
+    document.getElementById('zoom-in-button').addEventListener('click', () => { sfx.click(); zoomIn(); });
+    document.getElementById('zoom-out-button').addEventListener('click', () => { sfx.click(); zoomOut(); });
 
     // NEW Touch Anywhere Event Listeners
     setupTouchControls();
@@ -164,8 +165,14 @@ function setupNewGame() {
 // --- Start Run ---
 // THE single entry point for "a run begins" (start button, any key, or a
 // pointer press on the overlay — plan 010 hooks its AudioContext resume
-// here). Idempotent: once the overlay is gone and the clock runs, it no-ops.
+// here). Idempotent: the onStartScreen guard makes the overlay's
+// pointerdown + the button's click (both fire on one press) start exactly
+// one run — and exactly one start jingle.
 export function startRun() {
+    if (!state.onStartScreen) return;
+    unlockAudio(); // Browser autoplay policy: resume must ride a real gesture
+    sfx.start();
+    music.start();
     hideStartOverlay();
     if (state.isPaused) togglePause(); // Starts the clock and sets button text
 }
@@ -234,6 +241,7 @@ function update(dt) {
                 state.player.position.y = 0; // MODIFIED: Group origin at feet, scaling handles height
                 spawnNearPlayer();
                 resetCollectClock();
+                sfx.collect();
             }
         }
     }
@@ -259,6 +267,7 @@ function animate(now) {
 // Called by the "Play Again" / "Restart" buttons and by Space/Enter on the
 // death screen (input.js). Returns to the start overlay via setupNewGame.
 export function resetGame() {
+    music.stop(); // A mid-run restart must not leave the loop playing over the start overlay
     setupNewGame(); // Re-initialize game state
 }
 

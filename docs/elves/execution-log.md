@@ -18,6 +18,23 @@
 
 ---
 
+## Batch 7 complete: 2026-07-26
+
+**Batch:** 7: High scores (009) + sound & music (010) — subagent ab8ad34a6007bc4f9, coordinator-verified
+**Contract status:** all done criteria of both plans met
+
+**What changed:** src/hiscores.js (top-5, versioned key, storage-failure-proof) + BEST RUNS board on the death screen with .is-new highlight and NEW BEST! badge; src/audio.js (~210 lines): 5 synthesized sfx, persistent mute (🔊/🔇, aria-pressed), and the user-mandated procedural chiptune — 112 BPM A-minor pentatonic, triangle bass + square arp + noise hats, hunt-mode intensity layer switching at bar boundaries, 0.3s fade on death. Zero audio assets. 31 tests (+4 hiscores, +5 audio).
+
+**Gates (agent + coordinator):** lint 0 · 31 passed · build 578ms · localStorage confined to hiscores.js+audio.js · zero asset references.
+
+**Review (light):** deviations sound — the gameover.spec toBeEmpty assertion was legitimately STRENGTHENED (slot now renders the board 009 promised). **Bugs found & fixed per user rule:** (1) start overlay fired startRun() twice per tap (pointerdown + click) — idempotency guard at root; (2) mid-run Restart bypassed endGame leaving music looping over the start overlay — resetGame now stops music. Honest music self-review recorded (competent 2-bar vamp; hunt layer carries it; harmonically static — acceptable for v1, noted for the family).
+
+**Regression attestation:** baseline 22→31 (+9, 0 removed, 1 strengthened). Confidence HIGH.
+
+**Next:** Batch 8 (plans 011 balance + 012 mobile). Tag elves/pre-batch-8.
+
+---
+
 ## Batch 6 complete: 2026-07-26
 
 **Batch:** 6: Start & death screens (plan 008) — subagent a017d6d3bded610d8, coordinator-verified

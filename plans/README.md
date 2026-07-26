@@ -22,8 +22,8 @@ row when done.
 | 006 | Camera: bounded two-way zoom, growth-aware framing, fog follows camera | P1 | M | 003 | DONE |
 | 007 | Rendering hygiene: pixel ratio, shared/disposed GPU resources, cached DOM/AABB, safe kill-flash | P2 | M | 003 | DONE |
 | 008 | Start screen + death screen + keyboard restart | P2 | M | 004 | DONE |
-| 009 | Local high scores (top-5, localStorage) on the death screen | P2 | S | 008 | TODO |
-| 010 | Synthesized sound effects + procedural background music + persistent mute | P2 | M | 008 | TODO |
+| 009 | Local high scores (top-5, localStorage) on the death screen | P2 | S | 008 | DONE |
+| 010 | Synthesized sound effects + procedural background music + persistent mute | P2 | M | 008 | DONE |
 | 011 | Kill points + enemy population cap (scoring/balance) | P2 | S | 003, 004, 005 | TODO |
 | 012 | Mobile polish: touch/UI conflicts, responsive layout, honest device detection | P2 | M | 002, 008 | TODO |
 | 013 | Docs truth pass + favicon/meta + Vercel deployment | P2 | S | 001 (hard); 002-012 (soft — run LAST) | TODO |

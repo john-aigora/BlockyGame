@@ -1,6 +1,8 @@
 import { MAX_ENEMY_INDICATORS } from './constants.js';
 import { state } from './state.js';
 import { canKillSpecificEnemy } from './enemies.js';
+import { recordScore } from './hiscores.js';
+import { unlockAudio, sfx, music, isMuted, setMuted } from './audio.js';
 
 // Cached DOM references, resolved once at init (plan 007) — the hot loop
 // must never call getElementById. game.js calls initUI() before any UI write.
@@ -14,7 +16,9 @@ export const el = {
     startOverlay: null,
     startButton: null,
     pauseButton: null,
-    speedButton: null
+    speedButton: null,
+    hiscoreSlot: null,
+    muteButton: null
 };
 
 export function initUI() {
@@ -28,6 +32,32 @@ export function initUI() {
     el.startButton = document.getElementById('start-button');
     el.pauseButton = document.getElementById('pause-button');
     el.speedButton = document.getElementById('speed-cycle-button');
+    el.hiscoreSlot = document.getElementById('hiscore-slot');
+    el.muteButton = document.getElementById('mute-button');
+    initMuteToggle();
+}
+
+// --- Mute Toggle (plan 010) ---
+// Persisted by src/audio.js (the storage owner); the label reflects the
+// saved state from boot. The click is a sanctioned unlock gesture, so
+// unmuting works even before the first run starts.
+function updateMuteButtonLabel() {
+    el.muteButton.textContent = isMuted() ? '\u{1F507}' : '\u{1F50A}';
+    el.muteButton.setAttribute('aria-pressed', String(isMuted()));
+}
+
+function initMuteToggle() {
+    updateMuteButtonLabel();
+    el.muteButton.addEventListener('click', () => {
+        unlockAudio();
+        setMuted(!isMuted()); // muting also stops the music (audio.js)
+        updateMuteButtonLabel();
+        if (!isMuted()) {
+            sfx.click();
+            // Unmuting mid-run brings the music back immediately.
+            if (state.gameActive && !state.onStartScreen) music.start();
+        }
+    });
 }
 
 // --- Start Overlay Functions (plan 008) ---
@@ -44,12 +74,41 @@ export function hideStartOverlay() {
 }
 
 // --- Death Screen Functions ---
-// Fills the structured death screen (title is static "GAME OVER" markup;
-// #hiscore-slot stays empty until plan 009 mounts the leaderboard).
-export function showDeathScreen(reason) {
+// Fills the structured death screen (title is static "GAME OVER" markup);
+// #hiscore-slot hosts the local top-5 leaderboard (plan 009).
+export function showDeathScreen(reason, hiscores = [], rank = -1) {
     el.deathReason.textContent = reason;
     el.finalScore.textContent = state.score;
+    renderHiscores(hiscores, rank);
     el.messageBox.style.display = 'block'; // Make the death screen visible
+}
+
+// Renders the BEST RUNS list into #hiscore-slot. The new run's row (by
+// rank) is highlighted; rank 0 also earns the NEW BEST! badge. An empty
+// list (storage unavailable AND the run failed to record) leaves the slot
+// empty, which hides it.
+function renderHiscores(list, rank) {
+    el.hiscoreSlot.innerHTML = '';
+    if (list.length === 0) return;
+    if (rank === 0) {
+        const badge = document.createElement('p');
+        badge.className = 'hiscore-badge';
+        badge.textContent = 'NEW BEST!';
+        el.hiscoreSlot.appendChild(badge);
+    }
+    const title = document.createElement('p');
+    title.className = 'hiscore-title';
+    title.textContent = 'BEST RUNS';
+    el.hiscoreSlot.appendChild(title);
+    const ol = document.createElement('ol');
+    ol.className = 'hiscore-list';
+    list.forEach((entry, i) => {
+        const li = document.createElement('li');
+        li.textContent = `${entry.score} — ${entry.date}`;
+        if (i === rank) li.classList.add('is-new');
+        ol.appendChild(li);
+    });
+    el.hiscoreSlot.appendChild(ol);
 }
 
 // Ends the current run. This is the ONLY legal way to end a game — every
@@ -58,7 +117,10 @@ export function showDeathScreen(reason) {
 export function endGame(reason) {
     if (!state.gameActive) return;
     state.gameActive = false;
-    showDeathScreen(reason);
+    music.stop(); // 0.3s fadeout — the death jingle plays over it
+    sfx.death();
+    const { list, rank } = recordScore(state.score);
+    showDeathScreen(reason, list, rank);
 }
 
 // Hides the message box.
@@ -95,6 +157,9 @@ export function createEnemyIndicators() {
 // opacity transition removed, an actually visible discrete flash.
 export function updateKillIndicator(dt) {
     const anyEnemyKillable = state.enemies.some(enemy => canKillSpecificEnemy(enemy));
+    // Hunt-mode music layer keys off the same already-computed signal;
+    // the actual switch lands on the next bar boundary (audio.js).
+    music.setIntensity(anyEnemyKillable ? 1 : 0);
     if (!el.killIndicator) return;
     if (anyEnemyKillable) {
         el.killIndicator.style.display = 'block';

@@ -186,9 +186,44 @@ canvas {
     margin: 0 0 5px;
 }
 
-/* Plan 009 mounts the high-score board here; empty and invisible for now. */
+/* High-score board (plan 009). Stays invisible when empty (storage
+   unavailable). Palette reuse only: yellow = collect timer, orange-red =
+   titles/kill accent, grey-blue = hints. */
 #hiscore-slot {
     margin: 0;
+}
+
+.hiscore-badge {
+    font-size: 0.7em;
+    color: #FF4500;
+    /* Bright Orange-Red accent (matches death title) */
+    margin: 12px 0 0;
+}
+
+.hiscore-title {
+    font-size: 0.6em;
+    color: #ECEFF1;
+    /* Off-White */
+    margin: 12px 0 6px;
+}
+
+.hiscore-list {
+    /* Press Start 2P is wide — keep the board compact */
+    font-size: 0.6em;
+    color: #B0BEC5;
+    /* Grey-Blue (matches .start-hint) */
+    list-style-position: inside;
+    margin: 0;
+    padding: 0;
+}
+
+.hiscore-list li {
+    margin: 3px 0;
+}
+
+.hiscore-list li.is-new {
+    color: #FFEB3B;
+    /* Bright Yellow (matches #collect-timer-display) */
 }
 
 /* Styling for the button inside the message box */
@@ -286,6 +321,18 @@ canvas {
     right: 10px;
     min-width: 40px;
     min-height: 40px;
+}
+
+/* Mute toggle (plan 010): lives inline in the #ui-container panel — every
+   canvas corner is already occupied. .game-button is position: absolute
+   for the corner buttons, so opt back into the flow here. */
+#mute-button {
+    position: static;
+    min-width: 40px;
+    min-height: 40px;
+    margin-right: 10px;
+    vertical-align: middle;
+    font-size: 16px;
 }
 
 /* Kill indicator styling */

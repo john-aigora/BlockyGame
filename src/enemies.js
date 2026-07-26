@@ -8,6 +8,7 @@ import { createCharacter, disposeCharacter } from './characters.js';
 import { spawnAtPosition } from './collectibles.js';
 import { endGame } from './ui.js';
 import { wrapPosition, torusDelta, torusDistance } from './worldmath.js';
+import { sfx } from './audio.js';
 
 // Module-level scratch vectors — reused every frame to avoid per-frame allocation.
 const tmpVec = new THREE.Vector3();
@@ -152,6 +153,7 @@ export function killEnemy(enemyGroup, index) {
     state.scene.remove(enemyGroup);
     disposeCharacter(enemyGroup); // Release the per-instance body material
     state.enemies.splice(index, 1);
+    sfx.kill();
 
     // Spawn 4 food particles
     for (let i = 0; i < 4; i++) {

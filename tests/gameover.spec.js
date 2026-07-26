@@ -31,9 +31,9 @@ test('the death screen renders once, structured, and stays stable', async ({ pag
   expect(reason.length).toBeGreaterThan(0);
   await expect(page.locator('#final-score')).toHaveText(/^\d+$/);
   const score = await page.locator('#final-score').textContent();
-  // #hiscore-slot is plan 009's mount point — present but empty for now.
+  // #hiscore-slot hosts the plan-009 leaderboard now.
   await expect(page.locator('#hiscore-slot')).toBeAttached();
-  await expect(page.locator('#hiscore-slot')).toBeEmpty();
+  await expect(page.locator('#hiscore-slot .hiscore-title')).toHaveText('BEST RUNS');
   // Stability: a second death trigger or stray frame must not rewrite it.
   await page.waitForTimeout(2000);
   await expect(page.locator('#death-title')).toHaveText('GAME OVER');
