@@ -49,6 +49,9 @@ export const BASE_PLAYER_SPEED = 6.0; // units/s — owner playtest: "1x should 
 export const MOBILE_SPEED_MULTIPLIER = 1.75; // Player is 75% faster on mobile than desktop base
 export const MAX_DRAG_DISTANCE = 75;
 export const DEAD_ZONE_RADIUS = 10;
+// Physical gamepads: axes below this magnitude read as zero (noise floor +
+// stick rest drift). 0.2 is standard for the HTML Gamepad API "standard" mapping.
+export const GAMEPAD_DEADZONE = 0.2;
 
 // World and spawning parameters
 export const worldSize = 200; // Defines the size of the ground plane (illusion of infinite space)

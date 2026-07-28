@@ -21,7 +21,7 @@ import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoo
 import { initTerrain, setTerrainActive, resetTerrainForNewRun, updateTerrain, shiftTerrain, groundHeightAt, slideMove, isRockFree } from './terrain.js';
 import { initClouds, setCloudMode, updateClouds, shiftClouds } from './clouds.js';
 import { initEffects, updateEffects, resetEffects, onCollect, onGrowthMilestone, shiftActiveParticles, spawnTextPopup, onJumpTakeoff, onJumpLand } from './effects.js';
-import { keys, keyboardVector, onKeyDown, onKeyUp, setupTouchControls } from './input.js';
+import { keys, keyboardVector, onKeyDown, onKeyUp, setupTouchControls, setupGamepad, pollGamepad } from './input.js';
 import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension, resetIndicators, showGoFlourish, initModePicker, updateModePicker, updateDistanceDisplay, resetDistanceDisplay } from './ui.js';
 import { resetCollectClock, tickCollectClock, tickComboClock } from './timers.js';
 import { loadWorldMode, saveWorldMode } from './hiscores.js';
@@ -99,6 +99,8 @@ function init() {
 
     // NEW Touch Anywhere Event Listeners
     setupTouchControls();
+    // Physical gamepad: connect listeners + per-frame poll in animate().
+    setupGamepad();
 
     // Plan 014 spike: `?move=continuous` swaps in the prototype movement
     // scheme (cursor-steer + boost). Classic mode never reaches this module.
@@ -551,6 +553,9 @@ function animate(now) {
     if (lastFrameTime === null) lastFrameTime = now;
     const dt = Math.min((now - lastFrameTime) / 1000, MAX_DELTA);
     lastFrameTime = now;
+    // Gamepad runs every frame — start/death/pause need button edges even
+    // when update() early-returns (paused or no active run).
+    pollGamepad();
     if (!state.isPaused) {
         update(dt);
         // Visual effects run on the same clock but OUTSIDE the gameActive

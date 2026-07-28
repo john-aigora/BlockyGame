@@ -18,6 +18,7 @@
 import * as THREE from 'three';
 import { state } from './state.js';
 import { spawnBurst } from './effects.js';
+import { gamepadVector, gamepadBoostHeld } from './input.js';
 
 // Tuning (grok_tips numbers; tune in playtest, not here-first)
 const TURN_RATE = 6; // per-second steering stiffness: lerp t = 1 - e^(-6*dt)
@@ -116,7 +117,11 @@ export function updateContinuousMovement(dt) {
     if (!player) return;
 
     // 1. Pick the steering target
-    if (state.touchActive && (state.movementVector.x !== 0 || state.movementVector.y !== 0)) {
+    const gp = gamepadVector();
+    if (gp.x !== 0 || gp.z !== 0) {
+        // Stick/D-pad: same screen-space mapping as touch drag
+        targetDir.set(gp.x, 0, gp.z).normalize();
+    } else if (state.touchActive && (state.movementVector.x !== 0 || state.movementVector.y !== 0)) {
         // Drag vector is screen-space (x right, y down) which maps straight
         // onto world (x, z) under this straight-down-behind camera.
         targetDir.set(state.movementVector.x, 0, state.movementVector.y).normalize();
@@ -140,8 +145,8 @@ export function updateContinuousMovement(dt) {
     if (heading.lengthSq() < 1e-8) heading.copy(targetDir); // lerp through zero (180° flip)
     heading.normalize();
 
-    // 3. Boost + energy bookkeeping
-    const boosting = boostHeld && energy > 0;
+    // 3. Boost + energy bookkeeping (Space, on-screen BOOST, or pad A / RT)
+    const boosting = (boostHeld || gamepadBoostHeld()) && energy > 0;
     energy += (boosting ? -ENERGY_DRAIN_PER_S : ENERGY_REGEN_PER_S) * dt;
     energy = Math.min(ENERGY_MAX, Math.max(0, energy));
     if (barFill) barFill.style.width = `${energy}%`;

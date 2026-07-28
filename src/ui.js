@@ -113,8 +113,8 @@ export function updateModePicker() {
     // both-modes wall of text.
     if (el.controlsHint) {
         el.controlsHint.textContent = endless
-            ? 'Move: Arrows / WASD · Jump: Space · Pause: P or Enter · Speed: F'
-            : 'Move: Arrows / WASD · Pause: Space or Enter · Speed: F';
+            ? 'Move: Arrows / WASD / Stick · Jump: Space or A · Pause: P / Start · Speed: F or Y'
+            : 'Move: Arrows / WASD / Stick · Pause: Space / Start · Speed: F or Y';
     }
 }
 

@@ -26,7 +26,7 @@ Controls are identical in both modes.
 ## How to play
 
 - **Start**: pick a mode, then click START (or press any key / tap the screen).
-- **Move**: Arrow keys / WASD on desktop; touch-and-drag anywhere on mobile.
+- **Move**: Arrow keys / WASD / gamepad stick (or D-pad) on desktop; touch-and-drag anywhere on mobile. Start/A/Y map to pause/confirm, jump (endless), and speed cycle.
 - **Grow**: grab a LIME block at least every 15 seconds — food is worth 1 point
   and makes you taller.
 - **Hunt**: when you're taller than an enemy it turns YELLOW and runs. Touch it
@@ -73,7 +73,7 @@ src/
   effects.js        pooled particles, walk animation, glow, screen juice
   audio.js          synthesized sound effects + procedural chiptune music
   hiscores.js       local top-5 storage
-  input.js          keyboard + multitouch-safe drag controls
+  input.js          keyboard + gamepad + multitouch-safe drag controls
   ui.js             HUD, indicators, start/death screens, endGame
   timers.js         the collect clock (game-time driven)
 tests/              Playwright specs (smoke, timing, game-over, world,

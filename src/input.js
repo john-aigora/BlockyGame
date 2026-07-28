@@ -1,14 +1,352 @@
-import { MAX_DRAG_DISTANCE, DEAD_ZONE_RADIUS, MOVEMENT_MODE } from './constants.js';
+import { MAX_DRAG_DISTANCE, DEAD_ZONE_RADIUS, MOVEMENT_MODE, GAMEPAD_DEADZONE } from './constants.js';
 import { state } from './state.js';
 import { togglePause, startRun, resetGame, cycleSpeed, tryJump } from './game.js';
 import { sfx } from './audio.js';
 
 export const keys = {}; // Object to keep track of currently pressed keys
 
-// --- Keyboard movement vector (game-feel pass) ---
+// --- Gamepad (HTML Gamepad API) ---
+// Polled every frame from animate(). Tuned for the Logitech F310 (Amazon
+// B003VAHYQY) as well as standard Xbox-layout pads.
+//
+// F310 has a physical D/X switch on the back:
+//   X = XInput  → browser mapping "standard" (Xbox indices)
+//   D = DirectInput → empty mapping; A is button 1, D-pad is a hat axis
+// Both modes are supported. Prefer X if you can flip the switch.
+//
+// Standard: axes 0/1 stick, buttons 12-15 D-pad, 0=A, 3=Y, 8=Back, 9=Start
+// DirectInput F310: axes 0/1 stick, hat on a later axis, 1=A, 2=B, 3=Y, 8/9 menu
+const gamepadAxesScratch = { x: 0, z: 0 };
+let prevPadButtons = []; // Edge detection for face/menu buttons
+let padConnected = false;
+let preferredPadIndex = null; // Stick to the pad that last produced input
+
+// Applies radial deadzone then re-scales remaining throw to [0,1] so small
+// intentional tilts still reach full speed near the rim.
+function applyDeadzone(x, y, zone) {
+    const mag = Math.hypot(x, y);
+    if (mag <= zone) return { x: 0, y: 0 };
+    const scale = Math.min(1, (mag - zone) / (1 - zone)) / mag;
+    return { x: x * scale, y: y * scale };
+}
+
+function axisValue(ax, i) {
+    const v = ax[i];
+    return typeof v === 'number' && Number.isFinite(v) ? v : 0;
+}
+
+function buttonPressed(gp, index) {
+    const b = gp.buttons && gp.buttons[index];
+    if (!b) return false;
+    // Some DirectInput builds report value without pressed.
+    return !!(b.pressed || (typeof b.value === 'number' && b.value >= 0.5));
+}
+
+function buttonEdge(gp, index) {
+    return buttonPressed(gp, index) && !prevPadButtons[index];
+}
+
+// True when this pad is the F310 (or kin) in DirectInput / non-standard mode.
+function isDirectInputLayout(gp) {
+    if (!gp) return false;
+    if (gp.mapping === 'standard') return false;
+    const id = (gp.id || '').toLowerCase();
+    // Explicit F310 / Logitech Dual Action family, or any pad with no standard map.
+    return id.includes('f310') || id.includes('dual action') || id.includes('logitech') ||
+        gp.mapping === '' || gp.mapping === 'none';
+}
+
+// Logical face/menu indices for this pad (standard vs F310 DirectInput).
+function padButtons(gp) {
+    if (isDirectInputLayout(gp)) {
+        // DirectInput F310: 0=X 1=A 2=B 3=Y 6=LT 7=RT 8=Back 9=Start
+        return { a: 1, b: 2, x: 0, y: 3, back: 8, start: 9, rt: 7, lt: 6 };
+    }
+    // Standard / XInput
+    return { a: 0, b: 1, x: 2, y: 3, back: 8, start: 9, rt: 7, lt: 6 };
+}
+
+function padActivityScore(gp) {
+    let score = 0;
+    if (gp.mapping === 'standard') score += 0.25;
+    const ax = gp.axes || [];
+    for (let i = 0; i < ax.length; i++) score += Math.abs(axisValue(ax, i));
+    const btns = gp.buttons || [];
+    for (let i = 0; i < btns.length; i++) {
+        if (buttonPressed(gp, i)) score += 2;
+    }
+    return score;
+}
+
+// Prefer the pad that is currently producing input; lock onto it so a
+// silent ghost slot (common on macOS) cannot steal the first index.
+function activeGamepad() {
+    const list = navigator.getGamepads ? navigator.getGamepads() : null;
+    if (!list) return null;
+
+    if (preferredPadIndex != null) {
+        const locked = list[preferredPadIndex];
+        if (locked && locked.connected) {
+            if (padActivityScore(locked) > 0.15) return locked;
+            // Keep lock while connected even at rest, once claimed.
+            return locked;
+        }
+        preferredPadIndex = null;
+    }
+
+    let best = null;
+    let bestScore = 0;
+    let bestIndex = -1;
+    let first = null;
+    let firstIndex = -1;
+    for (let i = 0; i < list.length; i++) {
+        const gp = list[i];
+        if (!gp || !gp.connected) continue;
+        if (first == null) {
+            first = gp;
+            firstIndex = i;
+        }
+        const score = padActivityScore(gp);
+        if (score > bestScore) {
+            bestScore = score;
+            best = gp;
+            bestIndex = i;
+        }
+    }
+    if (best && bestScore > 0.15) {
+        preferredPadIndex = bestIndex;
+        return best;
+    }
+    if (first) {
+        preferredPadIndex = firstIndex;
+        return first;
+    }
+    return null;
+}
+
+// D-pad as buttons (standard) or hat axis (DirectInput F310: usually axis 9,
+// sometimes 5/6/7; values are discrete ±1 / ±0.714 / 0).
+function readDpad(gp) {
+    let x = 0;
+    let z = 0;
+    if (buttonPressed(gp, 15)) x += 1;
+    if (buttonPressed(gp, 14)) x -= 1;
+    if (buttonPressed(gp, 13)) z += 1;
+    if (buttonPressed(gp, 12)) z -= 1;
+    if (x !== 0 || z !== 0) return { x, z };
+
+    const ax = gp.axes || [];
+    // Scan late axes for a hat: large magnitude, near-cardinal values.
+    for (let i = 0; i < ax.length; i++) {
+        if (i < 2) continue; // 0/1 are the left stick
+        const v = axisValue(ax, i);
+        if (Math.abs(v) < 0.2 || Math.abs(v) > 1.01) continue;
+        // Classic DirectInput POV: -1 up, 1 down on one axis is rare; more
+        // often a single hat axis encodes 8-way as stepped floats.
+        // Two-axis hats (6/7 or 4/5): treat as digital if past threshold.
+    }
+    // Two-axis hat pairs common on DI pads
+    for (const [xi, yi] of [[6, 7], [4, 5], [5, 6], [7, 8]]) {
+        if (xi >= ax.length || yi >= ax.length) continue;
+        const hx = axisValue(ax, xi);
+        const hy = axisValue(ax, yi);
+        if (Math.abs(hx) < 0.5 && Math.abs(hy) < 0.5) continue;
+        return {
+            x: hx > 0.5 ? 1 : hx < -0.5 ? -1 : 0,
+            z: hy > 0.5 ? 1 : hy < -0.5 ? -1 : 0
+        };
+    }
+    // Single hat axis (F310 DI often reports POV as one axis)
+    for (let i = 2; i < ax.length; i++) {
+        const v = axisValue(ax, i);
+        if (Math.abs(v) < 0.5) continue;
+        // Map common POV encodings to cardinals (Chrome F310 DI ≈ stepped).
+        if (v < -0.9) return { x: 0, z: -1 }; // up
+        if (v > 0.9) return { x: 0, z: 1 }; // down
+        if (v > 0.1 && v < 0.6) return { x: 1, z: 0 }; // right-ish
+        if (v < -0.1 && v > -0.6) return { x: -1, z: 0 }; // left-ish
+        // 8-way diagonals — approximate
+        if (v > 0.6 && v <= 0.9) return { x: 1, z: 1 };
+        if (v < -0.6 && v >= -0.9) return { x: -1, z: -1 };
+    }
+    return { x: 0, z: 0 };
+}
+
+// Unit-length (or zero) move vector from left stick + D-pad. Stick Y is
+// screen-down positive on the standard mapping, matching our world +Z /
+// "S key" convention used by keyboardVector.
+export function gamepadVector() {
+    const gp = activeGamepad();
+    gamepadAxesScratch.x = 0;
+    gamepadAxesScratch.z = 0;
+    if (!gp) return gamepadAxesScratch;
+
+    const ax = gp.axes || [];
+    // Left stick is always axes 0/1 on F310 X and D modes and on standard pads.
+    const stick = applyDeadzone(axisValue(ax, 0), axisValue(ax, 1), GAMEPAD_DEADZONE);
+    const dpad = readDpad(gp);
+
+    let x = stick.x + dpad.x;
+    let z = stick.y + dpad.z;
+    const mag = Math.hypot(x, z);
+    if (mag > 1) {
+        x /= mag;
+        z /= mag;
+    }
+    gamepadAxesScratch.x = x;
+    gamepadAxesScratch.z = z;
+    return gamepadAxesScratch;
+}
+
+function anyFaceEdge(gp) {
+    const b = padButtons(gp);
+    for (const i of [b.a, b.b, b.x, b.y, b.start]) {
+        if (buttonEdge(gp, i)) return true;
+    }
+    // Also accept raw 0 on DI pads (X button) so any face starts.
+    if (buttonEdge(gp, 0)) return true;
+    return false;
+}
+
+function snapshotButtons(gp) {
+    const n = gp.buttons ? gp.buttons.length : 0;
+    if (prevPadButtons.length !== n) prevPadButtons = new Array(n).fill(false);
+    for (let i = 0; i < n; i++) prevPadButtons[i] = buttonPressed(gp, i);
+}
+
+// True while A or RT is held — continuous-mode boost (mirrors Space).
+export function gamepadBoostHeld() {
+    const gp = activeGamepad();
+    if (!gp) return false;
+    const b = padButtons(gp);
+    return buttonPressed(gp, b.a) || buttonPressed(gp, b.rt);
+}
+
+export function isGamepadConnected() {
+    return padConnected || !!activeGamepad();
+}
+
+// Read-only snapshot for debug HUD / tests.
+export function gamepadDebugInfo() {
+    const gp = activeGamepad();
+    if (!gp) return { connected: false };
+    const b = padButtons(gp);
+    return {
+        connected: true,
+        id: gp.id,
+        mapping: gp.mapping || '',
+        index: gp.index,
+        directInput: isDirectInputLayout(gp),
+        buttons: { a: b.a, b: b.b, y: b.y, start: b.start },
+        axes: Array.from(gp.axes || []).map((v) => Math.round((v || 0) * 100) / 100),
+        move: { ...gamepadVector() }
+    };
+}
+
+// Edge-triggered actions. Must run every animation frame (including pause /
+// start / death) because update() early-returns outside a live run.
+export function pollGamepad() {
+    const gp = activeGamepad();
+    if (!gp) {
+        if (prevPadButtons.length) prevPadButtons = [];
+        padConnected = false;
+        updatePadHud(null);
+        return;
+    }
+    padConnected = true;
+    updatePadHud(gp);
+    const b = padButtons(gp);
+
+    // Start overlay: any face/start press begins the run (matches "any key").
+    if (state.onStartScreen) {
+        if (anyFaceEdge(gp)) {
+            startRun();
+            snapshotButtons(gp);
+            return;
+        }
+        snapshotButtons(gp);
+        return;
+    }
+
+    // Death screen: A or Start returns to the start overlay (Space/Enter).
+    if (!state.gameActive) {
+        if (buttonEdge(gp, b.a) || buttonEdge(gp, b.start)) {
+            resetGame();
+            snapshotButtons(gp);
+            return;
+        }
+        snapshotButtons(gp);
+        return;
+    }
+
+    // Mid-run (including paused): Start / Select pause-toggles.
+    if (buttonEdge(gp, b.start) || buttonEdge(gp, b.back)) {
+        sfx.click();
+        togglePause();
+    }
+
+    // Classic: A mirrors Space (pause). Endless: A is jump. Continuous: A is
+    // boost (held — see gamepadBoostHeld), not an edge action.
+    if (MOVEMENT_MODE === 'continuous') {
+        // boost is level-held, not edge; nothing here
+    } else if (state.worldMode === 'endless') {
+        if (buttonEdge(gp, b.a)) tryJump();
+        // B also pauses in endless so one face button is always "stop"
+        if (buttonEdge(gp, b.b)) {
+            sfx.click();
+            togglePause();
+        }
+    } else if (buttonEdge(gp, b.a)) {
+        togglePause();
+    }
+
+    // Y cycles speed (mirrors F).
+    if (!state.isPaused && buttonEdge(gp, b.y)) {
+        sfx.click();
+        cycleSpeed();
+    }
+
+    snapshotButtons(gp);
+}
+
+// Small bottom-left status so a dead pad is obvious (id + mode).
+let padHudEl = null;
+function updatePadHud(gp) {
+    if (!padHudEl) {
+        padHudEl = document.getElementById('pad-status');
+        if (!padHudEl) return;
+    }
+    if (!gp) {
+        padHudEl.hidden = true;
+        return;
+    }
+    padHudEl.hidden = false;
+    const mode = gp.mapping === 'standard' ? 'XInput' : 'DirectInput';
+    const short = (gp.id || 'Gamepad').split('(')[0].trim().slice(0, 28);
+    const mv = gamepadVector();
+    const live = Math.hypot(mv.x, mv.z) > 0.05 ? ' · live' : '';
+    padHudEl.textContent = `${short} · ${mode}${live}`;
+}
+
+export function setupGamepad() {
+    window.addEventListener('gamepadconnected', (e) => {
+        padConnected = true;
+        preferredPadIndex = e.gamepad ? e.gamepad.index : preferredPadIndex;
+    });
+    window.addEventListener('gamepaddisconnected', (e) => {
+        if (e.gamepad && e.gamepad.index === preferredPadIndex) preferredPadIndex = null;
+        padConnected = !!activeGamepad();
+        prevPadButtons = [];
+        updatePadHud(activeGamepad());
+    });
+}
+
+// --- Keyboard + gamepad movement vector (game-feel pass) ---
 // Builds a UNIT-length input vector from the held movement keys (arrows and
-// their WASD aliases), so diagonals move at exactly player speed instead of
-// the old per-axis 1.41x. Opposite keys cancel to a clean zero (no jitter).
+// their WASD aliases) plus the active gamepad stick/D-pad, so diagonals move
+// at exactly player speed instead of the old per-axis 1.41x. Opposite keys
+// cancel to a clean zero (no jitter). Stick + keys are summed then clamped
+// so combining sources never exceeds full speed.
 // Returned object is a module-level scratch — read it, don't keep it.
 const keyboardScratch = { x: 0, z: 0 };
 export function keyboardVector() {
@@ -18,10 +356,13 @@ export function keyboardVector() {
     const up = (keys['arrowup'] || keys['w']) ? 1 : 0;
     let x = right - left;
     let z = down - up;
-    if (x !== 0 && z !== 0) {
-        const inv = 1 / Math.hypot(x, z); // Both axes held: scale to unit length
-        x *= inv;
-        z *= inv;
+    const gp = gamepadVector();
+    x += gp.x;
+    z += gp.z;
+    const mag = Math.hypot(x, z);
+    if (mag > 1) {
+        x /= mag;
+        z /= mag;
     }
     keyboardScratch.x = x;
     keyboardScratch.z = z;
