@@ -26,16 +26,16 @@
             <p class="tagline">Collect. Grow. Hunt the yellow ones.</p>
             <!-- Teaching the mobile layout relies on: #instructions is hidden
                  on small screens (plan 012), so movement + survival rules live here. -->
-            <p class="tagline">Move: Arrows / WASD &mdash; or drag anywhere. <br>
+            <p class="tagline">Move: Arrows / WASD / gamepad stick &mdash; or drag anywhere. <br>
                 Eat LIME blocks to grow. Outgrow enemies: YELLOW means yours!</p>
             <div id="mode-picker">
                 <button id="mode-classic" class="game-button mode-button" aria-pressed="true">CLASSIC ARENA</button>
                 <button id="mode-endless" class="game-button mode-button" aria-pressed="false">ENDLESS WORLD</button>
             </div>
             <!-- Endless-only control hint; ui.js shows it while ENDLESS WORLD is selected -->
-            <p class="tagline" id="endless-hint" style="display: none">Space: Jump &mdash; hop the rocks, not the lakes!</p>
+            <p class="tagline" id="endless-hint" style="display: none">Space or A: Jump &mdash; hop the rocks, not the lakes!</p>
             <button id="start-button" class="game-button">&#9654; START</button>
-            <p class="start-hint">or press any key</p>
+            <p class="start-hint">or press any key / gamepad button</p>
         </div>
         <div id="message-box" class="message-box">
             <h2 id="death-title">GAME OVER</h2>
@@ -70,6 +70,8 @@
             Grab LIME blocks to grow &mdash; miss for 15 seconds and it's game over. <br>
             Outgrow an enemy and it turns YELLOW &mdash; eat it for big points!
         </div>
+        <!-- Shown when a controller is seen (F310 / standard). Press any button once to wake it. -->
+        <div id="pad-status" hidden></div>
     </div>
 
     <script type="module" src="/src/main.js"></script>

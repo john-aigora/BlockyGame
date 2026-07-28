@@ -92,6 +92,14 @@ canvas {
     max-width: 800px;
 }
 
+/* Controller detect line (Logitech F310 etc.) — quiet status under the HUD */
+#pad-status {
+    margin-top: 8px;
+    font-size: 0.7em;
+    letter-spacing: 0.02em;
+    color: #90A4AE;
+}
+
 /* Styling for individual UI elements (score, timer) */
 .ui-element {
     display: inline-block;
