@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { startGame, waitForGameOver, waitGameSeconds } from './helpers.js';
+import { openGame, startGame, waitForGameOver, waitGameSeconds } from './helpers.js';
 
 // Toys + polish (owner queue items 4-5 + QA board flag): voxel clouds in
 // both skies, the endless Space-jump (rocks hoppable, water never, classic
@@ -14,15 +14,12 @@ test.beforeEach(async ({ page }) => {
 });
 
 async function bootClassic(page) {
-  await page.goto('/');
-  await page.waitForFunction(() => window.__game?.state?.enemies?.length >= 1);
+  await openGame(page);
   await startGame(page);
 }
 
 async function bootEndless(page) {
-  await page.goto('/');
-  await page.waitForFunction(() => window.__game?.state?.enemies?.length >= 1);
-  await page.locator('#mode-endless').click();
+  await openGame(page);
   await startGame(page);
 }
 
@@ -248,7 +245,6 @@ test('Space still pauses classic; endless jumps on Space and pauses on P', async
   // ENDLESS (same session, through the real overlay): Space becomes JUMP.
   await page.locator('#restart-game-button').click();
   await expect(page.locator('#start-overlay')).toBeVisible();
-  await page.locator('#mode-endless').click();
   await startGame(page);
   await page.keyboard.press('Space');
   const jumped = await page.evaluate(() => ({
@@ -276,8 +272,7 @@ test('the endless board ranks by distance (score per row) and re-ranks stored li
       { score: 10, distance: 500, date: '2026-01-02' }
     ]));
   });
-  await page.goto('/');
-  await page.waitForFunction(() => window.__game?.state?.enemies?.length >= 1);
+  await openGame(page);
   await startGame(page);
 
   // A 200u run that dies broke: mid-table by distance despite 0 points.

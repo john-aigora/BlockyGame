@@ -1,4 +1,4 @@
-import { applySpeedMultiplier } from './game.js';
+import { applySpeedMultiplier, speedUp, speedDown, forceWorldMode } from './game.js';
 import { state } from './state.js';
 import { spawnNearPlayer, spawnAtPosition } from './collectibles.js';
 import { spawnNewEnemies, updateEnemyStreaming, resetEnemyStreaming } from './enemies.js';
@@ -23,6 +23,9 @@ window.__game = {
         updateEnemyStreaming, // Bubble spawn path (endless spawn-band spec)
         resetEnemyStreaming,
         applySpeedMultiplier, // Speed recompute path (balance spec — size speed bonus)
+        speedUp,
+        speedDown,
+        forceWorldMode, // Classic torus for wrap regression tests only
         touchHandlers: { onTouchStart, onTouchMove, onTouchEndOrCancel },
         gamepadVector, // Stick/D-pad unit vector (gamepad spec)
         pollGamepad, // Edge actions — tests drive a mocked navigator.getGamepads

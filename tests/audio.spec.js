@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { startGame, waitForGameOver } from './helpers.js';
+import { openGame, startGame, waitForGameOver } from './helpers.js';
 
 // Audio (plan 010): real output can't be asserted headlessly, so these
 // tests assert STATE (mute persistence, context lifecycle, music
@@ -10,7 +10,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('mute persists: localStorage flag, label, and aria survive a reload', async ({ page }) => {
-  await page.goto('/');
+  await openGame(page);
   await page.locator('#mute-button').click();
   expect(await page.evaluate(() => localStorage.getItem('blocky.muted'))).toBe('1');
   await expect(page.locator('#mute-button')).toHaveText('\u{1F507}');
@@ -20,7 +20,7 @@ test('mute persists: localStorage flag, label, and aria survive a reload', async
 });
 
 test('sfx before any gesture are safe no-ops (no context, no crash)', async ({ page }) => {
-  await page.goto('/');
+  await openGame(page);
   await page.evaluate(() => {
     window.__game.debug.sfx.collect();
     window.__game.debug.sfx.kill();
@@ -33,7 +33,7 @@ test('sfx before any gesture are safe no-ops (no context, no crash)', async ({ p
 });
 
 test('starting a run unlocks the AudioContext', async ({ page }) => {
-  await page.goto('/');
+  await openGame(page);
   await startGame(page);
   // Chromium normally reports 'running' after a real click gesture; CI can
   // lag at 'suspended' — the plan-sanctioned assertion is "context exists".
@@ -42,14 +42,14 @@ test('starting a run unlocks the AudioContext', async ({ page }) => {
 
 test('full playthrough with mute ON stays silent-safe to the death screen', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('blocky.muted', '1'));
-  await page.goto('/');
+  await openGame(page);
   await startGame(page);
   await waitForGameOver(page);
   expect(await page.evaluate(() => window.__game.debug.isMuted())).toBe(true);
 });
 
 test('music lifecycle: off before start, on during the run, off after death; never on while muted', async ({ page }) => {
-  await page.goto('/');
+  await openGame(page);
   const musicActive = () => page.evaluate(() => window.__game.debug.musicActive());
   expect(await musicActive()).toBe(false);
   await startGame(page);
@@ -59,7 +59,7 @@ test('music lifecycle: off before start, on during the run, off after death; nev
   expect(await musicActive()).toBe(false);
   // Muted at boot: the scheduler must never start at all.
   await page.addInitScript(() => localStorage.setItem('blocky.muted', '1'));
-  await page.goto('/');
+  await openGame(page);
   await startGame(page);
   await page.waitForTimeout(300);
   expect(await musicActive()).toBe(false);

@@ -5,6 +5,7 @@ import { recordScore } from './hiscores.js';
 import { torusDistance } from './worldmath.js';
 import { unlockAudio, sfx, music, isMuted, setMuted } from './audio.js';
 import { onPlayerDeath, onNewBest } from './effects.js';
+import { rumble } from './rumble.js';
 
 // Cached DOM references, resolved once at init (plan 007) — the hot loop
 // must never call getElementById. game.js calls initUI() before any UI write.
@@ -79,11 +80,8 @@ export function showGoFlourish() {
     el.goFlourish.classList.add('go-play');
 }
 
-// --- World-mode picker (endless mode) ---
-// Two buttons on the start overlay: CLASSIC ARENA and ENDLESS WORLD. The
-// overlay itself starts a run on ANY pointer press, so both buttons stop
-// propagation — picking a mode must never launch it. game.js supplies the
-// switch callback (it owns the environment swap + fresh setup).
+// --- World-mode picker (retired UI; classic is test/debug only) ---
+// Markup may be absent. Still safe to call so forceWorldMode can refresh HUD.
 export function initModePicker(onPick) {
     for (const [button, mode] of [[el.modeClassic, 'classic'], [el.modeEndless, 'endless']]) {
         if (!button) continue;
@@ -97,24 +95,22 @@ export function initModePicker(onPick) {
     updateModePicker();
 }
 
-// Reflects state.worldMode on the buttons (highlight + aria-pressed), and
-// swaps in the endless control hint ("Space: Jump — P: Pause") so the rule
-// change is taught before the run starts.
 export function updateModePicker() {
-    if (!el.modeClassic || !el.modeEndless) return;
     const endless = state.worldMode === 'endless';
-    el.modeClassic.classList.toggle('mode-selected', !endless);
-    el.modeEndless.classList.toggle('mode-selected', endless);
-    el.modeClassic.setAttribute('aria-pressed', String(!endless));
-    el.modeEndless.setAttribute('aria-pressed', String(endless));
+    if (el.modeClassic && el.modeEndless) {
+        el.modeClassic.classList.toggle('mode-selected', !endless);
+        el.modeEndless.classList.toggle('mode-selected', endless);
+        el.modeClassic.setAttribute('aria-pressed', String(!endless));
+        el.modeEndless.setAttribute('aria-pressed', String(endless));
+    }
     if (el.endlessHint) el.endlessHint.style.display = endless ? '' : 'none';
-    // The controls line under the game tells the truth for the SELECTED mode
-    // (Space means pause in classic but jump in endless) — one line, no
-    // both-modes wall of text.
     if (el.controlsHint) {
         el.controlsHint.textContent = endless
-            ? 'Move: Arrows / WASD / Stick · Jump: Space or A · Pause: P / Start · Speed: F or Y'
-            : 'Move: Arrows / WASD / Stick · Pause: Space / Start · Speed: F or Y';
+            ? 'Move: Stick / WASD · Jump: Space or A · Slow: X or R · Fast: Y · Pause: Start · Mute: Select'
+            : 'Move: Stick / WASD · Slow: X or R · Fast: Y · Pause: Start · Mute: Select · F cycles';
+    }
+    if (el.distanceDisplay) {
+        el.distanceDisplay.style.display = endless ? '' : 'none';
     }
 }
 
@@ -302,6 +298,7 @@ export function endGame(reason) {
     updateJumpButton(); // The dead can't hop — hide the touch JUMP control
     music.stop(); // 0.3s fadeout — the death jingle plays over it
     sfx.death();
+    rumble(180, 0.7); // Stronger death pulse when the pad can rumble
     onPlayerDeath(); // Squash flat + orange-red burst (pool), behind the beat
     // Per-mode boards: the death screen shows the ladder of the mode that
     // just ended, and endless runs never pollute the classic top-5.

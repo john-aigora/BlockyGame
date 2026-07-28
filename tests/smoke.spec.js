@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { startGame, waitForGameOver } from './helpers.js';
+import { openGame, startGame, waitForGameOver } from './helpers.js';
 
 // Wall-clock numbers below are wait CEILINGS only — the collect countdown
 // runs on the game clock, which parallel-suite load can dilate far below
@@ -7,7 +7,7 @@ import { startGame, waitForGameOver } from './helpers.js';
 
 test.beforeEach(async ({ page }) => {
   page.on('pageerror', (err) => { throw new Error(`Page error: ${err.message}`); });
-  await page.goto('/');
+  await openGame(page);
 });
 
 test('game boots into the start overlay over a rendered scene', async ({ page }) => {

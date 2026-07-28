@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { startGame, waitGameSeconds } from './helpers.js';
+import { openGame, startGame, waitGameSeconds, forceClassic } from './helpers.js';
 
 // Fairness pass (owner playtest, escalated): honest collision — "respect
 // the size of the gap and the size of the player's block" — plus the F
@@ -15,9 +15,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 async function bootEndless(page) {
-  await page.goto('/');
-  await page.waitForFunction(() => window.__game?.state?.enemies?.length >= 1);
-  await page.locator('#mode-endless').click();
+  await openGame(page);
   await startGame(page);
 }
 
@@ -118,8 +116,7 @@ test('corner slide: a diagonal into the shoreline creeps along it and never free
 });
 
 test('F cycles the speed multiplier mid-run, never on the start overlay', async ({ page }) => {
-  await page.goto('/');
-  await page.waitForFunction(() => window.__game?.state?.enemies?.length >= 1);
+  await openGame(page);
   // On the overlay, F is just "any key": it starts the run, no cycling.
   await page.keyboard.press('f');
   await expect(page.locator('#start-overlay')).toBeHidden();

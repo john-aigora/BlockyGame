@@ -23,10 +23,19 @@ Pick a mode on the start screen (your choice is remembered):
 
 Controls are identical in both modes.
 
+## Access
+
+In-app password gate (not Vercel protection). Password: `blocky`. Unlock is session-scoped.
+
 ## How to play
 
-- **Start**: pick a mode, then click START (or press any key / tap the screen).
-- **Move**: Arrow keys / WASD / gamepad stick (or D-pad) on desktop; touch-and-drag anywhere on mobile. Start/A/Y map to pause/confirm, jump (endless), and speed cycle.
+Endless world only (classic arena is retired; original May 2025 build remains at `/original.html`).
+
+- **Start**: click START (or press any key / pad button / tap the screen).
+- **Move**: Arrow keys / WASD / gamepad stick (or D-pad); touch-and-drag on mobile.
+- **Jump**: Space or pad **A** (hop rocks, not lakes).
+- **Speed**: F cycles; **R** or pad **X** slows one step; pad **Y** speeds up. Ladder: 0.5× → 1× → 1.5× → 2× → 3× → 5×.
+- **Pad (F310 on Mac: back switch D)**: A jump, Start pause, Select mute, LB/RB zoom, Start+Select restart.
 - **Grow**: grab a LIME block at least every 15 seconds — food is worth 1 point
   and makes you taller.
 - **Hunt**: when you're taller than an enemy it turns YELLOW and runs. Touch it

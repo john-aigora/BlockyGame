@@ -1,7 +1,8 @@
-import { MAX_DRAG_DISTANCE, DEAD_ZONE_RADIUS, MOVEMENT_MODE, GAMEPAD_DEADZONE } from './constants.js';
+import { MAX_DRAG_DISTANCE, DEAD_ZONE_RADIUS, MOVEMENT_MODE, GAMEPAD_DEADZONE, GAMEPAD_STICK_CURVE } from './constants.js';
 import { state } from './state.js';
-import { togglePause, startRun, resetGame, cycleSpeed, tryJump } from './game.js';
-import { sfx } from './audio.js';
+import { togglePause, startRun, resetGame, cycleSpeed, speedUp, speedDown, tryJump } from './game.js';
+import { zoomIn, zoomOut } from './world.js';
+import { sfx, isMuted, setMuted } from './audio.js';
 
 export const keys = {}; // Object to keep track of currently pressed keys
 
@@ -10,16 +11,20 @@ export const keys = {}; // Object to keep track of currently pressed keys
 // B003VAHYQY) as well as standard Xbox-layout pads.
 //
 // F310 has a physical D/X switch on the back:
-//   X = XInput  → browser mapping "standard" (Xbox indices)
+//   X = XInput  → browser mapping "standard" (Xbox indices) — weak on macOS
 //   D = DirectInput → empty mapping; A is button 1, D-pad is a hat axis
-// Both modes are supported. Prefer X if you can flip the switch.
+// On Mac, use D. Plan 016: full session without keyboard.
 //
-// Standard: axes 0/1 stick, buttons 12-15 D-pad, 0=A, 3=Y, 8=Back, 9=Start
-// DirectInput F310: axes 0/1 stick, hat on a later axis, 1=A, 2=B, 3=Y, 8/9 menu
+// Binds (run): stick/D-pad move · A jump/pause · B pause (endless) · Start pause
+//   Select mute · Y faster · X slower · LB/RB zoom · Start+Select restart
+// Title: stick/D-pad left-right mode · face start
 const gamepadAxesScratch = { x: 0, z: 0 };
 let prevPadButtons = []; // Edge detection for face/menu buttons
 let padConnected = false;
 let preferredPadIndex = null; // Stick to the pad that last produced input
+let padDebugEl = null;
+const PAD_DEBUG = typeof location !== 'undefined' &&
+    new URLSearchParams(location.search).get('paddebug') === '1';
 
 // Applies radial deadzone then re-scales remaining throw to [0,1] so small
 // intentional tilts still reach full speed near the rim.
@@ -28,6 +33,14 @@ function applyDeadzone(x, y, zone) {
     if (mag <= zone) return { x: 0, y: 0 };
     const scale = Math.min(1, (mag - zone) / (1 - zone)) / mag;
     return { x: x * scale, y: y * scale };
+}
+
+// Ease-in on each axis after deadzone (arcade analog walk).
+function applyStickCurve(x, y, exp) {
+    if (exp <= 1) return { x, y };
+    const cx = Math.sign(x) * Math.pow(Math.abs(x), exp);
+    const cz = Math.sign(y) * Math.pow(Math.abs(y), exp);
+    return { x: cx, y: cz };
 }
 
 function axisValue(ax, i) {
@@ -59,11 +72,11 @@ function isDirectInputLayout(gp) {
 // Logical face/menu indices for this pad (standard vs F310 DirectInput).
 function padButtons(gp) {
     if (isDirectInputLayout(gp)) {
-        // DirectInput F310: 0=X 1=A 2=B 3=Y 6=LT 7=RT 8=Back 9=Start
-        return { a: 1, b: 2, x: 0, y: 3, back: 8, start: 9, rt: 7, lt: 6 };
+        // DirectInput F310: 0=X 1=A 2=B 3=Y 4=LB 5=RB 6=LT 7=RT 8=Back 9=Start
+        return { a: 1, b: 2, x: 0, y: 3, lb: 4, rb: 5, back: 8, start: 9, rt: 7, lt: 6 };
     }
     // Standard / XInput
-    return { a: 0, b: 1, x: 2, y: 3, back: 8, start: 9, rt: 7, lt: 6 };
+    return { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, back: 8, start: 9, rt: 7, lt: 6 };
 }
 
 function padActivityScore(gp) {
@@ -181,7 +194,8 @@ export function gamepadVector() {
 
     const ax = gp.axes || [];
     // Left stick is always axes 0/1 on F310 X and D modes and on standard pads.
-    const stick = applyDeadzone(axisValue(ax, 0), axisValue(ax, 1), GAMEPAD_DEADZONE);
+    let stick = applyDeadzone(axisValue(ax, 0), axisValue(ax, 1), GAMEPAD_DEADZONE);
+    stick = applyStickCurve(stick.x, stick.y, GAMEPAD_STICK_CURVE);
     const dpad = readDpad(gp);
 
     let x = stick.x + dpad.x;
@@ -195,6 +209,9 @@ export function gamepadVector() {
     gamepadAxesScratch.z = z;
     return gamepadAxesScratch;
 }
+
+// Re-export for debug callers that already import input.
+export { rumble } from './rumble.js';
 
 function anyFaceEdge(gp) {
     const b = padButtons(gp);
@@ -249,10 +266,12 @@ export function pollGamepad() {
         if (prevPadButtons.length) prevPadButtons = [];
         padConnected = false;
         updatePadHud(null);
+        updatePadDebug(null);
         return;
     }
     padConnected = true;
     updatePadHud(gp);
+    updatePadDebug(gp);
     // First frame after connect: seed edge state without firing. A button
     // already held at plug-in must not auto-start or jump.
     if (prevPadButtons.length === 0) {
@@ -261,7 +280,7 @@ export function pollGamepad() {
     }
     const b = padButtons(gp);
 
-    // Start overlay: any face/start press begins the run (matches "any key").
+    // Start overlay: face/start begins the run. Classic mode picker retired.
     if (state.onStartScreen) {
         if (anyFaceEdge(gp)) {
             startRun();
@@ -283,10 +302,25 @@ export function pollGamepad() {
         return;
     }
 
-    // Mid-run (including paused): Start / Select pause-toggles.
-    if (buttonEdge(gp, b.start) || buttonEdge(gp, b.back)) {
+    // Start+Select chord = mid-run restart (takes priority over single binds).
+    if (buttonPressed(gp, b.start) && buttonPressed(gp, b.back) &&
+        (buttonEdge(gp, b.start) || buttonEdge(gp, b.back))) {
+        sfx.click();
+        resetGame();
+        snapshotButtons(gp);
+        return;
+    }
+
+    // Start = pause. Select/Back = mute (plan 016; was also pause).
+    if (buttonEdge(gp, b.start)) {
         sfx.click();
         togglePause();
+    }
+    if (buttonEdge(gp, b.back)) {
+        setMuted(!isMuted());
+        sfx.click();
+        const muteBtn = document.getElementById('mute-button');
+        if (muteBtn) muteBtn.textContent = isMuted() ? '\u{1F507}' : '\u{1F50A}';
     }
 
     // Classic: A mirrors Space (pause). Endless: A is jump. Continuous: A is
@@ -295,7 +329,6 @@ export function pollGamepad() {
         // boost is level-held, not edge; nothing here
     } else if (state.worldMode === 'endless') {
         if (buttonEdge(gp, b.a)) tryJump();
-        // B also pauses in endless so one face button is always "stop"
         if (buttonEdge(gp, b.b)) {
             sfx.click();
             togglePause();
@@ -304,16 +337,30 @@ export function pollGamepad() {
         togglePause();
     }
 
-    // Y cycles speed (mirrors F).
+    // Y = faster, X = slower (dedicated slow-down). F key still cycles.
     if (!state.isPaused && buttonEdge(gp, b.y)) {
         sfx.click();
-        cycleSpeed();
+        speedUp();
+    }
+    if (!state.isPaused && buttonEdge(gp, b.x)) {
+        sfx.click();
+        speedDown();
+    }
+
+    // LB / RB = zoom out / in
+    if (buttonEdge(gp, b.lb)) {
+        sfx.click();
+        zoomOut();
+    }
+    if (buttonEdge(gp, b.rb)) {
+        sfx.click();
+        zoomIn();
     }
 
     snapshotButtons(gp);
 }
 
-// Small bottom-left status so a dead pad is obvious (id + mode).
+// Status line: pad id + short bind reminder when live.
 let padHudEl = null;
 function updatePadHud(gp) {
     if (!padHudEl) {
@@ -326,10 +373,32 @@ function updatePadHud(gp) {
     }
     padHudEl.hidden = false;
     const mode = gp.mapping === 'standard' ? 'XInput' : 'DirectInput';
-    const short = (gp.id || 'Gamepad').split('(')[0].trim().slice(0, 28);
+    const short = (gp.id || 'Gamepad').split('(')[0].trim().slice(0, 22);
     const mv = gamepadVector();
     const live = Math.hypot(mv.x, mv.z) > 0.05 ? ' · live' : '';
-    padHudEl.textContent = `${short} · ${mode}${live}`;
+    if (state.onStartScreen) {
+        padHudEl.textContent = `${short} · ${mode}${live} · A start`;
+    } else {
+        padHudEl.textContent = `${short} · ${mode}${live} · A jump · X slow · Y fast · Start pause · Select mute`;
+    }
+}
+
+function updatePadDebug(gp) {
+    if (!PAD_DEBUG) return;
+    if (!padDebugEl) {
+        padDebugEl = document.createElement('pre');
+        padDebugEl.id = 'pad-debug';
+        padDebugEl.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:50;'
+            + 'margin:0;padding:6px 8px;font:11px/1.35 monospace;color:#B2DFDB;'
+            + 'background:rgba(0,0,0,0.72);max-width:42vw;white-space:pre-wrap;pointer-events:none;';
+        document.body.appendChild(padDebugEl);
+    }
+    if (!gp) {
+        padDebugEl.textContent = 'pad: none';
+        return;
+    }
+    const info = gamepadDebugInfo();
+    padDebugEl.textContent = JSON.stringify(info, null, 0);
 }
 
 export function setupGamepad() {
@@ -342,6 +411,7 @@ export function setupGamepad() {
         padConnected = !!activeGamepad();
         prevPadButtons = [];
         updatePadHud(activeGamepad());
+        updatePadDebug(activeGamepad());
     });
 }
 
@@ -436,13 +506,20 @@ export function onKeyDown(event) {
     }
 
     // F cycles the speed multiplier mid-run — owner: "shouldn't have to use
-    // the mouse". Only reachable DURING a run: the start overlay consumed
-    // the key above (any key starts there), and the death screen returned
-    // before this. Mirrors the button path exactly (click sfx included).
+    // the mouse". R steps slower (dedicated slow-down; pad X is the peer).
+    // Only reachable DURING a run: the start overlay consumed the key above
+    // (any key starts there), and the death screen returned before this.
     if (key === 'f') {
         if (!isRepeat) {
             sfx.click();
             cycleSpeed();
+        }
+        return;
+    }
+    if (key === 'r') {
+        if (!isRepeat) {
+            sfx.click();
+            speedDown();
         }
         return;
     }

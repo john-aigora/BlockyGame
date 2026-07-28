@@ -52,6 +52,8 @@ export const DEAD_ZONE_RADIUS = 10;
 // Physical gamepads: axes below this magnitude read as zero (noise floor +
 // stick rest drift). 0.2 is standard for the HTML Gamepad API "standard" mapping.
 export const GAMEPAD_DEADZONE = 0.2;
+// Ease-in after deadzone: 1 = linear, >1 softens small tilts (arcade analog walk).
+export const GAMEPAD_STICK_CURVE = 1.35;
 
 // World and spawning parameters
 export const worldSize = 200; // Defines the size of the ground plane (illusion of infinite space)

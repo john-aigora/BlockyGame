@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { startGame } from './helpers.js';
+import { openGame, startGame } from './helpers.js';
 
 // Scoring & balance (plan 011 + score-juice pass): defeating an enemy pays
 // at least the KILL_POINTS bounty through the REAL collision path (the size
@@ -8,8 +8,7 @@ import { startGame } from './helpers.js';
 
 test.beforeEach(async ({ page }) => {
   page.on('pageerror', (err) => { throw new Error(`Page error: ${err.message}`); });
-  await page.goto('/');
-  await page.waitForFunction(() => window.__game?.state?.enemies?.length >= 1);
+  await openGame(page);
 });
 
 // Force-kills one enemy through the real collision branch: make the player

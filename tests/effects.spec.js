@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { startGame } from './helpers.js';
+import { openGame, startGame } from './helpers.js';
 
 // Visual juice (plan 015): the particle engine must be a true pool (no GPU
 // allocation per burst/collect), and the reduced-motion code paths must
@@ -10,8 +10,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('50 bursts + 10 collects do not grow the geometry count (pool discipline)', async ({ page }) => {
-  await page.goto('/');
-  await page.waitForFunction(() => window.__game?.state?.enemies?.length >= 1);
+  await openGame(page);
   await page.waitForTimeout(300); // Let boot-time geometries register
 
   // Big player: enemies flee, so teleport-collecting can't end the run.
@@ -48,8 +47,7 @@ test('50 bursts + 10 collects do not grow the geometry count (pool discipline)',
 });
 
 test('score popups are pooled: repeated spawns never grow GPU resources', async ({ page }) => {
-  await page.goto('/');
-  await page.waitForFunction(() => window.__game?.state?.enemies?.length >= 1);
+  await openGame(page);
   await page.waitForTimeout(300); // Let boot-time geometries/textures register
 
   // Warmup: cycle the whole 8-sprite ring once so every pooled canvas
@@ -82,8 +80,7 @@ test('score popups are pooled: repeated spawns never grow GPU resources', async 
 
 test('boots and plays cleanly with prefers-reduced-motion', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/');
-  await page.waitForFunction(() => window.__game?.state?.enemies?.length >= 1);
+  await openGame(page);
   const info = await page.evaluate(() => window.__game.debug.effectsInfo());
   expect(info.reducedMotion).toBe(true); // The flag paths are actually armed
 

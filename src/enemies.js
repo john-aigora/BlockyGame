@@ -19,6 +19,7 @@ import { wrapPosition, torusDelta, torusDistance } from './worldmath.js';
 import { sfx } from './audio.js';
 import { onEnemyKilled, spawnScorePopup, spawnBurst } from './effects.js';
 import { triggerKillShake } from './world.js';
+import { rumble } from './rumble.js';
 
 // Module-level scratch vectors — reused every frame to avoid per-frame allocation.
 const tmpVec = new THREE.Vector3();
@@ -279,6 +280,7 @@ export function killEnemy(enemyGroup, index) {
     disposeCharacter(enemyGroup); // Release the per-instance body material
     state.enemies.splice(index, 1);
     sfx.kill(state.comboCount - 1); // Pitch climbs with the combo
+    rumble(55, 0.45); // Pad kick on kill
 
     // Kill bounty (plan 011): hunting must beat pacifism — the README's
     // "strategically defeating enemies" promise, now actually paid.

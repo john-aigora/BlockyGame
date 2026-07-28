@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { startGame } from './helpers.js';
+import { openGame, startGame } from './helpers.js';
 
 // Rendering & resource hygiene (plan 007): shared GPU resources (no geometry
 // growth across the food cycle), device pixel ratio applied, and a kill-flash
@@ -7,8 +7,7 @@ import { startGame } from './helpers.js';
 
 test.beforeEach(async ({ page }) => {
   page.on('pageerror', (err) => { throw new Error(`Page error: ${err.message}`); });
-  await page.goto('/');
-  await page.waitForFunction(() => window.__game?.state?.enemies?.length >= 1);
+  await openGame(page);
 });
 
 test('food spawn/remove cycle does not grow the geometry count', async ({ page }) => {

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { startGame } from './helpers.js';
+import { openGame, startGame } from './helpers.js';
 
 // Mobile polish (plan 012): touches that start on UI never drive movement,
 // exactly one tracked finger owns the drag, and the phone layout applies.
@@ -12,8 +12,7 @@ test.use({ hasTouch: true, viewport: { width: 390, height: 844 } });
 
 test.beforeEach(async ({ page }) => {
   page.on('pageerror', (err) => { throw new Error(`Page error: ${err.message}`); });
-  await page.goto('/');
-  await page.waitForFunction(() => window.__game?.state?.enemies?.length >= 1);
+  await openGame(page);
 });
 
 test('a tap on the pause button pauses without moving the player', async ({ page }) => {

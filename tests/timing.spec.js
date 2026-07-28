@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { startGame, waitGameSeconds } from './helpers.js';
+import { openGame, startGame, waitGameSeconds, forceClassic } from './helpers.js';
 
 // Movement/timer specs measure against the GAME clock (state.runTime, the
 // same dt the movement integrates), never performance.now(): under
@@ -10,7 +10,7 @@ import { startGame, waitGameSeconds } from './helpers.js';
 
 test.beforeEach(async ({ page }) => {
   page.on('pageerror', (err) => { throw new Error(`Page error: ${err.message}`); });
-  await page.goto('/');
+  await openGame(page);
 });
 
 test('pausing and resuming does not refill the collect countdown', async ({ page }) => {

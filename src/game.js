@@ -22,6 +22,7 @@ import { initTerrain, setTerrainActive, resetTerrainForNewRun, updateTerrain, sh
 import { initClouds, setCloudMode, updateClouds, shiftClouds } from './clouds.js';
 import { initEffects, updateEffects, resetEffects, onCollect, onGrowthMilestone, shiftActiveParticles, spawnTextPopup, onJumpTakeoff, onJumpLand } from './effects.js';
 import { keys, keyboardVector, onKeyDown, onKeyUp, setupTouchControls, setupGamepad, pollGamepad } from './input.js';
+import { rumble } from './rumble.js';
 import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension, resetIndicators, showGoFlourish, initModePicker, updateModePicker, updateDistanceDisplay, resetDistanceDisplay } from './ui.js';
 import { resetCollectClock, tickCollectClock, tickComboClock } from './timers.js';
 import { loadWorldMode, saveWorldMode } from './hiscores.js';
@@ -45,11 +46,12 @@ function init() {
 
     initUI(); // Resolve all UI DOM refs once — everything after this uses el.*
 
-    // World mode is chosen on the start overlay and persisted; it must be
-    // resolved BEFORE any world math or spawning runs (worldmath.js
-    // dispatches on it). Default (and any unrecognized value) is classic.
+    // Product is endless-only. Mode must be set BEFORE world math / spawning
+    // (worldmath.js dispatches on it). Classic exists only via forceWorldMode
+    // for the torus regression suite.
     state.worldMode = loadWorldMode();
-    initModePicker(setWorldMode);
+    // Mode picker removed from the UI; keep init no-op-safe if markup absent.
+    if (typeof initModePicker === 'function') initModePicker(setWorldMode);
 
     // Mobile detection and speed adjustment (plan 012): capability +
     // form-factor, not UA sniffing. A touch-laptop with a mouse reports
@@ -395,6 +397,7 @@ function update(dt) {
                 spawnNearPlayer();
                 resetCollectClock();
                 sfx.collect();
+                rumble(35, 0.25); // Soft pad pulse (no-op if no actuator)
             }
         }
     }
@@ -504,18 +507,32 @@ function shiftEntityForRebase(group, dx, dz) {
     }
 }
 
-// --- World mode switch (start-overlay picker) ---
-// Persists the choice, swaps the environment (classic plane vs terrain
-// root), and rebuilds the whole session layout under the new rules via
-// setupNewGame — the picker only exists on the overlay, where a reset is
-// invisible.
+// --- World mode (product = endless only) ---
+// setWorldMode remains for tests/debug that still switch to classic torus.
+// The start overlay no longer exposes a picker.
 export function setWorldMode(mode) {
-    if (mode === state.worldMode || !state.onStartScreen) return;
+    if (mode !== 'classic' && mode !== 'endless') return;
+    if (mode === state.worldMode) return;
+    // Product path never leaves the start screen when switching; tests may
+    // call this before start. Allow anytime on the overlay; mid-run only via
+    // forceWorldMode (debug).
+    if (!state.onStartScreen) return;
     state.worldMode = mode;
     saveWorldMode(mode);
     applyWorldEnvironment();
     updateModePicker();
     setupNewGame();
+}
+
+// Test/debug: force classic torus (or endless) even mid-session. Used by
+// world.spec wrap tests after the product retired the arena UI.
+export function forceWorldMode(mode) {
+    if (mode !== 'classic' && mode !== 'endless') return;
+    state.worldMode = mode;
+    saveWorldMode(mode);
+    applyWorldEnvironment();
+    updateModePicker();
+    if (state.onStartScreen) setupNewGame();
 }
 
 // Shows exactly one world per mode: the classic flat plane, or the endless
@@ -639,6 +656,37 @@ export function applySpeedMultiplier() {
 export function cycleSpeed() {
     state.currentSpeedMultiplierIndex = (state.currentSpeedMultiplierIndex + 1) % speedMultipliers.length;
     applySpeedMultiplier();
+}
+
+// Ordered ladder for dedicated faster/slower controls (pad Y/X, keyboard R).
+// The stored array keeps historical order (index 0 = 1.0x) so existing tests
+// and the cycle button stay stable; up/down navigate this sorted view.
+const SPEED_LADDER = [0.5, 1.0, 1.5, 2.0, 3.0, 5.0];
+
+function indexForMultiplier(value) {
+    const i = speedMultipliers.indexOf(value);
+    return i >= 0 ? i : 0;
+}
+
+export function speedUp() {
+    const cur = speedMultipliers[state.currentSpeedMultiplierIndex];
+    const next = SPEED_LADDER.find((v) => v > cur + 1e-9);
+    if (next == null) return false;
+    state.currentSpeedMultiplierIndex = indexForMultiplier(next);
+    applySpeedMultiplier();
+    return true;
+}
+
+export function speedDown() {
+    const cur = speedMultipliers[state.currentSpeedMultiplierIndex];
+    let prev = null;
+    for (const v of SPEED_LADDER) {
+        if (v < cur - 1e-9) prev = v;
+    }
+    if (prev == null) return false;
+    state.currentSpeedMultiplierIndex = indexForMultiplier(prev);
+    applySpeedMultiplier();
+    return true;
 }
 
 // --- Start the game ---

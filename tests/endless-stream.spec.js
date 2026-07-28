@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { startGame, waitForGameOver, waitGameSeconds } from './helpers.js';
+import { openGame, startGame, waitForGameOver, waitGameSeconds } from './helpers.js';
 
 // Endless world, stage 2 (gameplay streaming): water/rock impassability,
 // the per-chunk food + monster-bubble streaming (with resource plateau),
@@ -14,9 +14,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 async function bootEndless(page) {
-  await page.goto('/');
-  await page.waitForFunction(() => window.__game?.state?.enemies?.length >= 1);
-  await page.locator('#mode-endless').click();
+  await openGame(page);
   await startGame(page);
 }
 
@@ -219,8 +217,7 @@ test('endless deaths record distance under their own key; the classic board is u
     localStorage.setItem('blocky.worldMode', 'endless');
     localStorage.setItem('blocky.hiscores.v1', JSON.stringify([{ score: 50, date: '2026-01-01' }]));
   });
-  await page.goto('/');
-  await page.waitForFunction(() => window.__game?.state?.enemies?.length >= 1);
+  await openGame(page);
   await startGame(page);
   await expect(page.locator('#distance-display')).toBeVisible();
 

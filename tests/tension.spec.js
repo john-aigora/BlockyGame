@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { startGame } from './helpers.js';
+import { openGame, startGame } from './helpers.js';
 
 // Tension systems (awesome pass): the panic timer tags the HUD when the
 // collect countdown enters its last 5 seconds, and the danger vignette's
@@ -7,8 +7,7 @@ import { startGame } from './helpers.js';
 
 test('panic class engages under 5s and the danger vignette rises near an enemy', async ({ page }) => {
   page.on('pageerror', (err) => { throw new Error(`Page error: ${err.message}`); });
-  await page.goto('/');
-  await page.waitForFunction(() => window.__game?.state?.enemies?.length >= 1);
+  await openGame(page);
   await startGame(page);
 
   // PANIC: drop the countdown into the final 5 seconds; the next game-clock
