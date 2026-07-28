@@ -1,0 +1,27 @@
+{
+  "clip": "original",
+  "recordedAt": "2026-07-26T21:25:33.008Z",
+  "events": [
+    {
+      "t": 2.5,
+      "e": "resume-clicked"
+    },
+    {
+      "t": 14.1,
+      "e": "collected(score=1)"
+    },
+    {
+      "t": 14.1,
+      "e": "drift-to-enemy"
+    },
+    {
+      "t": 20.6,
+      "e": "near-enemy"
+    },
+    {
+      "t": 24.1,
+      "e": "still-2025@24.1"
+    }
+  ],
+  "sfx": []
+}

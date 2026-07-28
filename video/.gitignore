@@ -1,0 +1,8 @@
+node_modules/
+out/
+*.webm
+*.wav
+*.mp3
+*.mp4
+*.png
+.env

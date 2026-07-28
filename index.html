@@ -3,24 +3,56 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Blocky Collector 3D - Collect or Die!</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <meta name="description" content="Blocky Collector 3D — collect blocks, grow huge, hunt the yellow enemies. A fast browser arcade game.">
+    <meta name="theme-color" content="#004D40">
+    <meta property="og:title" content="Blocky Collector 3D">
+    <meta property="og:description" content="Collect. Grow. Hunt the yellow ones. A father/son browser arcade game.">
+    <meta property="og:type" content="website">
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 
 <body>
     <div id="game-container">
+        <a id="original-link" class="game-button" href="/original.html"
+            title="Play the untouched May 2025 build — see how far the models have come">&#8646; ORIGINAL &rsquo;25</a>
+        <div id="danger-vignette"></div>
+        <div id="go-flourish">GO!</div>
+        <div id="start-overlay">
+            <h1>BLOCKY COLLECTOR 3D</h1>
+            <p class="tagline">Collect. Grow. Hunt the yellow ones.</p>
+            <!-- Teaching the mobile layout relies on: #instructions is hidden
+                 on small screens (plan 012), so movement + survival rules live here. -->
+            <p class="tagline">Move: Arrows / WASD &mdash; or drag anywhere. <br>
+                Eat LIME blocks to grow. Outgrow enemies: YELLOW means yours!</p>
+            <div id="mode-picker">
+                <button id="mode-classic" class="game-button mode-button" aria-pressed="true">CLASSIC ARENA</button>
+                <button id="mode-endless" class="game-button mode-button" aria-pressed="false">ENDLESS WORLD</button>
+            </div>
+            <!-- Endless-only control hint; ui.js shows it while ENDLESS WORLD is selected -->
+            <p class="tagline" id="endless-hint" style="display: none">Space: Jump &mdash; hop the rocks, not the lakes!</p>
+            <button id="start-button" class="game-button">&#9654; START</button>
+            <p class="start-hint">or press any key</p>
+        </div>
         <div id="message-box" class="message-box">
-            <p id="message-text"></p>
+            <h2 id="death-title">GAME OVER</h2>
+            <p id="death-reason"></p>
+            <p class="final-score">Score: <span id="final-score">0</span></p>
+            <p class="final-score" id="final-distance-line" style="display: none">Distance: <span id="final-distance">0</span>u</p>
+            <div id="hiscore-slot"></div>
             <button id="restart-button">Play Again</button>
+            <p class="start-hint">or press Space</p>
         </div>
         <div id="top-controls">
             <button id="pause-button" class="game-button">Pause</button>
             <button id="restart-game-button" class="game-button">Restart</button>
             <button id="speed-cycle-button" class="game-button">Speed: 1x</button>
-            <button id="zoom-toggle-button" class="game-button">Zoom Out</button>
+            <button id="zoom-in-button" class="game-button">+</button>
+            <button id="zoom-out-button" class="game-button">&minus;</button>
+            <button id="jump-button" class="game-button">JUMP</button>
         </div>
     </div>
 
@@ -28,27 +60,19 @@
 
     <div id="ui-container">
         <div id="kill-indicator" class="kill-indicator">KILL!</div>
+        <div id="combo-chip" class="combo-chip">COMBO x2</div>
+        <button id="mute-button" class="game-button" aria-pressed="false">&#128266;</button>
         <div class="ui-element">Score: <span id="score">0</span></div>
+        <div class="ui-element" id="distance-display" style="display: none">Distance: <span id="distance">0</span></div>
         <div class="ui-element" id="collect-timer-display">Collect In: <span id="collect-time">15</span>s</div>
         <div id="instructions">
-            Arrow Keys: Move <br>
-            Spacebar: Pause / Resume <br>
-            Collect LIME blocks every 15s to grow! <br>
-            If TALLER than an enemy, they turn YELLOW. <br>
-            Touch YELLOW enemies to defeat them. <br>
-            Defeating an enemy spawns two new, larger foes. <br>
-            Survive & get a high score!
+            <span id="controls-hint">Move: Arrows / WASD &middot; Pause: Space or Enter &middot; Speed: F</span> <br>
+            Grab LIME blocks to grow &mdash; miss for 15 seconds and it's game over. <br>
+            Outgrow an enemy and it turns YELLOW &mdash; eat it for big points!
         </div>
     </div>
 
-    <script src="game.js"></script>
-    <script>
-        // Ensure the game starts after the page is fully loaded
-        window.addEventListener('load', function () {
-            console.log('Window loaded, initializing game...');
-            init();
-        });
-    </script>
+    <script type="module" src="/src/main.js"></script>
 </body>
 
 </html>

@@ -1,0 +1,22 @@
+{
+  "name": "blockygame-video",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Before/after comparison film for BlockyGame (2025 original vs 2026 rebuild). See README.md for the full workflow.",
+  "scripts": {
+    "record": "node scripts/record.js",
+    "audio": "node scripts/render-audio.js",
+    "lyria": "node scripts/lyria.js",
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts comparison-v2 out/comparison-v2.mp4",
+    "thumbnail": "remotion still src/index.ts comparison-v2 out/thumbnail.png --frame=0"
+  },
+  "dependencies": {
+    "@google/genai": "^1.16.0",
+    "@remotion/cli": "^4.0.499",
+    "@remotion/google-fonts": "^4.0.499",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "remotion": "^4.0.499"
+  }
+}

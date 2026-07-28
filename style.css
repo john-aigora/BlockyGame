@@ -14,7 +14,9 @@ body {
     align-items: center;
     justify-content: center;
     height: 100vh;
-    /* Full viewport height */
+    /* Fallback for browsers without dvh support */
+    height: 100dvh;
+    /* Full viewport height, tracking the mobile URL bar show/hide */
 }
 
 /* Container for the game canvas */
@@ -31,10 +33,39 @@ body {
     /* Dark gray border */
     border-radius: 10px;
     /* Rounded corners */
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-    /* Shadow for depth */
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5), 0 0 26px rgba(0, 137, 123, 0.35);
+    /* Depth shadow + a faint teal halo matching the world (spectacle pass) */
     position: relative;
     /* For positioning UI elements like the message box inside */
+}
+
+/* Always-on screen vignette (spectacle pass): a whisper of corner darkening
+   that focuses the eye center-frame, arcade-cabinet style. Deliberately far
+   too faint to cost readability; the red danger vignette (z-index 40) and
+   all UI sit above it. */
+#game-container::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    pointer-events: none;
+    border-radius: 5px;
+    background: radial-gradient(ellipse at center,
+            rgba(0, 0, 0, 0) 58%,
+            rgba(0, 0, 0, 0.16) 100%);
+}
+
+/* Touch hardening (plan 012): `manipulation` kills double-tap zoom on the
+   controls; the canvas is the drag surface, so no browser gestures at all. */
+.game-button,
+#start-button,
+#restart-button,
+#mute-button {
+    touch-action: manipulation;
+}
+
+#game-container canvas {
+    touch-action: none;
 }
 
 /* Styling for the Three.js canvas */
@@ -75,6 +106,30 @@ canvas {
 #score {
     color: #ECEFF1;
     /* Off-White */
+    display: inline-block;
+    /* transform (the pop animation) needs a box */
+}
+
+/* Score pop (plan 015): a quick lime-flavored scale bump on every score
+   increase. Single 0.35s play per point — no loop, no strobe. */
+@keyframes score-pop {
+    0% {
+        transform: scale(1);
+    }
+
+    35% {
+        transform: scale(1.4);
+        color: #76FF03;
+        /* Lime — the color of the food that earned it */
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+#score.score-pop {
+    animation: score-pop 0.35s ease-out;
 }
 
 /* Specific styling for the "Collect In" timer display */
@@ -83,12 +138,137 @@ canvas {
     /* Bright Yellow */
 }
 
+/* Panic timer (tension pass): the last PANIC_TIME seconds of the collect
+   countdown pulse the timer red. One smooth pulse per second — 1Hz, far
+   under the 3-flash photosensitivity limit. timers.js toggles the class. */
+@keyframes timer-panic-pulse {
+
+    0%,
+    100% {
+        color: #FFEB3B;
+        transform: scale(1);
+    }
+
+    50% {
+        color: #FF1744;
+        /* Danger red — same red as the hunter pupils and vignette */
+        transform: scale(1.06);
+    }
+}
+
+#collect-timer-display.timer-panic {
+    animation: timer-panic-pulse 1s ease-in-out infinite;
+}
+
+/* Danger vignette (tension pass): a red radial glow hugging the frame when
+   a non-killable enemy stalks close. ui.js drives opacity per frame (eased
+   toward 0.22 max, slow breathing) — this rule only paints the gradient.
+   The transparent center keeps gameplay fully readable. */
+#danger-vignette {
+    position: absolute;
+    inset: 0;
+    z-index: 40;
+    /* Above the canvas, below #top-controls (100) and overlays */
+    pointer-events: none;
+    opacity: 0;
+    border-radius: 5px;
+    background: radial-gradient(ellipse at center,
+            rgba(255, 23, 68, 0) 42%,
+            rgba(255, 23, 68, 0.65) 78%,
+            rgba(255, 23, 68, 1) 100%);
+}
+
 /* Styling for game instructions text */
 #instructions {
     margin-top: 10px;
     font-size: 0.7em;
     color: #ECEFF1;
     /* Off-White */
+}
+
+/* Start overlay (plan 008): covers the whole game container, above the
+   corner buttons (#top-controls is z-index 100) so nothing is clickable
+   through it. Doubles as the post-death "menu". */
+#start-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 110;
+    background-color: rgba(0, 0, 0, 0.75);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    border-radius: 5px;
+    padding: 0 20px;
+    box-sizing: border-box;
+}
+
+#start-overlay h1 {
+    font-size: 1.6em;
+    color: #FF4500;
+    /* Bright Orange-Red accent (matches kill indicator) */
+    text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.8);
+    margin: 0 0 15px;
+}
+
+#start-overlay .tagline {
+    font-size: 0.75em;
+    color: #ECEFF1;
+    margin: 0 0 25px;
+}
+
+/* The start button reuses .game-button visuals but sits in the flex flow
+   (the class is position: absolute for the corner buttons). */
+#start-button {
+    position: static;
+    min-height: 48px;
+    font-size: 16px;
+    padding: 12px 24px;
+}
+
+/* World-mode picker (endless mode): two toggle buttons above START. The
+   selected mode wears the lime edge — same accent language as the button
+   hover glow. Unselected sits dimmed so the choice reads at a glance. */
+#mode-picker {
+    display: flex;
+    gap: 12px;
+    margin: 0 0 18px;
+}
+
+/* Scoped under #mode-picker: .game-button (defined later, equal
+   specificity) sets position: absolute for the corner buttons — these
+   selectors must outrank it to stay in the overlay's flex flow. */
+#mode-picker .mode-button {
+    position: static;
+    min-height: 44px;
+    font-size: 11px;
+    padding: 10px 14px;
+    background-color: #37474F;
+    /* Dimmed slate — not the action green; START keeps that */
+    opacity: 0.75;
+}
+
+#mode-picker .mode-button.mode-selected {
+    background-color: #00695C;
+    /* Deep Dive teal — the world you're choosing */
+    border-color: #76FF03;
+    box-shadow: 0 0 14px rgba(118, 255, 3, 0.55);
+    opacity: 1;
+}
+
+#mode-picker .mode-button:hover {
+    background-color: #455A64;
+}
+
+#mode-picker .mode-button.mode-selected:hover {
+    background-color: #00796B;
+}
+
+.start-hint {
+    font-size: 0.6em;
+    color: #B0BEC5;
+    margin: 15px 0 0;
 }
 
 /* Styling for the message box (game over, etc.) */
@@ -117,6 +297,80 @@ canvas {
     /* Responsive width within its container */
     max-width: 400px;
     /* Max width for the message box */
+    /* Fade-in (plan 015): plays each time display flips none → block */
+    animation: box-appear 0.35s ease-out;
+}
+
+@keyframes box-appear {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.92);
+    }
+
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+/* Structured death-screen children (plan 008) */
+#death-title {
+    color: #FF4500;
+    /* Same accent as the start title */
+    font-size: 1.1em;
+    margin: 0 0 12px;
+}
+
+#death-reason {
+    font-size: 0.55em;
+    margin: 0 0 12px;
+}
+
+.final-score {
+    font-size: 0.8em;
+    color: #FFEB3B;
+    /* Bright Yellow (matches the collect timer) */
+    margin: 0 0 5px;
+}
+
+/* High-score board (plan 009). Stays invisible when empty (storage
+   unavailable). Palette reuse only: yellow = collect timer, orange-red =
+   titles/kill accent, grey-blue = hints. */
+#hiscore-slot {
+    margin: 0;
+}
+
+.hiscore-badge {
+    font-size: 0.7em;
+    color: #FF4500;
+    /* Bright Orange-Red accent (matches death title) */
+    margin: 12px 0 0;
+}
+
+.hiscore-title {
+    font-size: 0.6em;
+    color: #ECEFF1;
+    /* Off-White */
+    margin: 12px 0 6px;
+}
+
+.hiscore-list {
+    /* Press Start 2P is wide — keep the board compact */
+    font-size: 0.6em;
+    color: #B0BEC5;
+    /* Grey-Blue (matches .start-hint) */
+    list-style-position: inside;
+    margin: 0;
+    padding: 0;
+}
+
+.hiscore-list li {
+    margin: 3px 0;
+}
+
+.hiscore-list li.is-new {
+    color: #FFEB3B;
+    /* Bright Yellow (matches #collect-timer-display) */
 }
 
 /* Styling for the button inside the message box */
@@ -140,6 +394,20 @@ canvas {
     /* Darker Muted Green on hover */
 }
 
+/* Time-machine toggle: hop to the untouched May 2025 build. Sits above the
+   start overlay (z 110) so the comparison is one tap from the title screen.
+   Uses the `translate` property (not transform) for centering so the
+   .game-button hover scale doesn't clobber it. */
+#original-link {
+    top: 10px;
+    left: 50%;
+    translate: -50% 0;
+    z-index: 120;
+    text-decoration: none;
+    font-size: 10px;
+    opacity: 0.85;
+}
+
 /* Top controls styling */
 #top-controls {
     position: absolute;
@@ -148,14 +416,16 @@ canvas {
     width: 100%;
     height: 100%;
     z-index: 100;
-    pointer-events: auto;
-    /* Allow clicks to pass through to game canvas if no button is hit */
-    /* Removed display:flex, gap, and specific top/right offsets */
+    pointer-events: none;
+    /* The overlay itself passes clicks through; only the buttons capture them
+       (previously pointer-events: auto here silently blocked the game-over
+       "Play Again" button underneath — discovered by the smoke tests). */
 }
 
 /* Game button styling */
 .game-button {
     position: absolute;
+    pointer-events: auto;
     /* Each button positioned absolutely within #top-controls */
     background-color: #66BB6A;
     /* Muted Green */
@@ -174,14 +444,25 @@ canvas {
     box-shadow: 0 0 10px rgba(255, 69, 0, 0.5);
 }
 
+/* Hover/active polish (plan 015): a lime edge-glow on hover and a clear
+   pressed state, consistent across every control. */
 .game-button:hover {
     background-color: #4CAF50;
     /* Darker Muted Green */
     transform: scale(1.05);
+    border-color: #76FF03;
+    box-shadow: 0 0 14px rgba(118, 255, 3, 0.55);
 }
 
 .game-button:active {
     transform: scale(0.95);
+    border-color: #FFEB3B;
+    box-shadow: 0 0 8px rgba(255, 235, 59, 0.6);
+}
+
+.game-button:focus-visible {
+    outline: 2px solid #76FF03;
+    outline-offset: 2px;
 }
 
 /* Specific positioning for each button in corners */
@@ -200,9 +481,46 @@ canvas {
     left: 10px;
 }
 
-#zoom-toggle-button {
+#zoom-in-button {
+    bottom: 52px;
+    right: 10px;
+    min-width: 40px;
+    min-height: 40px;
+}
+
+#zoom-out-button {
     bottom: 10px;
     right: 10px;
+    min-width: 40px;
+    min-height: 40px;
+}
+
+/* Touch JUMP control (endless runs on coarse pointers only — ui.js owns
+   visibility). Sits above the zoom stack (bottom 10 + 40, 52 + 40) with a
+   clear gap; ≥48px per the touch-target floor, round like a thumb pad. */
+#jump-button {
+    display: none;
+    bottom: 104px;
+    right: 10px;
+    min-width: 56px;
+    min-height: 56px;
+    border-radius: 50%;
+    font-size: 10px;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* Mute toggle (plan 010): lives inline in the #ui-container panel — every
+   canvas corner is already occupied. .game-button is position: absolute
+   for the corner buttons, so opt back into the flow here. */
+#mute-button {
+    position: static;
+    min-width: 40px;
+    min-height: 40px;
+    margin-right: 10px;
+    vertical-align: middle;
+    font-size: 16px;
 }
 
 /* Kill indicator styling */
@@ -223,10 +541,111 @@ canvas {
     font-weight: bold;
     text-transform: uppercase;
     display: none;
-    transition: opacity 0.3s ease;
+    /* No opacity transition: the flash is a discrete 1Hz toggle from JS
+       (a transition here smears it into a static shimmer) */
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
     border: 2px solid #FFFFFF;
     box-shadow: 0 0 10px rgba(255, 69, 0, 0.5);
+}
+
+/* Combo chip (score-juice pass): a small yellow "COMBO xN" badge tucked
+   under the kill indicator. Hidden at x1; pops once per increment (a single
+   0.25s play retriggered from JS — no loop, no strobe). */
+.combo-chip {
+    position: absolute;
+    top: 64px;
+    /* Just below the kill indicator (top: 10px + its height) */
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.65);
+    color: #FFEB3B;
+    /* Bright Yellow — the kill/bounty color */
+    border: 2px solid #FFEB3B;
+    border-radius: 5px;
+    padding: 6px 12px;
+    font-size: 0.8em;
+    text-shadow: 2px 2px 2px rgba(0, 0, 0, 0.6);
+    box-shadow: 0 0 10px rgba(255, 235, 59, 0.5);
+    display: none;
+    /* Shown by JS from x2 up */
+}
+
+@keyframes combo-pop {
+    0% {
+        transform: translateX(-50%) scale(1);
+    }
+
+    40% {
+        transform: translateX(-50%) scale(1.3);
+    }
+
+    100% {
+        transform: translateX(-50%) scale(1);
+    }
+}
+
+#combo-chip.combo-pop {
+    animation: combo-pop 0.25s ease-out;
+}
+
+/* GO! flourish (spectacle pass): one big lime "GO!" flash center-screen as
+   a run begins. A single 0.6s scale+fade play retriggered from JS — one
+   flash per start, nowhere near the 3/sec photosensitivity limit. Idles at
+   opacity 0 so it needs no display bookkeeping. */
+#go-flourish {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 60;
+    /* Above the canvas and vignettes, below #top-controls (100) */
+    pointer-events: none;
+    color: #76FF03;
+    /* Food lime — the "go get it" color */
+    font-size: 4em;
+    text-shadow: 4px 4px 0 rgba(0, 0, 0, 0.8), 0 0 18px rgba(118, 255, 3, 0.6);
+    opacity: 0;
+}
+
+@keyframes go-flourish {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.3);
+    }
+
+    30% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1.15);
+    }
+
+    60% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(1.5);
+    }
+}
+
+#go-flourish.go-play {
+    animation: go-flourish 0.6s ease-out;
+}
+
+/* Reduced motion: the GO! beat survives as a simple fade (no scale) */
+@keyframes go-fade {
+    0% {
+        opacity: 0;
+    }
+
+    30% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0;
+    }
 }
 
 /* Off-Screen Enemy Indicator Styling */
@@ -261,4 +680,65 @@ canvas {
     /* Hidden by default */
 }
 
-/* Media Query for Mobile Screen Adjustments */
+/* Accessibility (plan 015): no screen-space animation for users who asked
+   the OS for reduced motion. Object motion in the 3D scene is handled
+   separately in src/effects.js. */
+@media (prefers-reduced-motion: reduce) {
+
+    #score.score-pop,
+    #combo-chip.combo-pop,
+    .message-box {
+        animation: none;
+    }
+
+    .game-button:hover,
+    .game-button:active {
+        transform: none;
+    }
+
+    /* GO! still lands — as a plain fade, no scale motion */
+    #go-flourish.go-play {
+        animation: go-fade 0.6s ease-out;
+    }
+
+    /* Panic still reads — as a static urgency color, not a pulse. The
+       vignette's breathing is likewise disabled in ui.js (static opacity). */
+    #collect-timer-display.timer-panic {
+        animation: none;
+        color: #FF1744;
+    }
+}
+
+/* Media Query for Mobile Screen Adjustments (plan 012): edge-to-edge game
+   area, 44px touch targets, and no always-open instruction block — the
+   start overlay carries the teaching on phones. */
+@media (max-width: 600px) {
+    #game-container {
+        width: 100vw;
+        height: 60dvh;
+        border-width: 3px;
+        border-radius: 0;
+    }
+
+    .game-button {
+        padding: 12px 14px;
+        font-size: 11px;
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    #ui-container {
+        width: 100vw;
+        font-size: 0.9em;
+        padding: 8px;
+    }
+
+    #instructions {
+        display: none;
+        /* The start overlay now teaches the game */
+    }
+
+    .ui-element {
+        font-size: 1em;
+    }
+}
