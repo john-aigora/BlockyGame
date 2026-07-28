@@ -105,6 +105,39 @@ test('Start button toggles pause mid-run', async ({ page }) => {
   expect(await page.evaluate(() => window.__game.state.isPaused)).toBe(false);
 });
 
+// Fugu P1 guard: right stick (axes 2/3) must never drive movement on
+// standard-mapping pads (Xbox / F310 X). Only left stick + D-pad buttons do.
+test('right stick does not move the player on standard pads', async ({ page }) => {
+  await page.goto('/');
+  await startGame(page);
+  await page.evaluate(installMockPad);
+  await page.evaluate(() => window.__game.debug.pollGamepad());
+
+  const before = await page.evaluate(() => ({
+    x: window.__game.state.player.position.x,
+    z: window.__game.state.player.position.z
+  }));
+
+  await page.evaluate(() => {
+    const pad = window.__mockPad.pad;
+    pad.axes[2] = 0.95; // right stick X
+    pad.axes[3] = 0.95; // right stick Y
+    pad.timestamp = performance.now();
+  });
+  await waitGameSeconds(page, 0.4);
+
+  const after = await page.evaluate(() => ({
+    x: window.__game.state.player.position.x,
+    z: window.__game.state.player.position.z,
+    vec: window.__game.debug.gamepadVector()
+  }));
+
+  expect(Math.abs(after.vec.x)).toBeLessThan(0.05);
+  expect(Math.abs(after.vec.z)).toBeLessThan(0.05);
+  expect(Math.abs(after.x - before.x)).toBeLessThan(0.2);
+  expect(Math.abs(after.z - before.z)).toBeLessThan(0.2);
+});
+
 // Logitech F310 in DirectInput (D switch): A is button 1, mapping is empty.
 test('F310 DirectInput A button starts a run', async ({ page }) => {
   await page.goto('/');

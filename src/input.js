@@ -126,6 +126,8 @@ function activeGamepad() {
 
 // D-pad as buttons (standard) or hat axis (DirectInput F310: usually axis 9,
 // sometimes 5/6/7; values are discrete ±1 / ±0.714 / 0).
+// Standard-mapping pads expose D-pad only as buttons 12-15 — never scan
+// axes there, or the right stick (axes 2/3) becomes phantom full-speed walk.
 function readDpad(gp) {
     let x = 0;
     let z = 0;
@@ -135,18 +137,13 @@ function readDpad(gp) {
     if (buttonPressed(gp, 12)) z -= 1;
     if (x !== 0 || z !== 0) return { x, z };
 
+    // XInput / standard: no hat axes to read.
+    if (gp.mapping === 'standard') return { x: 0, z: 0 };
+
     const ax = gp.axes || [];
-    // Scan late axes for a hat: large magnitude, near-cardinal values.
-    for (let i = 0; i < ax.length; i++) {
-        if (i < 2) continue; // 0/1 are the left stick
-        const v = axisValue(ax, i);
-        if (Math.abs(v) < 0.2 || Math.abs(v) > 1.01) continue;
-        // Classic DirectInput POV: -1 up, 1 down on one axis is rare; more
-        // often a single hat axis encodes 8-way as stepped floats.
-        // Two-axis hats (6/7 or 4/5): treat as digital if past threshold.
-    }
-    // Two-axis hat pairs common on DI pads
-    for (const [xi, yi] of [[6, 7], [4, 5], [5, 6], [7, 8]]) {
+    // Two-axis hat pairs common on DI pads (never 0/1 left stick, never 2/3
+    // right stick — those are analog sticks on F310 D mode too).
+    for (const [xi, yi] of [[6, 7], [4, 5], [7, 8]]) {
         if (xi >= ax.length || yi >= ax.length) continue;
         const hx = axisValue(ax, xi);
         const hy = axisValue(ax, yi);
@@ -156,8 +153,9 @@ function readDpad(gp) {
             z: hy > 0.5 ? 1 : hy < -0.5 ? -1 : 0
         };
     }
-    // Single hat axis (F310 DI often reports POV as one axis)
-    for (let i = 2; i < ax.length; i++) {
+    // Single hat/POV axis: only high indices (F310 DI often uses 9). Skip
+    // 0-3 so left/right sticks never decode as cardinal D-pad.
+    for (let i = 4; i < ax.length; i++) {
         const v = axisValue(ax, i);
         if (Math.abs(v) < 0.5) continue;
         // Map common POV encodings to cardinals (Chrome F310 DI ≈ stepped).
@@ -255,6 +253,12 @@ export function pollGamepad() {
     }
     padConnected = true;
     updatePadHud(gp);
+    // First frame after connect: seed edge state without firing. A button
+    // already held at plug-in must not auto-start or jump.
+    if (prevPadButtons.length === 0) {
+        snapshotButtons(gp);
+        return;
+    }
     const b = padButtons(gp);
 
     // Start overlay: any face/start press begins the run (matches "any key").
