@@ -2,7 +2,8 @@ import { MAX_DRAG_DISTANCE, DEAD_ZONE_RADIUS, MOVEMENT_MODE, GAMEPAD_DEADZONE, G
 import { state } from './state.js';
 import { togglePause, startRun, resetGame, cycleSpeed, speedUp, speedDown, tryJump } from './game.js';
 import { zoomIn, zoomOut } from './world.js';
-import { sfx, isMuted, setMuted } from './audio.js';
+import { sfx } from './audio.js';
+import { toggleMuteFromUI } from './ui.js';
 
 export const keys = {}; // Object to keep track of currently pressed keys
 
@@ -317,10 +318,7 @@ export function pollGamepad() {
         togglePause();
     }
     if (buttonEdge(gp, b.back)) {
-        setMuted(!isMuted());
-        sfx.click();
-        const muteBtn = document.getElementById('mute-button');
-        if (muteBtn) muteBtn.textContent = isMuted() ? '\u{1F507}' : '\u{1F50A}';
+        toggleMuteFromUI(); // Same path as the mute button (aria, unlock, music)
     }
 
     // Classic: A mirrors Space (pause). Endless: A is jump. Continuous: A is

@@ -132,23 +132,30 @@ export function updateJumpButton() {
 // saved state from boot. The click is a sanctioned unlock gesture, so
 // unmuting works even before the first run starts.
 function updateMuteButtonLabel() {
+    if (!el.muteButton) return;
     el.muteButton.textContent = isMuted() ? '\u{1F507}' : '\u{1F50A}';
     el.muteButton.setAttribute('aria-pressed', String(isMuted()));
 }
 
+// Shared by the mute button and the gamepad Select/Back bind (input.js).
+export function toggleMuteFromUI() {
+    unlockAudio();
+    setMuted(!isMuted()); // muting also stops the music (audio.js)
+    updateMuteButtonLabel();
+    if (!isMuted()) {
+        sfx.click();
+        // Unmuting mid-run brings the music back immediately — but only
+        // while the run is actually live: music follows the pause state
+        // (togglePause), so unmuting while paused must stay silent.
+        if (state.gameActive && !state.isPaused && !state.onStartScreen) music.start();
+    }
+}
+
 function initMuteToggle() {
     updateMuteButtonLabel();
+    if (!el.muteButton) return;
     el.muteButton.addEventListener('click', () => {
-        unlockAudio();
-        setMuted(!isMuted()); // muting also stops the music (audio.js)
-        updateMuteButtonLabel();
-        if (!isMuted()) {
-            sfx.click();
-            // Unmuting mid-run brings the music back immediately — but only
-            // while the run is actually live: music follows the pause state
-            // (togglePause), so unmuting while paused must stay silent.
-            if (state.gameActive && !state.isPaused && !state.onStartScreen) music.start();
-        }
+        toggleMuteFromUI();
     });
 }
 

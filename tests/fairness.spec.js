@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openGame, startGame, waitGameSeconds, forceClassic } from './helpers.js';
+import { openGame, startGame, waitGameSeconds } from './helpers.js';
 
 // Fairness pass (owner playtest, escalated): honest collision — "respect
 // the size of the gap and the size of the player's block" — plus the F

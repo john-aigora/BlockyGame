@@ -13,29 +13,10 @@ test.beforeEach(async ({ page }) => {
   page.on('pageerror', (err) => { throw new Error(`Page error: ${err.message}`); });
 });
 
-async function bootClassic(page) {
-  await openGame(page);
-  await startGame(page);
-}
-
 async function bootEndless(page) {
   await openGame(page);
   await startGame(page);
 }
-
-test('classic sky: a fixed pool of 8 voxel clouds drifts high above the arena', async ({ page }) => {
-  await bootClassic(page);
-  const info0 = await page.evaluate(() => window.__game.debug.cloudInfo());
-  expect(info0.classicCount).toBe(8); // The whole pack, from boot
-  expect(info0.minY).toBeGreaterThanOrEqual(12); // High above every head...
-  expect(info0.maxY).toBeLessThanOrEqual(18); // ...inside the altitude band
-  expect(info0.allocs).toBe(8); // Classic never streams: the pool IS the sky
-  // Shared wind: over 2 game seconds the sampled cloud must have drifted
-  // (0.32 u/s × 2 ≈ 0.64u; a torus wrap mid-window only makes the delta bigger).
-  await waitGameSeconds(page, 2);
-  const info1 = await page.evaluate(() => window.__game.debug.cloudInfo());
-  expect(Math.abs(info1.sampleX - info0.sampleX)).toBeGreaterThan(0.3);
-});
 
 test('endless sky: seeded clouds stream with the chunk window and recycle through the pool', async ({ page }) => {
   test.setTimeout(150000);
@@ -233,19 +214,8 @@ test('a jump can never cross water: the arc lands at the shore edge (endless)', 
   expect(after.ground).toBeGreaterThanOrEqual(WL); // Standing dry
 });
 
-test('Space still pauses classic; endless jumps on Space and pauses on P', async ({ page }) => {
-  // CLASSIC: Space = pause / resume, exactly as always.
-  await bootClassic(page);
-  await page.keyboard.press('Space');
-  expect(await page.evaluate(() => window.__game.state.isPaused)).toBe(true);
-  await expect(page.locator('#pause-button')).toHaveText('Resume');
-  await page.keyboard.press('Space');
-  expect(await page.evaluate(() => window.__game.state.isPaused)).toBe(false);
-
-  // ENDLESS (same session, through the real overlay): Space becomes JUMP.
-  await page.locator('#restart-game-button').click();
-  await expect(page.locator('#start-overlay')).toBeVisible();
-  await startGame(page);
+test('endless jumps on Space and pauses on P', async ({ page }) => {
+  await bootEndless(page);
   await page.keyboard.press('Space');
   const jumped = await page.evaluate(() => ({
     airborne: window.__game.state.jumpAirborne,

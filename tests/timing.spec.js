@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openGame, startGame, waitGameSeconds, forceClassic } from './helpers.js';
+import { openGame, startGame, waitGameSeconds } from './helpers.js';
 
 // Movement/timer specs measure against the GAME clock (state.runTime, the
 // same dt the movement integrates), never performance.now(): under

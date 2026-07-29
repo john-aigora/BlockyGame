@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openGame, startGame, waitGameSeconds, forceClassic } from './helpers.js';
+import { openGame, startGame, waitGameSeconds } from './helpers.js';
 
 // Physical gamepad support (HTML Gamepad API). Playwright cannot inject a
 // real controller, so the suite installs a standard-mapping mock pad on
@@ -34,7 +34,7 @@ const installMockPad = () => {
   return true;
 };
 
-test('left stick moves the player in classic', async ({ page }) => {
+test('left stick moves the player', async ({ page }) => {
   await openGame(page);
   await startGame(page);
 

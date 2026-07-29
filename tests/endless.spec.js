@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openGame, startGame, waitGameSeconds, forceClassic } from './helpers.js';
+import { openGame, startGame, waitGameSeconds } from './helpers.js';
 
 // Endless world (product default): streamed terrain and floating-origin
 // rebase. Classic arena is retired from the UI (forceWorldMode for wrap tests).

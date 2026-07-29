@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openGame, startGame, waitGameSeconds, forceClassic } from './helpers.js';
+import { openGame, startGame, waitGameSeconds } from './helpers.js';
 
 // Endless world, stage 3 (spectacle + tuning): biome tint regions, the
 // shoreline band, water depth tint (with its snap-recolor cadence), the
