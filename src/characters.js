@@ -97,6 +97,16 @@ function getSharedMaterial(color) {
     return material;
 }
 
+// three r128 Material.clone() drops onBeforeCompile but copies userData, so
+// a naive clone loses the horizon bend while userData.worldBend stays true
+// and blocks re-patch. Clear the flag and re-arm the shader.
+function bendClone(mat) {
+    const c = mat.clone();
+    c.userData.worldBend = false;
+    applyWorldBend(c);
+    return c;
+}
+
 // --- Character Factory ---
 // Shared geometry recipe for the player and enemies: a group made of a body
 // cube (with a lighter cap-block highlight on top), 4 legs with darker feet,
@@ -123,10 +133,10 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
     // --- Geometries (shared per baseSize) and Materials ---
     const geoms = getGeometries(baseSize);
     const bodyMaterial = perInstanceBodyMaterial
-        ? getSharedMaterial(bodyColor).clone() // Own copy: this character's color flips independently
+        ? bendClone(getSharedMaterial(bodyColor)) // Own copy + re-armed horizon bend
         : getSharedMaterial(bodyColor);
     const capMaterial = perInstanceBodyMaterial
-        ? getSharedMaterial(shadeColor(bodyColor, CAP_LIGHTEN)).clone() // Flips with the body (enemies.js)
+        ? bendClone(getSharedMaterial(shadeColor(bodyColor, CAP_LIGHTEN))) // Flips with body (enemies.js)
         : getSharedMaterial(shadeColor(bodyColor, CAP_LIGHTEN));
     const footMaterial = getSharedMaterial(shadeColor(bodyColor, FOOT_SHADE)); // SHARED even for enemies — feet stay dark when the body flips
     const faceMaterial = getSharedMaterial(faceColor);

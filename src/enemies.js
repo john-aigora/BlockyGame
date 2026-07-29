@@ -164,12 +164,18 @@ export function shiftPendingSpawns(dx, dz) {
 
 // Advances warn discs; fires the real spawn when the timer ends.
 export function updateSpawnWarnings(dt) {
+    // Shared material: one global pulse for all discs (per-disc opacity
+    // would fight each other when multiple warns overlap).
+    if (pendingSpawns.length > 0 && warnMaterial) {
+        const t0 = pendingSpawns[0].t;
+        const pulse = 0.5 + 0.5 * Math.sin((SPAWN_WARN_TIME - t0) * 10);
+        warnMaterial.opacity = 0.3 + 0.45 * pulse;
+    }
     for (let i = pendingSpawns.length - 1; i >= 0; i--) {
         const p = pendingSpawns[i];
         p.t -= dt;
-        // Pulse opacity + slight scale throb so it reads as "danger here".
+        // Per-mesh scale throb (opacity is global above).
         const pulse = 0.5 + 0.5 * Math.sin((SPAWN_WARN_TIME - p.t) * 10);
-        if (p.mesh.material) p.mesh.material.opacity = 0.3 + 0.45 * pulse;
         const r = SPAWN_WARN_RADIUS * Math.max(0.85, p.scaleFactor) * (0.92 + 0.12 * pulse);
         p.mesh.scale.set(r, r, r);
         // Keep grounded if the origin rebased under the disc.
