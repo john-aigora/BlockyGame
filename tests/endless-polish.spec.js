@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { startGame, waitGameSeconds } from './helpers.js';
+import { openGame, startGame, waitGameSeconds } from './helpers.js';
 
 // Endless world, stage 3 (spectacle + tuning): biome tint regions, the
 // shoreline band, water depth tint (with its snap-recolor cadence), the
@@ -10,12 +10,10 @@ const WL = -0.9; // WATER_LEVEL (constants.js) — inlined for in-page scans
 
 test.beforeEach(async ({ page }) => {
   page.on('pageerror', (err) => { throw new Error(`Page error: ${err.message}`); });
-  await page.goto('/');
-  await page.waitForFunction(() => window.__game?.state?.enemies?.length >= 1);
+  await openGame(page);
 });
 
 test('crossing 250u fires the DISTANCE milestone popup (and again at 500u)', async ({ page }) => {
-  await page.locator('#mode-endless').click();
   await startGame(page);
   await waitGameSeconds(page, 0.2);
   expect(await page.evaluate(() => window.__game.debug.effectsInfo().lastPopupText)).toBeNull();
@@ -76,7 +74,6 @@ test('biome tint varies by region; the shoreline band brightens the waterline', 
 });
 
 test('water wears a depth tint and recolors on the follow-snap cadence, not per frame', async ({ page }) => {
-  await page.locator('#mode-endless').click();
   await startGame(page);
   await waitGameSeconds(page, 0.5);
   const boot = await page.evaluate(() => {
@@ -110,7 +107,6 @@ test('water wears a depth tint and recolors on the follow-snap cadence, not per 
 });
 
 test('the endless attract camera keeps its clearance over the terrain', async ({ page }) => {
-  await page.locator('#mode-endless').click();
   // Let the attract orbit blend in fully and the spawn window build.
   await page.waitForFunction(() => window.__game.debug.terrainInfo().activeChunks >= 25, null, { timeout: 30000 });
   const result = await page.evaluate(() => new Promise((resolve) => {

@@ -1,10 +1,9 @@
 import { test, expect } from '@playwright/test';
-import { startGame } from './helpers.js';
+import { openGame, startGame } from './helpers.js';
 
 test.beforeEach(async ({ page }) => {
   page.on('pageerror', (err) => { throw new Error(`Page error: ${err.message}`); });
-  await page.goto('/');
-  await page.waitForFunction(() => window.__game?.state?.player);
+  await openGame(page);
 });
 
 test('zoom out clamps at ZOOM_MAX and the scene stays inside the fog', async ({ page }) => {

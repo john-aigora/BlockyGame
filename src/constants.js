@@ -26,6 +26,9 @@ export const DANGER_VIGNETTE_MAX = 0.22; // Peak opacity of the red danger vigne
 export const HEARTBEAT_BPM = 72; // Danger heartbeat tempo (one low lub-dub per beat, very quiet)
 export const SPAWN_MATERIALIZE_TIME = 0.5; // Seconds a newly spawned enemy takes to scale in (no move/collide while forming)
 export const SPAWN_MATERIALIZE_START_SCALE = 0.05; // Fraction of full size a materializing enemy starts at
+// Red ground warn BEFORE the monster appears — notice time for the player.
+export const SPAWN_WARN_TIME = 0.95; // Seconds the red pulse sits on the ground before materialize
+export const SPAWN_WARN_RADIUS = 1.35; // Base ring radius (scaled up a bit with the enemy)
 
 // Spectacle systems (awesome pass): title, death, and finish.
 export const DEATH_SQUASH_TIME = 0.32; // Seconds the player takes to squash flat before bursting (skipped under reduced motion)
@@ -52,6 +55,8 @@ export const DEAD_ZONE_RADIUS = 10;
 // Physical gamepads: axes below this magnitude read as zero (noise floor +
 // stick rest drift). 0.2 is standard for the HTML Gamepad API "standard" mapping.
 export const GAMEPAD_DEADZONE = 0.2;
+// Ease-in after deadzone: 1 = linear, >1 softens small tilts (arcade analog walk).
+export const GAMEPAD_STICK_CURVE = 1.35;
 
 // World and spawning parameters
 export const worldSize = 200; // Defines the size of the ground plane (illusion of infinite space)
@@ -193,13 +198,17 @@ export const CLOUD_CLEAR_FAR = 16; // ...easing back to full size out here. Scre
 // off-center neighbors must render — only the one that would park over the
 // player's own head fades out.
 
-// Jump (endless only): a fixed ballistic arc on the game clock. Apex height
-// and airtime are the FEEL numbers; gravity and takeoff velocity are derived
-// (h = g·T²/8, v0 = g·T/2) so tuning either keeps the arc consistent.
-export const JUMP_APEX_HEIGHT = 1.8; // World units at the top of the arc — clears every boulder stack
-export const JUMP_AIRTIME = 0.55; // Seconds of air per jump (~3.3u of travel at base speed)
-export const JUMP_GRAVITY = (8 * JUMP_APEX_HEIGHT) / (JUMP_AIRTIME * JUMP_AIRTIME); // ≈47.6 u/s²
-export const JUMP_VELOCITY = (JUMP_GRAVITY * JUMP_AIRTIME) / 2; // Takeoff speed ≈13.1 u/s
+// Jump (endless only): ballistic arc on the game clock. Apex and airtime
+// grow with playerScale so bigger heroes clear taller rocks / wider gaps
+// that blocked them when small. Gravity/velocity derived per jump
+// (h = g·T²/8, v0 = g·T/2). Scale-1 values keep the rock-hop toys green.
+export const JUMP_APEX_HEIGHT = 1.55; // Apex at playerScale 1
+export const JUMP_APEX_GROWTH = 0.75; // Extra apex per unit of scale above 1
+export const JUMP_AIRTIME = 0.52; // Airtime at playerScale 1
+export const JUMP_AIRTIME_GROWTH = 0.07; // Extra airtime per unit scale above 1 (more horizontal range)
+// Legacy derived constants (scale-1) — still used by any reader that imports them.
+export const JUMP_GRAVITY = (8 * JUMP_APEX_HEIGHT) / (JUMP_AIRTIME * JUMP_AIRTIME);
+export const JUMP_VELOCITY = (JUMP_GRAVITY * JUMP_AIRTIME) / 2;
 
 // --- Movement mode flag (plan 014 design spike) ---
 // `?move=continuous` opts into the Little Big Snake-style prototype

@@ -1,12 +1,48 @@
 import { test, expect } from '@playwright/test';
 
+// In-app gate password (src/gate.js). Tests skip the form via sessionStorage.
+export const GATE_PASSWORD = 'blocky';
+
+// Call before page.goto so the gate never blocks module load.
+export async function bypassGate(page) {
+  await page.addInitScript(() => {
+    try { sessionStorage.setItem('blocky.gate.unlocked', '1'); } catch { /* */ }
+  });
+}
+
+export async function unlockGate(page) {
+  const gated = await page.locator('#gate-overlay').isVisible().catch(() => false);
+  if (!gated) return;
+  await page.locator('#gate-password').fill(GATE_PASSWORD);
+  await page.locator('#gate-form').evaluate((form) => form.requestSubmit());
+  await expect(page.locator('#gate-overlay')).toBeHidden({ timeout: 10000 });
+  await page.waitForFunction(() => window.__game && window.__game.state, null, { timeout: 15000 });
+}
+
+// Default entry: unlock + load + wait until the game is alive.
+export async function openGame(page) {
+  await bypassGate(page);
+  await page.goto('/');
+  await page.waitForFunction(() => window.__game?.state?.enemies?.length >= 1, null, { timeout: 30000 });
+}
+
 // Shared game-start helper (plan 008). The game boots into the start
 // overlay; every spec that needs a running game goes through the real
 // entry point — the overlay's START button — never the pause button.
-// Also used after "Play Again", which returns to the start overlay.
 export async function startGame(page) {
+  // If the suite only did page.goto without bypass, unlock interactively.
+  await unlockGate(page);
+  if (!(await page.evaluate(() => !!window.__game?.state).catch(() => false))) {
+    await page.waitForFunction(() => window.__game?.state, null, { timeout: 15000 });
+  }
   await page.locator('#start-button').click();
   await expect(page.locator('#start-overlay')).toBeHidden();
+}
+
+// Classic torus for wrap/AI suites (product UI no longer exposes it).
+export async function forceClassic(page) {
+  await page.evaluate(() => window.__game.debug.forceWorldMode('classic'));
+  await expect.poll(async () => page.evaluate(() => window.__game.state.worldMode)).toBe('classic');
 }
 
 // Plays an idle run out to the death screen (collect-clock expiry or enemy

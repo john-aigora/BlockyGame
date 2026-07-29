@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { startGame, waitGameSeconds } from './helpers.js';
+import { openGame, startGame, waitGameSeconds } from './helpers.js';
 
 // Physical gamepad support (HTML Gamepad API). Playwright cannot inject a
 // real controller, so the suite installs a standard-mapping mock pad on
@@ -34,8 +34,8 @@ const installMockPad = () => {
   return true;
 };
 
-test('left stick moves the player in classic', async ({ page }) => {
-  await page.goto('/');
+test('left stick moves the player', async ({ page }) => {
+  await openGame(page);
   await startGame(page);
 
   await page.evaluate(installMockPad);
@@ -66,7 +66,7 @@ test('left stick moves the player in classic', async ({ page }) => {
 });
 
 test('A button starts a run from the title screen', async ({ page }) => {
-  await page.goto('/');
+  await openGame(page);
   await expect(page.locator('#start-overlay')).toBeVisible();
 
   await page.evaluate(installMockPad);
@@ -83,7 +83,7 @@ test('A button starts a run from the title screen', async ({ page }) => {
 });
 
 test('Start button toggles pause mid-run', async ({ page }) => {
-  await page.goto('/');
+  await openGame(page);
   await startGame(page);
   await page.evaluate(installMockPad);
   await page.evaluate(() => window.__game.debug.pollGamepad());
@@ -108,7 +108,7 @@ test('Start button toggles pause mid-run', async ({ page }) => {
 // Fugu P1 guard: right stick (axes 2/3) must never drive movement on
 // standard-mapping pads (Xbox / F310 X). Only left stick + D-pad buttons do.
 test('right stick does not move the player on standard pads', async ({ page }) => {
-  await page.goto('/');
+  await openGame(page);
   await startGame(page);
   await page.evaluate(installMockPad);
   await page.evaluate(() => window.__game.debug.pollGamepad());
@@ -138,9 +138,26 @@ test('right stick does not move the player on standard pads', async ({ page }) =
   expect(Math.abs(after.z - before.z)).toBeLessThan(0.2);
 });
 
+test('speedDown steps to a slower multiplier', async ({ page }) => {
+  await openGame(page);
+  await startGame(page);
+  // Default index 0 = 1.0x; one step down → 0.5x
+  const after = await page.evaluate(() => {
+    const ok = window.__game.debug.speedDown();
+    return {
+      ok,
+      mult: window.__game.state.actualPlayerSpeed,
+      index: window.__game.state.currentSpeedMultiplierIndex
+    };
+  });
+  expect(after.ok).toBe(true);
+  // 0.5x of the device base (desktop 6.0 → 3.0)
+  expect(after.mult).toBeCloseTo(3.0, 5);
+});
+
 // Logitech F310 in DirectInput (D switch): A is button 1, mapping is empty.
 test('F310 DirectInput A button starts a run', async ({ page }) => {
-  await page.goto('/');
+  await openGame(page);
   await expect(page.locator('#start-overlay')).toBeVisible();
 
   await page.evaluate(() => {

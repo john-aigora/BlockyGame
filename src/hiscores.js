@@ -65,14 +65,17 @@ export function recordScore(score, mode = 'classic', distance = 0) {
     return { list: trimmed, rank };
 }
 
-// --- World-mode preference (start-overlay picker) ---
-// Anything unrecognized (or unavailable storage) falls back to classic.
+// --- World-mode preference ---
+// Product is endless-only. load always returns endless; save is a no-op
+// kept so older call sites and tests that still write do not throw.
 export function loadWorldMode() {
-    try { return localStorage.getItem(MODE_KEY) === 'endless' ? 'endless' : 'classic'; }
-    catch { return 'classic'; }
+    return 'endless';
 }
 
 export function saveWorldMode(mode) {
-    try { localStorage.setItem(MODE_KEY, mode); }
-    catch { /* preference just doesn't persist */ }
+    try {
+        // Still record debug classic requests so forceWorldMode can round-trip
+        // in tests; the product boot path never reads classic from storage.
+        localStorage.setItem(MODE_KEY, mode === 'classic' ? 'classic' : 'endless');
+    } catch { /* preference just doesn't persist */ }
 }

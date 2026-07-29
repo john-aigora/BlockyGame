@@ -99,12 +99,17 @@ vec4 mvPosition = viewMatrix * bentWorld;
 gl_Position = projectionMatrix * mvPosition;
 `;
 
-function applyWorldBend(material) {
+// Exported so food and characters share the same horizon roll as terrain
+// (otherwise far pickups/enemies float "in the sky" above the curved ground).
+export function applyWorldBend(material) {
+    if (!material || material.userData.worldBend) return;
+    material.userData.worldBend = true;
     material.onBeforeCompile = (shader) => {
         shader.uniforms.uCurveStrength = bendUniform;
         shader.vertexShader = 'uniform float uCurveStrength;\n' +
             shader.vertexShader.replace('#include <project_vertex>', BEND_PROJECT_CHUNK);
     };
+    material.needsUpdate = true;
 }
 
 // --- Module state ---

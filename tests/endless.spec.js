@@ -1,40 +1,30 @@
 import { test, expect } from '@playwright/test';
-import { startGame, waitGameSeconds } from './helpers.js';
+import { openGame, startGame, waitGameSeconds } from './helpers.js';
 
-// Endless world (terrain engine stage): the start-overlay mode picker, the
-// streamed deterministic terrain, and the floating-origin rebase. The
-// original suites all run in classic mode and cover its (unchanged)
-// behavior; everything here opts into endless via the real UI.
+// Endless world (product default): streamed terrain and floating-origin
+// rebase. Classic arena is retired from the UI (forceWorldMode for wrap tests).
 
 test.beforeEach(async ({ page }) => {
   page.on('pageerror', (err) => { throw new Error(`Page error: ${err.message}`); });
-  await page.goto('/');
-  await page.waitForFunction(() => window.__game?.state?.enemies?.length >= 1);
+  await openGame(page);
 });
 
-test('boots into classic by default with the mode picker on the overlay', async ({ page }) => {
-  await expect(page.locator('#mode-classic')).toBeVisible();
-  await expect(page.locator('#mode-endless')).toBeVisible();
-  await expect(page.locator('#mode-classic')).toHaveClass(/mode-selected/);
-  await expect(page.locator('#mode-endless')).not.toHaveClass(/mode-selected/);
-  expect(await page.evaluate(() => window.__game.state.worldMode)).toBe('classic');
-  // Classic environment: the flat arena plane, no terrain streaming.
-  expect(await page.evaluate(() => window.__game.state.ground.visible)).toBe(true);
-  expect(await page.evaluate(() => window.__game.debug.terrainInfo().streaming)).toBe(false);
+test('boots into endless by default without a mode picker', async ({ page }) => {
+  await expect(page.locator('#mode-classic')).toHaveCount(0);
+  await expect(page.locator('#mode-endless')).toHaveCount(0);
+  expect(await page.evaluate(() => window.__game.state.worldMode)).toBe('endless');
+  expect(await page.evaluate(() => window.__game.state.ground.visible)).toBe(false);
+  expect(await page.evaluate(() => window.__game.debug.terrainInfo().streaming)).toBe(true);
 });
 
-test('mode picker boots an endless run: terrain streams, player stands on it', async ({ page }) => {
+test('endless boot streams terrain and grounds the player', async ({ page }) => {
   // Shader-patch safety net: a broken onBeforeCompile surfaces as a
   // console.error from three, not a pageerror — trap those too.
   const consoleErrors = [];
   page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(msg.text()); });
 
-  await page.locator('#mode-endless').click();
-  await expect(page.locator('#mode-endless')).toHaveClass(/mode-selected/);
-  // Picking a mode must NOT start the run (the overlay-press start guard).
   await expect(page.locator('#start-overlay')).toBeVisible();
   expect(await page.evaluate(() => window.__game.state.worldMode)).toBe('endless');
-  expect(await page.evaluate(() => localStorage.getItem('blocky.worldMode'))).toBe('endless');
   expect(await page.evaluate(() => window.__game.state.ground.visible)).toBe(false);
 
   // The full 7x7 window streams in (2 builds/frame) on the title screen.
@@ -70,17 +60,11 @@ test('mode picker boots an endless run: terrain streams, player stands on it', a
   expect(consoleErrors).toEqual([]);
 });
 
-test('endless choice persists across a reload (and can switch back)', async ({ page }) => {
-  await page.locator('#mode-endless').click();
+test('endless mode survives a reload', async ({ page }) => {
   await page.reload();
   await page.waitForFunction(() => window.__game?.state?.enemies?.length >= 1);
   expect(await page.evaluate(() => window.__game.state.worldMode)).toBe('endless');
-  await expect(page.locator('#mode-endless')).toHaveClass(/mode-selected/);
-  // Switching back restores the classic arena environment.
-  await page.locator('#mode-classic').click();
-  expect(await page.evaluate(() => window.__game.state.worldMode)).toBe('classic');
-  expect(await page.evaluate(() => window.__game.state.ground.visible)).toBe(true);
-  expect(await page.evaluate(() => localStorage.getItem('blocky.worldMode'))).toBe('classic');
+  expect(await page.evaluate(() => window.__game.state.ground.visible)).toBe(false);
 });
 
 test('terrain height is deterministic: same coords, same height, across reloads', async ({ page }) => {
@@ -99,7 +83,6 @@ test('terrain height is deterministic: same coords, same height, across reloads'
 });
 
 test('floating-origin rebase preserves the local bubble in one frame', async ({ page }) => {
-  await page.locator('#mode-endless').click();
   await startGame(page);
   await waitGameSeconds(page, 0.2);
   // Stage 2 streams gameplay: enemies despawn beyond 80u and food lives

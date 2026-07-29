@@ -79,6 +79,87 @@ canvas {
     /* Slightly rounded corners for the canvas itself */
 }
 
+/* In-app password gate (not Vercel). Full-screen until session unlock. */
+#gate-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #004D40;
+    font-family: 'Press Start 2P', system-ui, sans-serif;
+}
+
+#gate-overlay[hidden] {
+    display: none !important;
+}
+
+#gate-form {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    width: min(360px, 90vw);
+    padding: 28px 24px;
+    background: #263238;
+    border-radius: 12px;
+    box-shadow: 0 0 24px rgba(0, 0, 0, 0.45);
+    text-align: center;
+}
+
+#gate-form h1 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: #76FF03;
+    letter-spacing: 0.06em;
+}
+
+#gate-form .tagline {
+    margin: 0;
+    font-size: 0.55rem;
+    line-height: 1.6;
+    color: #B0BEC5;
+}
+
+.gate-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+}
+
+#gate-password {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 14px;
+    font-family: inherit;
+    font-size: 0.7rem;
+    color: #ECEFF1;
+    background: #102027;
+    border: 2px solid #546E7A;
+    border-radius: 8px;
+    outline: none;
+}
+
+#gate-password:focus {
+    border-color: #76FF03;
+}
+
+#gate-submit {
+    position: static;
+    min-height: 48px;
+    width: 100%;
+    font-size: 14px;
+}
+
+.gate-error {
+    margin: 0;
+    font-size: 0.55rem;
+    color: #FF8A80;
+}
+
 /* Container for UI elements like score and timer */
 #ui-container {
     margin-top: 15px;

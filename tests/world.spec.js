@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { startGame, waitGameSeconds } from './helpers.js';
+import { openGame, startGame, waitGameSeconds, forceClassic } from './helpers.js';
 
 // Toroidal world correctness (plan 005): wrapping preserves overshoot, all
 // food spawns land inside the world, and enemy AI takes the short way across
@@ -9,8 +9,9 @@ import { startGame, waitGameSeconds } from './helpers.js';
 
 test.beforeEach(async ({ page }) => {
   page.on('pageerror', (err) => { throw new Error(`Page error: ${err.message}`); });
-  await page.goto('/');
-  await page.waitForFunction(() => window.__game?.state?.enemies?.length >= 1);
+  await openGame(page);
+  // Product is endless-only; torus wrap tests force classic arena via debug.
+  await forceClassic(page);
 });
 
 test('all food spawns stay inside the world even with the player at the edge', async ({ page }) => {

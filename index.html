@@ -16,6 +16,18 @@
 </head>
 
 <body>
+    <!-- In-app gate (password blocky). Not Vercel protection. -->
+    <div id="gate-overlay" role="dialog" aria-modal="true" aria-labelledby="gate-title" aria-hidden="false">
+        <form id="gate-form" autocomplete="on">
+            <h1 id="gate-title">BLOCKY</h1>
+            <p class="tagline">Enter password to play</p>
+            <label class="gate-label" for="gate-password">Password</label>
+            <input id="gate-password" name="password" type="password" autocomplete="current-password"
+                required maxlength="64" spellcheck="false" />
+            <button type="submit" class="game-button" id="gate-submit">ENTER</button>
+            <p id="gate-error" class="gate-error" hidden>Wrong password</p>
+        </form>
+    </div>
     <div id="game-container">
         <a id="original-link" class="game-button" href="/original.html"
             title="Play the untouched May 2025 build — see how far the models have come">&#8646; ORIGINAL &rsquo;25</a>
@@ -26,14 +38,9 @@
             <p class="tagline">Collect. Grow. Hunt the yellow ones.</p>
             <!-- Teaching the mobile layout relies on: #instructions is hidden
                  on small screens (plan 012), so movement + survival rules live here. -->
-            <p class="tagline">Move: Arrows / WASD / gamepad stick &mdash; or drag anywhere. <br>
-                Eat LIME blocks to grow. Outgrow enemies: YELLOW means yours!</p>
-            <div id="mode-picker">
-                <button id="mode-classic" class="game-button mode-button" aria-pressed="true">CLASSIC ARENA</button>
-                <button id="mode-endless" class="game-button mode-button" aria-pressed="false">ENDLESS WORLD</button>
-            </div>
-            <!-- Endless-only control hint; ui.js shows it while ENDLESS WORLD is selected -->
-            <p class="tagline" id="endless-hint" style="display: none">Space or A: Jump &mdash; hop the rocks, not the lakes!</p>
+            <p class="tagline">Endless world. Move: stick / arrows &mdash; or drag. <br>
+                Pad: A jump, X slow, Y fast. Eat LIME blocks. YELLOW enemies are yours!</p>
+            <p class="tagline" id="endless-hint">Space or A: Jump &mdash; hop the rocks, not the lakes!</p>
             <button id="start-button" class="game-button">&#9654; START</button>
             <p class="start-hint">or press any key / gamepad button</p>
         </div>
@@ -63,10 +70,10 @@
         <div id="combo-chip" class="combo-chip">COMBO x2</div>
         <button id="mute-button" class="game-button" aria-pressed="false">&#128266;</button>
         <div class="ui-element">Score: <span id="score">0</span></div>
-        <div class="ui-element" id="distance-display" style="display: none">Distance: <span id="distance">0</span></div>
+        <div class="ui-element" id="distance-display">Distance: <span id="distance">0</span></div>
         <div class="ui-element" id="collect-timer-display">Collect In: <span id="collect-time">15</span>s</div>
         <div id="instructions">
-            <span id="controls-hint">Move: Arrows / WASD &middot; Pause: Space or Enter &middot; Speed: F</span> <br>
+            <span id="controls-hint">Move: Stick / WASD · Jump: Space or A · Slow: X or R · Fast: Y · Pause: Start</span> <br>
             Grab LIME blocks to grow &mdash; miss for 15 seconds and it's game over. <br>
             Outgrow an enemy and it turns YELLOW &mdash; eat it for big points!
         </div>
@@ -74,7 +81,11 @@
         <div id="pad-status" hidden></div>
     </div>
 
-    <script type="module" src="/src/main.js"></script>
+    <script type="module">
+        import { unlockOrShowGate } from '/src/gate.js';
+        await unlockOrShowGate();
+        await import('/src/main.js');
+    </script>
 </body>
 
 </html>
