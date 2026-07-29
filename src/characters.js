@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { state } from './state.js';
+import { applyWorldBend } from './terrain.js';
 
 // --- Shared GPU resource caches (plan 007) ---
 // Geometries are cached per baseSize (every part dimension derives from
@@ -22,6 +23,11 @@ export const ENEMY_PUPIL_HUNT_MATERIAL = new THREE.MeshStandardMaterial({ color:
 export const ENEMY_PUPIL_SCARED_MATERIAL = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, emissive: 0xFFFFFF, emissiveIntensity: 0.3 });
 // Cartoon outline: an inverted hull (BackSide shell) on the body cube only.
 const OUTLINE_MATERIAL = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide });
+// Horizon bend (endless) so far characters sit on the curved ground, not above it.
+applyWorldBend(HERO_GLOW_MATERIAL);
+applyWorldBend(ENEMY_PUPIL_HUNT_MATERIAL);
+applyWorldBend(ENEMY_PUPIL_SCARED_MATERIAL);
+applyWorldBend(OUTLINE_MATERIAL);
 
 // Shade factors for the derived body-color materials (kid-tunable-ish, but
 // they live here because they are a look, not game balance).
@@ -85,6 +91,7 @@ function getSharedMaterial(color) {
     let material = materialCache.get(color);
     if (!material) {
         material = new THREE.MeshStandardMaterial({ color });
+        applyWorldBend(material); // Match terrain curve (food/enemies at distance)
         materialCache.set(color, material);
     }
     return material;

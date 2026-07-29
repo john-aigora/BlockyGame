@@ -6,13 +6,14 @@ import {
     SPAWN_SIZE_PATTERN, PREY_HEIGHT_RANGE, PEER_HEIGHT_RANGE,
     SIZE_BOUNTY_PER_UNIT, COMBO_WINDOW, COMBO_MAX,
     SPAWN_MATERIALIZE_TIME, SPAWN_MATERIALIZE_START_SCALE,
+    SPAWN_WARN_TIME, SPAWN_WARN_RADIUS,
     ENEMY_COLLIDER_HALF_WIDTH, ENEMY_WEDGE_TIME, ENEMY_DETOUR_TIME,
     ENDLESS_ENEMY_TARGET, ENDLESS_ENEMY_CAP, ENEMY_DESPAWN_RADIUS,
     ENDLESS_SPAWN_MIN, ENDLESS_SPAWN_MAX, ENDLESS_SPAWN_INTERVAL, RAMP_HEIGHT_STEP
 } from './constants.js';
 import { state } from './state.js';
 import { createCharacter, disposeCharacter, shadeColor, CAP_LIGHTEN } from './characters.js';
-import { groundHeightAt, isWalkable, slideMove } from './terrain.js';
+import { groundHeightAt, isWalkable, slideMove, applyWorldBend } from './terrain.js';
 import { spawnAtPosition } from './collectibles.js';
 import { endGame, updateScoreDisplay, showComboChip } from './ui.js';
 import { wrapPosition, torusDelta, torusDistance } from './worldmath.js';
@@ -82,6 +83,113 @@ export function beginMaterialize(enemyGroup) {
     ud.materializing = SPAWN_MATERIALIZE_TIME;
     ud.materializeBurstPending = true;
     enemyGroup.scale.setScalar(ud.materializeTarget * SPAWN_MATERIALIZE_START_SCALE);
+}
+
+// --- Pre-spawn red warn (owner request: notice before monsters appear) ---
+// A pulsing red disc on the ground for SPAWN_WARN_TIME, then the enemy
+// materializes there. Disc is pooled; nothing is allocated after warm-up.
+const pendingSpawns = []; // { x, z, scaleFactor, t, mesh }
+const warnDiscPool = [];
+let warnMaterial = null;
+const WARN_GEO = new THREE.RingGeometry(0.35, 1.0, 28);
+
+function getWarnMaterial() {
+    if (!warnMaterial) {
+        warnMaterial = new THREE.MeshBasicMaterial({
+            color: 0xFF1744,
+            transparent: true,
+            opacity: 0.55,
+            side: THREE.DoubleSide,
+            depthWrite: false
+        });
+        applyWorldBend(warnMaterial);
+    }
+    return warnMaterial;
+}
+
+function acquireWarnDisc() {
+    let mesh = warnDiscPool.pop();
+    if (!mesh) {
+        mesh = new THREE.Mesh(WARN_GEO, getWarnMaterial());
+        mesh.rotation.x = -Math.PI / 2; // Flat on XZ
+        mesh.renderOrder = 2;
+    }
+    mesh.visible = true;
+    return mesh;
+}
+
+function releaseWarnDisc(mesh) {
+    if (!mesh) return;
+    mesh.visible = false;
+    if (mesh.parent) mesh.parent.remove(mesh);
+    warnDiscPool.push(mesh);
+}
+
+// Queue a monster: red ground flash first, then materialize.
+export function scheduleEnemySpawn(spawnX, spawnZ, scaleFactor) {
+    if (!state.scene) return;
+    const mesh = acquireWarnDisc();
+    const y = state.worldMode === 'endless'
+        ? groundHeightAt(spawnX, spawnZ) + 0.08
+        : 0.08;
+    mesh.position.set(spawnX, y, spawnZ);
+    const r = SPAWN_WARN_RADIUS * Math.max(0.85, scaleFactor);
+    mesh.scale.set(r, r, r);
+    state.scene.add(mesh);
+    pendingSpawns.push({
+        x: spawnX,
+        z: spawnZ,
+        scaleFactor,
+        t: SPAWN_WARN_TIME,
+        mesh
+    });
+}
+
+export function clearPendingSpawns() {
+    for (const p of pendingSpawns) releaseWarnDisc(p.mesh);
+    pendingSpawns.length = 0;
+}
+
+// Floating-origin: warn discs + scheduled coords are local-frame too.
+export function shiftPendingSpawns(dx, dz) {
+    for (const p of pendingSpawns) {
+        p.x -= dx;
+        p.z -= dz;
+        if (p.mesh) {
+            p.mesh.position.x -= dx;
+            p.mesh.position.z -= dz;
+        }
+    }
+}
+
+// Advances warn discs; fires the real spawn when the timer ends.
+export function updateSpawnWarnings(dt) {
+    for (let i = pendingSpawns.length - 1; i >= 0; i--) {
+        const p = pendingSpawns[i];
+        p.t -= dt;
+        // Pulse opacity + slight scale throb so it reads as "danger here".
+        const pulse = 0.5 + 0.5 * Math.sin((SPAWN_WARN_TIME - p.t) * 10);
+        if (p.mesh.material) p.mesh.material.opacity = 0.3 + 0.45 * pulse;
+        const r = SPAWN_WARN_RADIUS * Math.max(0.85, p.scaleFactor) * (0.92 + 0.12 * pulse);
+        p.mesh.scale.set(r, r, r);
+        // Keep grounded if the origin rebased under the disc.
+        if (state.worldMode === 'endless') {
+            p.mesh.position.y = groundHeightAt(p.x, p.z) + 0.08;
+        }
+        if (p.t > 0) continue;
+        // Time's up: spawn the real monster and drop the warn disc.
+        releaseWarnDisc(p.mesh);
+        pendingSpawns.splice(i, 1);
+        const enemy = createEnemy();
+        enemy.scale.setScalar(p.scaleFactor);
+        enemy.position.set(
+            p.x,
+            state.worldMode === 'endless' ? groundHeightAt(p.x, p.z) : 0,
+            p.z
+        );
+        if (state.worldMode !== 'endless') wrapPosition(enemy.position);
+        beginMaterialize(enemy);
+    }
 }
 
 // Scratch origin for the materialize burst — never allocated per spawn.
@@ -309,12 +417,12 @@ function currentEnemyScaleFactor() {
 
 export function spawnNewEnemies() {
     // Population cap (plan 011): only spawn into free slots under the cap
-    // (endless runs a higher one — its bubble target ramps up). Zero is
-    // valid — a full horde means the kill still paid points and food,
-    // which is the difficulty curve's relief valve.
+    // (endless runs a higher one — its bubble target ramps up). Pending
+    // red-warn discs count as reserved slots so we never over-queue.
     const endless = state.worldMode === 'endless';
     const cap = endless ? ENDLESS_ENEMY_CAP : MAX_ENEMIES;
-    const slots = Math.max(0, cap - state.enemies.length);
+    const reserved = state.enemies.length + pendingSpawns.length;
+    const slots = Math.max(0, cap - reserved);
     const count = Math.min(ENEMIES_PER_KILL, slots);
     if (count === 0) return;
 
@@ -352,19 +460,14 @@ export function spawnNewEnemies() {
                 placed = isWalkable(spawnX, spawnZ, radius);
             }
             if (!placed) continue;
+        } else {
+            const wrapped = { x: spawnX, y: 0, z: spawnZ };
+            wrapPosition(wrapped);
+            spawnX = wrapped.x;
+            spawnZ = wrapped.z;
         }
-        const enemy = createEnemy();
-        enemy.scale.set(newEnemyScaleFactor, newEnemyScaleFactor, newEnemyScaleFactor);
-        enemy.position.y = 0;
-        enemy.position.x = spawnX;
-        enemy.position.z = spawnZ;
-        wrapPosition(enemy.position); // A capped distance can still cross the seam near an edge
-        if (endless) {
-            // Grounded from frame one: the materialize telegraph must grow
-            // out of the hillside, not hover at y=0 inside it.
-            enemy.position.y = groundHeightAt(enemy.position.x, enemy.position.z);
-        }
-        beginMaterialize(enemy); // Scale-in telegraph: no pop-in, no instant threat
+        // Red ground flash first — monster appears after SPAWN_WARN_TIME.
+        scheduleEnemySpawn(spawnX, spawnZ, newEnemyScaleFactor);
     }
 }
 
@@ -438,7 +541,8 @@ export function updateEnemyStreaming(dt) {
 
     const target = Math.min(ENDLESS_ENEMY_TARGET + state.endlessRampLevel, ENDLESS_ENEMY_CAP);
     bubbleSpawnCooldown -= dt;
-    if (bubbleSpawnCooldown > 0 || state.enemies.length >= target) return;
+    // Pending warns reserve slots so we do not flood red discs.
+    if (bubbleSpawnCooldown > 0 || state.enemies.length + pendingSpawns.length >= target) return;
     bubbleSpawnCooldown = ENDLESS_SPAWN_INTERVAL;
 
     // Size band rotates deterministically (owner fix: the old always-1.5x rule
@@ -461,11 +565,8 @@ export function updateEnemyStreaming(dt) {
         const spawnX = state.player.position.x + Math.cos(angle) * dist;
         const spawnZ = state.player.position.z + Math.sin(angle) * dist;
         if (!isWalkable(spawnX, spawnZ, radius)) continue;
-        const enemy = createEnemy();
-        enemy.scale.setScalar(scaleFactor);
-        enemy.position.set(spawnX, groundHeightAt(spawnX, spawnZ), spawnZ);
-        beginMaterialize(enemy); // Same telegraph as every other spawn
-        bubbleSpawnCounter++; // Advance the band rotation only on a real spawn
+        scheduleEnemySpawn(spawnX, spawnZ, scaleFactor); // Red warn, then materialize
+        bubbleSpawnCounter++; // Advance the band rotation only on a real schedule
         return;
     }
 }

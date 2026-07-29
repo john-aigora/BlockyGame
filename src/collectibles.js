@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { worldSize, worldBoundary, collectibleSpawnRadius, minSpawnDistanceFromPlayer } from './constants.js';
 import { state } from './state.js';
 import { wrapPosition } from './worldmath.js';
-import { groundHeightAt, isFoodSpot, chunkKeyForTrue } from './terrain.js';
+import { groundHeightAt, isFoodSpot, chunkKeyForTrue, applyWorldBend } from './terrain.js';
 
 // Shared GPU resources for ALL collectibles — allocated once for the app's
 // lifetime and never disposed (plan 007). Per-spawn allocation would leak
@@ -11,6 +11,8 @@ const COLLECTIBLE_GEOMETRY = new THREE.BoxGeometry(0.7, 0.7, 0.7); // Smaller cu
 // Exported for effects.js (plan 015): the food glow pulse animates
 // emissiveIntensity on this ONE shared material — all food pulses in sync.
 export const COLLECTIBLE_MATERIAL = new THREE.MeshStandardMaterial({ color: 0x76FF03 }); // Lime Green for collectibles (food)
+// Same horizon bend as terrain — without this, far food reads as floating sky cubes.
+applyWorldBend(COLLECTIBLE_MATERIAL);
 
 // Builds a collectible mesh (small lime-green cube) on the shared resources.
 function buildCollectible() {

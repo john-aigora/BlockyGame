@@ -9,13 +9,13 @@ import {
     CHUNK_SIZE, REBASE_DISTANCE,
     PLAYER_COLLIDER_HALF_WIDTH, RAMP_DISTANCE, RAMP_SPEED_STEP, RAMP_SPEED_MAX,
     DISTANCE_MILESTONE_STEP,
-    JUMP_GRAVITY, JUMP_VELOCITY
+    JUMP_APEX_HEIGHT, JUMP_APEX_GROWTH, JUMP_AIRTIME, JUMP_AIRTIME_GROWTH
 } from './constants.js';
 import { initContinuousMovement, resetContinuousMovement, updateContinuousMovement } from './movement-continuous.js';
 import { wrapPosition, torusDeltaComponent } from './worldmath.js';
 import { state } from './state.js';
 import { createPlayer, disposeCharacter } from './characters.js';
-import { createEnemy, updateEnemies, updateEnemyStreaming, resetEnemyStreaming, playerBox, scratchBox, beginMaterialize } from './enemies.js';
+import { createEnemy, updateEnemies, updateEnemyStreaming, resetEnemyStreaming, playerBox, scratchBox, beginMaterialize, updateSpawnWarnings, clearPendingSpawns, shiftPendingSpawns } from './enemies.js';
 import { spawnNearPlayer, spawnAnywhere } from './collectibles.js';
 import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoomIn, zoomOut, updateGroundScroll } from './world.js';
 import { initTerrain, setTerrainActive, resetTerrainForNewRun, updateTerrain, shiftTerrain, groundHeightAt, slideMove, isRockFree } from './terrain.js';
@@ -136,6 +136,8 @@ function setupNewGame() {
     state.endlessRampLevel = 0; // speed recompute below (ramp feeds enemy speed)
     state.jumpOffset = 0; // A restart mid-arc lands instantly:
     state.jumpVelocity = 0; // fresh runs always start grounded
+    state.jumpGravity = 0;
+    clearPendingSpawns(); // Drop any red warn discs from the last run
     state.jumpAirborne = false;
     resetEnemyStreaming(); // A fresh run's first bubble top-up owes no cooldown
     resetDistanceDisplay(); // Zero the HUD and show/hide it per the current mode
@@ -276,6 +278,9 @@ function update(dt) {
 
     // Enemy AI, movement, and player-collision handling
     updateEnemies(dt);
+    // Red pre-spawn warns → materialize (after AI so a just-spawned foe
+    // waits one frame, same as kill-spawn appends).
+    updateSpawnWarnings(dt);
 
     // Player movement and other game updates (ground, light, camera, collectibles)
     if (state.gameActive) {
@@ -409,26 +414,43 @@ function update(dt) {
 // integrates it inside update()'s endless branch. No double-jump: airborne
 // presses are ignored. XZ momentum carries because movement input keeps
 // applying mid-air (the slide just ignores rocks — see the movement block).
+// Apex/airtime grow with playerScale so bigger heroes clear more ground.
+function jumpLaunchParams() {
+    const s = Math.max(1, state.playerScale);
+    const apex = JUMP_APEX_HEIGHT + JUMP_APEX_GROWTH * (s - 1);
+    const air = JUMP_AIRTIME + JUMP_AIRTIME_GROWTH * (s - 1);
+    const gravity = (8 * apex) / (air * air);
+    const velocity = (gravity * air) / 2;
+    return { gravity, velocity };
+}
+
 export function tryJump() {
     if (state.worldMode !== 'endless') return; // Classic Space = pause, untouched
     if (MOVEMENT_MODE === 'continuous') return; // The spike owns Space (boost) — no jump there
     if (!state.gameActive || state.isPaused || state.onStartScreen) return;
     if (state.jumpAirborne) return; // No double-jump
+    const { gravity, velocity } = jumpLaunchParams();
     state.jumpAirborne = true;
-    state.jumpVelocity = JUMP_VELOCITY;
+    state.jumpVelocity = velocity;
+    state.jumpGravity = gravity; // Locked for this arc (scale mid-air would warp it)
     sfx.jump(); // Rising boing
     onJumpTakeoff(); // Dust kick + crouch squash (squash skipped under reduced motion)
 }
 
 function updateJumpPhysics(dt) {
     if (!state.jumpAirborne) return;
-    state.jumpVelocity -= JUMP_GRAVITY * dt;
+    // Prefer the locked per-jump gravity; recompute scale-1 if missing.
+    const grav = state.jumpGravity > 0
+        ? state.jumpGravity
+        : (8 * JUMP_APEX_HEIGHT) / (JUMP_AIRTIME * JUMP_AIRTIME);
+    state.jumpVelocity -= grav * dt;
     state.jumpOffset += state.jumpVelocity * dt;
     if (state.jumpOffset <= 0) {
         // Touchdown: the offset rides ON TOP of the terrain height, so the
         // landing spot is wherever the (water-legal) XZ slide ended up.
         state.jumpOffset = 0;
         state.jumpVelocity = 0;
+        state.jumpGravity = 0;
         state.jumpAirborne = false;
         sfx.land(); // Soft thump
         onJumpLand(); // Landing dust burst
@@ -486,6 +508,7 @@ function rebaseWorldIfNeeded() {
     state.worldOrigin.z += dz;
     shiftEntityForRebase(state.player, dx, dz);
     for (const enemy of state.enemies) shiftEntityForRebase(enemy, dx, dz);
+    shiftPendingSpawns(dx, dz); // Red pre-spawn discs + scheduled coords
     for (const collectible of state.collectibles) {
         collectible.position.x -= dx;
         collectible.position.z -= dz;

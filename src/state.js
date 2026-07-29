@@ -21,6 +21,7 @@ export const state = {
   // Classic never jumps: all three stay at rest there.
   jumpOffset: 0,
   jumpVelocity: 0,
+  jumpGravity: 0, // Locked at takeoff so mid-air size changes do not warp the arc
   jumpAirborne: false,
   // Scene, camera, and renderer are fundamental to Three.js
   scene: null,
