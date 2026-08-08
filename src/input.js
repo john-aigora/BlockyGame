@@ -459,6 +459,44 @@ export function keyboardVector() {
     return keyboardScratch;
 }
 
+// THE movement vector (audit C-5): sums EVERY source — keyboard, gamepad
+// (via keyboardVector above), and the touch drag — then clamps ONCE to unit
+// length. game.js consumes this for all player movement; the old shape
+// added the touch vector on top of the already-clamped keys+stick sum, so
+// stacking touch and keyboard reached 2x speed.
+// Returned object is a module-level scratch — read it, don't keep it.
+const moveScratch = { x: 0, z: 0 };
+export function moveVector() {
+    const kv = keyboardVector();
+    let x = kv.x;
+    let z = kv.z;
+    if (state.touchActive) {
+        x += state.movementVector.x;
+        z += state.movementVector.y; // Touch vector is {x,y}: y drives world z
+    }
+    const mag = Math.hypot(x, z);
+    if (mag > 1) {
+        x /= mag;
+        z /= mag;
+    }
+    moveScratch.x = x;
+    moveScratch.z = z;
+    return moveScratch;
+}
+
+// Zeroes every transient movement input — held keys, the touch drag, and
+// its vector (audit C-4). Wired to window blur and the visibilitychange
+// hidden branch in game.js: an alt-tab or app switch mid-run swallows the
+// matching keyup, and a latched key would walk the player into a lake on
+// resume. Plan 026 reuses this on seat switches — keep exported.
+export function clearTransientInput() {
+    for (const key in keys) keys[key] = false;
+    activeTouchId = null;
+    state.touchActive = false;
+    state.movementVector.x = 0;
+    state.movementVector.y = 0;
+}
+
 // --- Event Handlers ---
 // Handles key press down events.
 export function onKeyDown(event) {

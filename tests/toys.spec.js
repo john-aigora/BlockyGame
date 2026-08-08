@@ -214,6 +214,91 @@ test('a jump can never cross water: the arc lands at the shore edge (endless)', 
   expect(after.ground).toBeGreaterThanOrEqual(WL); // Standing dry
 });
 
+test('the landing-grace ring cannot be walked through a boulder (C-6)', async ({ page }) => {
+  test.setTimeout(150000);
+  await bootEndless(page);
+  await page.waitForFunction(() => window.__game.debug.terrainInfo().queued === 0, null, { timeout: 30000 });
+  // Find a seeded rock and a DIAGONAL spot inside the old inflated grace
+  // ring: center closer than rockEdge + 0.54 (so the OLD rule said "wedged,
+  // ignore rocks") while all five radius-0 probe points are clear (so the
+  // body is honestly outside — the new probe-parity rule keeps rocks
+  // solid). On the old code this exact band walked straight through
+  // boulders.
+  const spot = await page.evaluate(([WL_]) => {
+    const d = window.__game.debug;
+    const R = 0.54; // Scale-1 player collider half-width
+    for (let z = -60; z <= 60; z += 0.5) {
+      for (let x = 12; x <= 90; x += 0.5) {
+        if (d.isRockFree(x, z, 0)) continue; // (x,z) is inside some rock circle
+        if (d.terrainHeight(x, z) < WL_ + 0.3) continue;
+        // Chord-march both axes to locate the circle center.
+        let e1 = x, w1 = x;
+        while (!d.isRockFree(e1 + 0.02, z, 0)) e1 += 0.02;
+        while (!d.isRockFree(w1 - 0.02, z, 0)) w1 -= 0.02;
+        const cx = (e1 + w1) / 2;
+        let n1 = z, s1 = z;
+        while (!d.isRockFree(cx, s1 + 0.02, 0)) s1 += 0.02;
+        while (!d.isRockFree(cx, n1 - 0.02, 0)) n1 -= 0.02;
+        const cz = (n1 + s1) / 2;
+        const rockR = Math.max((e1 - w1) / 2, (s1 - n1) / 2);
+        // Big rocks only: the mid-walk assert below samples at 1.5-1.8u of
+        // travel from d = rockR + 0.4, i.e. 0.35-0.65u past the center — a
+        // circle with rockR ≥ 0.75 provably still contains that point, so
+        // the OLD walk-through code cannot slip out the far side unseen.
+        if (rockR < 0.75) continue;
+        // Diagonal candidate inside the old ring: d = rockR + 0.4 < rockR + R.
+        const dd = rockR + 0.4;
+        const px = cx + dd * Math.SQRT1_2;
+        const pz = cz + dd * Math.SQRT1_2;
+        const probesClear = d.isRockFree(px, pz, 0) &&
+          d.isRockFree(px + R, pz, 0) && d.isRockFree(px - R, pz, 0) &&
+          d.isRockFree(px, pz + R, 0) && d.isRockFree(px, pz - R, 0);
+        if (!probesClear) continue;
+        // Dry footing for the spot and the short walk.
+        if (d.terrainHeight(px, pz) < WL_ + 0.1) continue;
+        if (d.terrainHeight(cx, cz) < WL_ + 0.1) continue;
+        return { px, pz, cx, cz, rockR };
+      }
+    }
+    return null;
+  }, [WL]);
+  expect(spot).not.toBeNull();
+
+  await page.evaluate(({ px, pz }) => {
+    const s = window.__game.state;
+    s.player.position.x = px;
+    s.player.position.z = pz;
+    s.collectTimeLeft = 999;
+    for (const e of s.enemies) e.position.x = s.player.position.x + 200;
+  }, spot);
+  await page.waitForFunction(() => window.__game.debug.terrainInfo().queued === 0, null, { timeout: 30000 });
+
+  // Walk diagonally STRAIGHT AT the rock center and sample at EXACTLY
+  // 0.25 game-s (+≤1 frame) INSIDE the poll predicate — ~1.5-1.8u of
+  // travel, provably inside the circle on the old walk-through code (see
+  // the rockR ≥ 0.75 bound above), before any keyup latency can carry the
+  // player out the far side. The honest movement probes must keep the
+  // player's CENTER outside the collision circle at all times.
+  const t0 = await page.evaluate(() => window.__game.state.runTime);
+  await page.keyboard.down('ArrowLeft');
+  await page.keyboard.down('ArrowUp');
+  const handle = await page.waitForFunction(([tt]) => {
+    const g = window.__game;
+    const s = g.state;
+    if (s.runTime < tt + 0.25) return false;
+    const p = s.player.position;
+    return {
+      centerClear: g.debug.isRockFree(p.x, p.z, 0),
+      gameActive: s.gameActive
+    };
+  }, [t0], { timeout: 60000 });
+  await page.keyboard.up('ArrowLeft');
+  await page.keyboard.up('ArrowUp');
+  const after = await handle.jsonValue();
+  expect(after.gameActive).toBe(true);
+  expect(after.centerClear).toBe(true); // Never inside the boulder — no walk-through
+});
+
 test('endless jumps on Space and pauses on P', async ({ page }) => {
   await bootEndless(page);
   await page.keyboard.press('Space');

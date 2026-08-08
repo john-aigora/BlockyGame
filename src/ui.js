@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { MAX_ENEMY_INDICATORS, DANGER_RADIUS, DANGER_VIGNETTE_MAX, HEARTBEAT_BPM, DEATH_SCREEN_DELAY } from './constants.js';
 import { state } from './state.js';
 import { canKillSpecificEnemy } from './enemies.js';
@@ -481,13 +482,30 @@ export function updateKillIndicator(dt) {
 }
 
 // --- Off-Screen Enemy Indicator Logic (per-frame) ---
+// View-space scratch for the behind-camera check (audit C-3) — reused per enemy.
+const indicatorViewPos = new THREE.Vector3();
+
 export function updateOffscreenIndicators() {
     let indicatorsUsed = 0;
     const screenPadding = 15; // How far from the game edge indicators should sit (reduced slightly)
 
     state.enemies.forEach(enemyGroup => {
         const enemyPos = enemyGroup.position.clone();
+        // Truthful arrows (audit C-3): project() divides by a NEGATIVE w for
+        // points behind the camera plane, mirroring both axes — enemies ≳30u
+        // "south" (+Z) of the player are routinely behind it, and their
+        // arrows pointed exactly the wrong way. View space tells the truth
+        // (z > -near means behind); for those, negate the mirrored
+        // projection to recover the true screen direction and push it far
+        // outside the frustum so the edge clamp below owns the placement.
+        indicatorViewPos.copy(enemyGroup.position).applyMatrix4(state.camera.matrixWorldInverse);
+        const behindCamera = indicatorViewPos.z > -state.camera.near;
         const screenPos = enemyPos.project(state.camera);
+        if (behindCamera) {
+            const mag = Math.hypot(screenPos.x, screenPos.y) || 1;
+            screenPos.x = (-screenPos.x / mag) * 1000;
+            screenPos.y = (-screenPos.y / mag) * 1000;
+        }
 
         const isOffScreenX = screenPos.x < -1 || screenPos.x > 1;
         const isOffScreenY = screenPos.y < -1 || screenPos.y > 1;

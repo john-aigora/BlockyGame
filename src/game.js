@@ -18,10 +18,10 @@ import { createPlayer, disposeCharacter } from './characters.js';
 import { createEnemy, updateEnemies, updateEnemyStreaming, resetEnemyStreaming, playerBox, scratchBox, beginMaterialize, updateSpawnWarnings, clearPendingSpawns, shiftPendingSpawns } from './enemies.js';
 import { spawnNearPlayer, spawnAnywhere } from './collectibles.js';
 import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoomIn, zoomOut, updateGroundScroll } from './world.js';
-import { initTerrain, setTerrainActive, resetTerrainForNewRun, updateTerrain, shiftTerrain, groundHeightAt, slideMove, isRockFree } from './terrain.js';
+import { initTerrain, setTerrainActive, resetTerrainForNewRun, updateTerrain, shiftTerrain, groundHeightAt, slideMove, isRockWedged } from './terrain.js';
 import { initClouds, setCloudMode, updateClouds, shiftClouds } from './clouds.js';
 import { initEffects, updateEffects, resetEffects, onCollect, onGrowthMilestone, shiftActiveParticles, spawnTextPopup, onJumpTakeoff, onJumpLand } from './effects.js';
-import { keys, keyboardVector, onKeyDown, onKeyUp, setupTouchControls, setupGamepad, pollGamepad } from './input.js';
+import { keys, moveVector, clearTransientInput, onKeyDown, onKeyUp, setupTouchControls, setupGamepad, pollGamepad } from './input.js';
 import { rumble } from './rumble.js';
 import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension, resetIndicators, showGoFlourish, initModePicker, updateModePicker, updateDistanceDisplay, resetDistanceDisplay } from './ui.js';
 import { resetCollectClock, tickCollectClock, tickComboClock } from './timers.js';
@@ -110,8 +110,15 @@ function init() {
 
     // Auto-pause when the tab is hidden (the dt clamp already prevents
     // catch-up jumps; this puts the player in a fair, deliberate resume state).
+    // Both blur and hidden also CLEAR transient inputs (audit C-4): the
+    // matching keyup goes to the other window/app, and a latched key would
+    // otherwise keep driving the player on resume.
+    window.addEventListener('blur', clearTransientInput);
     document.addEventListener('visibilitychange', () => {
-        if (document.hidden && !state.isPaused && state.gameActive) togglePause();
+        if (document.hidden) {
+            clearTransientInput();
+            if (!state.isPaused && state.gameActive) togglePause();
+        }
     });
 
     // 8. Initial Game Setup
@@ -303,13 +310,12 @@ function update(dt) {
         // sampled at the leading edge + lateral extremes of travel; a
         // blocked diagonal creeps along the shoreline instead of freezing).
         updateJumpPhysics(dt); // Advance the arc BEFORE the slide reads jumpAirborne
-        const kv = keyboardVector();
-        let moveX = kv.x * state.actualPlayerSpeed * dt;
-        let moveZ = kv.z * state.actualPlayerSpeed * dt;
-        if (state.touchActive) {
-            moveX += state.movementVector.x * state.actualPlayerSpeed * dt;
-            moveZ += state.movementVector.y * state.actualPlayerSpeed * dt;
-        }
+        // ONE movement vector for every input source (audit C-5): moveVector
+        // sums keyboard+stick+touch and clamps once — stacking sources can
+        // never exceed full speed.
+        const mv = moveVector();
+        const moveX = mv.x * state.actualPlayerSpeed * dt;
+        const moveZ = mv.z * state.actualPlayerSpeed * dt;
         const p = state.player.position;
         const radius = state.playerScale * PLAYER_COLLIDER_HALF_WIDTH;
         // JUMP RULES (owner queue item 5): airborne ignores ROCK circles
@@ -317,25 +323,23 @@ function update(dt) {
         // lake stops at the shoreline exactly like a blocked step and the
         // landing is always dry. The second clause is the landing grace: an
         // arc may legally END inside a rock circle (rocks were ignored on
-        // the way), so rocks stay ignored until the body walks clear —
-        // landing can never wedge the player inside a boulder.
-        const ignoreRocks = state.jumpAirborne || !isRockFree(p.x, p.z, radius);
+        // the way), so rocks stay ignored until the body walks clear.
+        // PROBE PARITY (audit C-6): "wedged" is judged by the same radius-0
+        // sample points the movement probes use — the old radius-inflated
+        // center circle stayed true across a ~radius-wide ring where every
+        // probe was already clear, silently turning rocks off there.
+        const ignoreRocks = state.jumpAirborne || isRockWedged(p.x, p.z, radius);
         const applied = slideMove(p.x, p.z, moveX, moveZ, radius, ignoreRocks);
         p.x += applied.x;
         p.z += applied.z;
         } else {
-        // Keyboard movement: arrows or WASD, as a normalized vector — a
-        // diagonal is exactly actualPlayerSpeed, not the old 1.41x per-axis
-        // sum, and opposite keys cancel to a standstill (game-feel pass).
-        const kv = keyboardVector();
-        state.player.position.x += kv.x * state.actualPlayerSpeed * dt;
-        state.player.position.z += kv.z * state.actualPlayerSpeed * dt;
-
-        // Joystick movement - now touch-anywhere movement
-        if (state.touchActive) {
-            state.player.position.x += state.movementVector.x * state.actualPlayerSpeed * dt; // USE actualPlayerSpeed
-            state.player.position.z += state.movementVector.y * state.actualPlayerSpeed * dt; // USE actualPlayerSpeed
-        }
+        // Keyboard/stick/touch movement as ONE normalized vector (audit
+        // C-5): a diagonal is exactly actualPlayerSpeed, opposite keys
+        // cancel to a standstill, and stacked sources clamp to unit length
+        // inside moveVector instead of adding a second speed on top.
+        const mv = moveVector();
+        state.player.position.x += mv.x * state.actualPlayerSpeed * dt;
+        state.player.position.z += mv.z * state.actualPlayerSpeed * dt;
         }
 
         if (state.worldMode === 'endless') {

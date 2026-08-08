@@ -576,11 +576,29 @@ function probeOk(tx, tz, ignoreRocks) {
 }
 
 // Is this LOCAL position clear of every rock collision circle for a body of
-// the given radius? The jump's landing grace (game.js) uses it: airborne
-// movement ignores rocks, so an arc may legally END inside a circle — rocks
-// stay ignored until the body walks clear, so a landing can never wedge.
+// the given radius? Static placement query (also on the debug handle — the
+// jump spec finds seeded rocks with it).
 export function isRockFree(localX, localZ, radius) {
     return !blockedByRock(localX + state.worldOrigin.x, localZ + state.worldOrigin.z, radius);
+}
+
+// Landing-grace wedge test (audit C-6): is one of the SAME radius-0 sample
+// points the movement probes use — center plus ±radius on each axis —
+// actually inside a rock circle? The jump's landing grace (game.js) keeps
+// rocks ignored while wedged, so an arc may legally END inside a circle and
+// walk clear. The OLD grace used the radius-INFLATED center circle
+// (!isRockFree(x, z, radius)), which stays true across a ~radius-wide ring
+// where every probe is already clear — rocks silently stopped existing
+// there and the player could walk straight through a boulder. Probe parity
+// closes that ring: wedged now means a probe point is genuinely inside.
+export function isRockWedged(localX, localZ, radius) {
+    const tx = localX + state.worldOrigin.x;
+    const tz = localZ + state.worldOrigin.z;
+    return blockedByRock(tx, tz, 0) ||
+        blockedByRock(tx + radius, tz, 0) ||
+        blockedByRock(tx - radius, tz, 0) ||
+        blockedByRock(tx, tz + radius, 0) ||
+        blockedByRock(tx, tz - radius, 0);
 }
 
 // --- Honest movement probe (owner escalation: "respect the size of the gap

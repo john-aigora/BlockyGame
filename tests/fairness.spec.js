@@ -133,6 +133,104 @@ test('F cycles the speed multiplier mid-run, never on the start overlay', async 
   expect(after.speed).toBeCloseTo(6.0 * 1.5, 5); // BASE_PLAYER_SPEED × multiplier (scale 1)
 });
 
+test('behind-camera enemies clamp their arrow to the BOTTOM edge, not mirrored to the top (C-3)', async ({ page }) => {
+  await bootEndless(page);
+  await waitGameSeconds(page, 0.3);
+  // enemies[0] is the boot enemy (streaming spawns arrive ≥0.95s in); park
+  // it 60u SOUTH (+Z) — well behind the camera plane. The old raw
+  // project() output mirrors behind-camera points (negative w), so this
+  // arrow used to clamp to the TOP edge, pointing kids exactly away from
+  // the danger.
+  const rect = await page.evaluate(() => {
+    const s = window.__game.state;
+    const e = s.enemies[0];
+    e.position.set(s.player.position.x, e.position.y, s.player.position.z + 60);
+    return { h: s.gameCanvasRect.height, top: s.gameCanvasRect.top };
+  });
+  await waitGameSeconds(page, 0.15); // ≥1 rendered frame with the new position
+  const arrow = await page.evaluate(() => {
+    const ind = window.__game.state.enemyIndicators[0];
+    return { display: ind.style.display, top: parseFloat(ind.style.top) };
+  });
+  expect(arrow.display).toBe('block'); // Off-screen → the arrow is live
+  expect(arrow.top).toBeGreaterThan(rect.top + rect.h * 0.75); // BOTTOM edge (south)
+});
+
+test('window blur clears held movement keys: no phantom walking after alt-tab (C-4)', async ({ page }) => {
+  await bootEndless(page);
+  await page.evaluate(() => {
+    const s = window.__game.state;
+    s.collectTimeLeft = 999;
+    for (const e of s.enemies) e.position.x = s.player.position.x + 200;
+  });
+  await page.keyboard.down('ArrowUp');
+  await waitGameSeconds(page, 0.3); // The held key genuinely drives movement first
+  // Dispatch blur and read the position in the SAME evaluate — no frame can
+  // run in between, so this is the exact freeze point.
+  const zAtBlur = await page.evaluate(() => {
+    window.dispatchEvent(new Event('blur'));
+    return window.__game.state.player.position.z;
+  });
+  await waitGameSeconds(page, 0.5);
+  const zEnd = await page.evaluate(() => window.__game.state.player.position.z);
+  await page.keyboard.up('ArrowUp');
+  expect(zAtBlur).toBeLessThan(-0.5); // Proof the key was latched and walking
+  expect(Math.abs(zEnd - zAtBlur)).toBeLessThanOrEqual(0.01); // Blur froze it
+});
+
+test('touch drag + held key move at exactly one speed, never two (C-5)', async ({ page }) => {
+  test.setTimeout(150000);
+  await bootEndless(page);
+  // A dry, rock-free 14u eastward lane on the seeded terrain — the travel
+  // measurement must see pure input arithmetic, not a shoreline slide.
+  const lane = await page.evaluate(() => {
+    const d = window.__game.debug;
+    for (let z = -60; z <= 60; z += 1) {
+      for (let x = -60; x <= 46; x += 1) {
+        let ok = true;
+        for (let t = 0; t <= 14 && ok; t += 0.25) {
+          // Center walkable with rock clearance, and the body's lateral
+          // extremes dry too — the honest movement probes sample the edges,
+          // so a shoreline half a body-width away would clamp the slide.
+          if (!d.isWalkable(x + t, z, 0.6) ||
+              !d.isWalkable(x + t, z - 0.7, 0) ||
+              !d.isWalkable(x + t, z + 0.7, 0)) ok = false;
+        }
+        if (ok) return { x, z };
+      }
+    }
+    return null;
+  });
+  expect(lane).not.toBeNull();
+  await teleportSafe(page, lane.x, lane.z);
+  // Full-strength rightward touch drag (fabricated handler events — the
+  // touch.spec.js pattern) STACKED on a held ArrowRight.
+  await page.evaluate(() => {
+    const h = window.__game.debug.touchHandlers;
+    const canvas = document.querySelector('#game-container canvas');
+    const touch = (id, x, y) => ({ identifier: id, clientX: x, clientY: y });
+    const ev = (target, ...changed) => ({ target, preventDefault() {}, changedTouches: changed, touches: changed });
+    h.onTouchStart(ev(canvas, touch(1, 100, 300)));
+    h.onTouchMove(ev(canvas, touch(1, 220, 300))); // 120px right = full-strength drag
+  });
+  await page.keyboard.down('ArrowRight');
+  const start = await page.evaluate(() => ({
+    x: window.__game.state.player.position.x,
+    t: window.__game.state.runTime,
+    speed: window.__game.state.actualPlayerSpeed
+  }));
+  await waitGameSeconds(page, 1.0);
+  const end = await page.evaluate(() => ({
+    x: window.__game.state.player.position.x,
+    t: window.__game.state.runTime
+  }));
+  await page.keyboard.up('ArrowRight');
+  const gameSeconds = end.t - start.t;
+  const travel = end.x - start.x;
+  expect(travel).toBeGreaterThan(start.speed * gameSeconds * 0.5); // It genuinely moved
+  expect(travel).toBeLessThanOrEqual(start.speed * gameSeconds * 1.05); // ONE speed, not two
+});
+
 test('panic arrow prefers reachable food over nearer food across a lake (endless)', async ({ page }) => {
   test.setTimeout(150000);
   await bootEndless(page);
