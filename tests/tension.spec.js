@@ -50,6 +50,35 @@ test('panic class engages under 5s and the danger vignette rises near an enemy',
     .toBeGreaterThan(0);
 });
 
+test('survival TIME HUD ticks m:ss on the game clock and celebrates the minute', async ({ page }) => {
+  page.on('pageerror', (err) => { throw new Error(`Page error: ${err.message}`); });
+  await openGame(page);
+  await expect(page.locator('#time')).toHaveText('0:00'); // Fresh boot
+  await startGame(page);
+  await freezeEnemies(page);
+
+  await waitGameSeconds(page, 2);
+  // Atomic read: the HUD must agree with the clock's whole second. (The wait
+  // guarantees runTime >= 2; asserting the literal '0:02' would race a loaded
+  // machine past the boundary between the wait and the read.)
+  const { text, rt } = await page.evaluate(() => ({
+    text: document.getElementById('time').textContent,
+    rt: window.__game.state.runTime
+  }));
+  const sec = Math.floor(rt);
+  expect(sec).toBeGreaterThanOrEqual(2);
+  expect(sec).toBeLessThan(60); // Still in the first minute — format is 0:ss
+  expect(text).toBe(`0:${String(sec % 60).padStart(2, '0')}`);
+
+  // Minute beat: jump the clock to just under the boundary and let it cross.
+  await page.evaluate(() => { window.__game.state.runTime = 59.5; });
+  await waitGameSeconds(page, 1);
+  await expect
+    .poll(() => page.evaluate(() => window.__game.debug.effectsInfo().lastPopupText), { timeout: 15000 })
+    .toBe('1 MINUTE!');
+  await expect(page.locator('#time')).toHaveText(/^1:0\d$/);
+});
+
 test('PHEW! fires once when a real scare fully drains away', async ({ page }) => {
   page.on('pageerror', (err) => { throw new Error(`Page error: ${err.message}`); });
   await openGame(page);

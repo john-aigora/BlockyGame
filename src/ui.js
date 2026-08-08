@@ -18,6 +18,7 @@ export const el = {
     score: null,
     distanceDisplay: null,
     distance: null,
+    time: null,
     finalDistanceLine: null,
     finalDistance: null,
     collectTime: null,
@@ -43,6 +44,7 @@ export function initUI() {
     el.score = document.getElementById('score');
     el.distanceDisplay = document.getElementById('distance-display');
     el.distance = document.getElementById('distance');
+    el.time = document.getElementById('time');
     el.finalDistanceLine = document.getElementById('final-distance-line');
     el.finalDistance = document.getElementById('final-distance');
     el.collectTime = document.getElementById('collect-time');
@@ -174,6 +176,42 @@ export function resetDistanceDisplay() {
     if (el.distanceDisplay) {
         el.distanceDisplay.style.display = state.worldMode === 'endless' ? '' : 'none';
     }
+}
+
+// --- Survival time HUD (plan 023 DT-10) ---
+// "Time: m:ss" beside DISTANCE — time survived, the run's other currency,
+// finally visible. Driven from state.runTime (the game clock — pause and
+// death freeze it) with whole-second change detection, so the hot loop
+// writes the DOM at most once per second. Every full minute earns a beat:
+// the distance-milestone pattern (chime + popup over the player's head).
+let lastTimeShown = -1; // Whole seconds last written to the DOM
+
+export function updateTimeDisplay() {
+    if (!el.time) return;
+    const sec = Math.floor(state.runTime);
+    if (sec === lastTimeShown) return;
+    const prev = lastTimeShown;
+    lastTimeShown = sec;
+    const minutes = Math.floor(sec / 60);
+    el.time.textContent = `${minutes}:${String(sec % 60).padStart(2, '0')}`;
+    // Minute milestone: fires when the shown time crosses a whole-minute
+    // boundary mid-run. prev >= 0 guards the reset's -1 -> 0 write, and the
+    // gameActive/player guard keeps a post-death HUD refresh silent.
+    if (minutes >= 1 && prev >= 0 && minutes > Math.floor(prev / 60) &&
+        state.gameActive && state.player) {
+        const p = state.player.position;
+        survivalBeatOrigin.x = p.x;
+        survivalBeatOrigin.y = p.y + state.playerScale + 0.6;
+        survivalBeatOrigin.z = p.z;
+        spawnTextPopup(survivalBeatOrigin, `${minutes} MINUTE${minutes > 1 ? 'S' : ''}!`, '#8BC34A');
+        sfx.milestone();
+    }
+}
+
+// New game: rewind the change detector and write the fresh 0:00.
+export function resetTimeDisplay() {
+    lastTimeShown = -1;
+    updateTimeDisplay(); // runTime was just reset — writes "0:00", no beat (prev guard)
 }
 
 // --- Death Screen Functions ---

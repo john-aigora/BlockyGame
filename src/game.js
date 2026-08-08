@@ -23,7 +23,7 @@ import { initClouds, setCloudMode, updateClouds, shiftClouds } from './clouds.js
 import { initEffects, updateEffects, resetEffects, onCollect, onGrowthMilestone, shiftActiveParticles, spawnTextPopup, onJumpTakeoff, onJumpLand } from './effects.js';
 import { keys, moveVector, clearTransientInput, onKeyDown, onKeyUp, setupTouchControls, setupGamepad, pollGamepad } from './input.js';
 import { rumble } from './rumble.js';
-import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension, resetIndicators, showGoFlourish, updateModeHud, updateDistanceDisplay, resetDistanceDisplay } from './ui.js';
+import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension, resetIndicators, showGoFlourish, updateModeHud, updateDistanceDisplay, resetDistanceDisplay, updateTimeDisplay, resetTimeDisplay } from './ui.js';
 import { resetCollectClock, tickCollectClock, tickComboClock } from './timers.js';
 import { loadWorldMode } from './hiscores.js';
 import { unlockAudio, sfx, music } from './audio.js';
@@ -148,6 +148,7 @@ function setupNewGame() {
     state.jumpAirborne = false;
     resetEnemyStreaming(); // A fresh run's first bubble top-up owes no cooldown
     resetDistanceDisplay(); // Zero the HUD and show/hide it per the current mode
+    resetTimeDisplay(); // Fresh 0:00 (runTime was reset above)
     applySpeedMultiplier(); // playerScale reset → drop any size speed bonus from the last run
     resetCombo(); // A mid-run restart must not carry a live combo into the new run
     resetTension(); // Nor a pulsing panic timer, red vignette, or racing heartbeat
@@ -278,6 +279,9 @@ function update(dt) {
 
     // Update kill indicator and enemy colors (visuals first)
     updateKillIndicator(dt);
+
+    // Survival TIME HUD (plan 023) — change-detected, writes once per second
+    updateTimeDisplay();
 
     // --- Off-Screen Enemy Indicator Logic ---
     updateOffscreenIndicators();
