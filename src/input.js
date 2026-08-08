@@ -106,7 +106,25 @@ function padActivityScore(gp) {
 // always connected — identity by gamepad.index only, and activity always wins.
 // Scan ALL pads first; adopt any pad producing input (re-pointing the lock);
 // the lock is only the idle fallback. (Ported back from battle-paddle.)
+//
+// PER-FRAME CACHE (plan 020 P-7): the selection scan ran up to 3x per frame
+// (poll, movement vector, HUD). pollGamepad bumps padPollCounter once per
+// frame, the first caller scans, same-counter callers reuse the SELECTION.
+// The cached value is a live Gamepad reference — axis/button reads stay
+// fresh (the test mocks mutate their pad objects in place, and the connect/
+// disconnect listeners bump the counter so selection reacts immediately).
+let padPollCounter = 0;
+let padCacheCounter = -1;
+let padCacheResult = null;
+
 function activeGamepad() {
+    if (padCacheCounter === padPollCounter) return padCacheResult;
+    padCacheCounter = padPollCounter;
+    padCacheResult = scanActiveGamepad();
+    return padCacheResult;
+}
+
+function scanActiveGamepad() {
     const list = navigator.getGamepads ? navigator.getGamepads() : null;
     if (!list) return null;
 
@@ -276,6 +294,7 @@ export function gamepadDebugInfo() {
 // Edge-triggered actions. Must run every animation frame (including pause /
 // start / death) because update() early-returns outside a live run.
 export function pollGamepad() {
+    padPollCounter++; // New frame — the first activeGamepad() call rescans
     const gp = activeGamepad();
     if (!gp) {
         if (prevPadButtonsByIndex.size) prevPadButtonsByIndex.clear();
@@ -376,26 +395,33 @@ export function pollGamepad() {
     snapshotButtons(gp);
 }
 
-// Status line: pad id + short bind reminder when live.
+// Status line: pad id + short bind reminder when live. The composed string
+// is compared against the last write (plan 020 P-7): a per-frame
+// textContent assignment invalidates layout even when the text is
+// identical, and this text only actually changes on connect/movement edges.
 let padHudEl = null;
+let lastPadHudText = null;
 function updatePadHud(gp) {
     if (!padHudEl) {
         padHudEl = document.getElementById('pad-status');
         if (!padHudEl) return;
     }
     if (!gp) {
-        padHudEl.hidden = true;
+        if (!padHudEl.hidden) padHudEl.hidden = true;
+        lastPadHudText = null; // A reconnect must rewrite the line
         return;
     }
-    padHudEl.hidden = false;
+    if (padHudEl.hidden) padHudEl.hidden = false;
     const mode = gp.mapping === 'standard' ? 'XInput' : 'DirectInput';
     const short = (gp.id || 'Gamepad').split('(')[0].trim().slice(0, 22);
     const mv = gamepadVector();
     const live = Math.hypot(mv.x, mv.z) > 0.05 ? ' · live' : '';
-    if (state.onStartScreen) {
-        padHudEl.textContent = `${short} · ${mode}${live} · A start`;
-    } else {
-        padHudEl.textContent = `${short} · ${mode}${live} · A jump · X slow · Y fast · Start pause · Select mute`;
+    const text = state.onStartScreen
+        ? `${short} · ${mode}${live} · A start`
+        : `${short} · ${mode}${live} · A jump · X slow · Y fast · Start pause · Select mute`;
+    if (text !== lastPadHudText) {
+        lastPadHudText = text;
+        padHudEl.textContent = text;
     }
 }
 
@@ -419,10 +445,12 @@ function updatePadDebug(gp) {
 
 export function setupGamepad() {
     window.addEventListener('gamepadconnected', (e) => {
+        padPollCounter++; // Invalidate the selection cache — react this frame
         padConnected = true;
         preferredPadIndex = e.gamepad ? e.gamepad.index : preferredPadIndex;
     });
     window.addEventListener('gamepaddisconnected', (e) => {
+        padPollCounter++; // Invalidate the selection cache — react this frame
         if (e.gamepad && e.gamepad.index === preferredPadIndex) preferredPadIndex = null;
         if (e.gamepad) prevPadButtonsByIndex.delete(e.gamepad.index);
         padConnected = !!activeGamepad();

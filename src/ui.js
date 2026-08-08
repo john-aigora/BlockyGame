@@ -406,6 +406,7 @@ export function resetTension() {
 export function resetIndicators() {
     for (const indicator of state.enemyIndicators) {
         if (indicator.style.display !== 'none') indicator.style.display = 'none';
+        indicator.__lastDisplay = 'none'; // Keep the hot-loop write cache honest
     }
     state.killFlashClock = 0;
     state.killIndicatorVisible = true;
@@ -484,13 +485,19 @@ export function updateKillIndicator(dt) {
 // --- Off-Screen Enemy Indicator Logic (per-frame) ---
 // View-space scratch for the behind-camera check (audit C-3) — reused per enemy.
 const indicatorViewPos = new THREE.Vector3();
+// Projection scratch (plan 020 P-5): copy into it, never clone, per enemy.
+const indicatorWorldPos = new THREE.Vector3();
 
+// Hot-loop hygiene (plan 020 P-5): positions ride ONE rounded translate3d
+// transform (left/top are pinned to 0 in CSS — the old per-frame left/top
+// writes forced layout), and every style write is skipped when unchanged
+// (cached on the element). resetIndicators keeps the display cache honest.
 export function updateOffscreenIndicators() {
     let indicatorsUsed = 0;
     const screenPadding = 15; // How far from the game edge indicators should sit (reduced slightly)
 
-    state.enemies.forEach(enemyGroup => {
-        const enemyPos = enemyGroup.position.clone();
+    for (const enemyGroup of state.enemies) {
+        if (indicatorsUsed >= MAX_ENEMY_INDICATORS) break;
         // Truthful arrows (audit C-3): project() divides by a NEGATIVE w for
         // points behind the camera plane, mirroring both axes — enemies ≳30u
         // "south" (+Z) of the player are routinely behind it, and their
@@ -500,7 +507,7 @@ export function updateOffscreenIndicators() {
         // outside the frustum so the edge clamp below owns the placement.
         indicatorViewPos.copy(enemyGroup.position).applyMatrix4(state.camera.matrixWorldInverse);
         const behindCamera = indicatorViewPos.z > -state.camera.near;
-        const screenPos = enemyPos.project(state.camera);
+        const screenPos = indicatorWorldPos.copy(enemyGroup.position).project(state.camera);
         if (behindCamera) {
             const mag = Math.hypot(screenPos.x, screenPos.y) || 1;
             screenPos.x = (-screenPos.x / mag) * 1000;
@@ -510,42 +517,50 @@ export function updateOffscreenIndicators() {
         const isOffScreenX = screenPos.x < -1 || screenPos.x > 1;
         const isOffScreenY = screenPos.y < -1 || screenPos.y > 1;
 
-        if ((isOffScreenX || isOffScreenY) && indicatorsUsed < MAX_ENEMY_INDICATORS) {
+        if (isOffScreenX || isOffScreenY) {
             const indicator = state.enemyIndicators[indicatorsUsed];
-            indicator.style.display = 'block';
 
-            // Set indicator color based on killability
-            if (canKillSpecificEnemy(enemyGroup)) {
-                indicator.style.backgroundColor = 'rgba(255, 235, 59, 0.8)'; // Yellow (match enemy killable color, with alpha)
-            } else {
-                indicator.style.backgroundColor = 'rgba(3, 169, 244, 0.8)'; // Electric Blue (match enemy normal color, with alpha)
-            }
+            // Color by killability (yellow = killable, blue = hunter)
+            const color = canKillSpecificEnemy(enemyGroup)
+                ? 'rgba(255, 235, 59, 0.8)'
+                : 'rgba(3, 169, 244, 0.8)';
 
             // Convert NDC to pixels relative to gameCanvasRect origin
-            let x = (screenPos.x * state.gameCanvasRect.width / 2) + state.gameCanvasRect.width / 2;
-            let y = -(screenPos.y * state.gameCanvasRect.height / 2) + state.gameCanvasRect.height / 2;
+            const x = (screenPos.x * state.gameCanvasRect.width / 2) + state.gameCanvasRect.width / 2;
+            const y = -(screenPos.y * state.gameCanvasRect.height / 2) + state.gameCanvasRect.height / 2;
 
-            // Clamp position to gameCanvasRect edges with padding
-            // Position is relative to the #offscreen-indicator-container, which is viewport-sized.
-            // So, we need to add gameCanvasRect.left and gameCanvasRect.top for final screen position.
-            let clampedX = Math.max(screenPadding, Math.min(x, state.gameCanvasRect.width - screenPadding)) + state.gameCanvasRect.left;
-            let clampedY = Math.max(screenPadding, Math.min(y, state.gameCanvasRect.height - screenPadding)) + state.gameCanvasRect.top;
+            // Clamp to the canvas edges (padding), in viewport coordinates
+            // (#offscreen-indicator-container is viewport-sized).
+            const clampedX = Math.max(screenPadding, Math.min(x, state.gameCanvasRect.width - screenPadding)) + state.gameCanvasRect.left;
+            const clampedY = Math.max(screenPadding, Math.min(y, state.gameCanvasRect.height - screenPadding)) + state.gameCanvasRect.top;
 
-            // Angle calculation from gameCanvasCenter to clamped enemy screen position (relative to viewport for atan2)
+            // Angle from the canvas center to the clamped screen position
             const angle = Math.atan2(clampedY - state.gameCanvasCenterY, clampedX - state.gameCanvasCenterX) * 180 / Math.PI;
 
-            indicator.style.transform = `translate(-50%, -50%) rotate(${angle + 90}deg)`;
-            indicator.style.left = `${clampedX}px`;
-            indicator.style.top = `${clampedY}px`;
+            const transform = `translate3d(${Math.round(clampedX)}px, ${Math.round(clampedY)}px, 0) translate(-50%, -50%) rotate(${Math.round(angle + 90)}deg)`;
+            if (indicator.__lastDisplay !== 'block') {
+                indicator.style.display = 'block';
+                indicator.__lastDisplay = 'block';
+            }
+            if (indicator.__lastBg !== color) {
+                indicator.style.backgroundColor = color;
+                indicator.__lastBg = color;
+            }
+            if (indicator.__lastTransform !== transform) {
+                indicator.style.transform = transform;
+                indicator.__lastTransform = transform;
+            }
 
             indicatorsUsed++;
         }
-    });
+    }
 
     // Hide any unused indicators from the pool
     for (let i = indicatorsUsed; i < MAX_ENEMY_INDICATORS; i++) {
-        if (state.enemyIndicators[i].style.display !== 'none') {
-            state.enemyIndicators[i].style.display = 'none';
+        const indicator = state.enemyIndicators[i];
+        if (indicator.__lastDisplay !== 'none') {
+            indicator.style.display = 'none';
+            indicator.__lastDisplay = 'none';
         }
     }
 }

@@ -27,6 +27,13 @@ import { rumble } from './rumble.js';
 const tmpVec = new THREE.Vector3();
 const avoidVec = new THREE.Vector3();
 const awayVec = new THREE.Vector3();
+// Hot-loop trio (plan 020 P-6): the combined steering vector and the
+// orbit/chase components were fresh Vector3s per enemy per frame. NOTE:
+// moveEnemyWithCollision MUTATES the movement vector (detour rotation), so
+// moveScratch is re-zeroed at the top of every enemy iteration.
+const moveScratch = new THREE.Vector3();
+const orbitScratch = new THREE.Vector3();
+const chaseScratch = new THREE.Vector3();
 
 // Module-level scratch AABBs — the ONLY Box3 instances in the codebase
 // (plan 007). playerBox is refreshed once per collision section; scratchBox
@@ -264,20 +271,21 @@ export function updateEnemies(dt) {
     setPlayerCollisionBox(playerBox);
     for (let i = state.enemies.length - 1; i >= 0; i--) {
         const enemyGroup = state.enemies[i];
-        const bodyMesh = enemyGroup.getObjectByName('body'); // Get the body mesh
+        const bodyMesh = enemyGroup.userData.bodyMesh; // Tagged at build (plan 020 P-6 — no name lookup)
 
-        // The body material INSTANCE is shared by legs, ears, and tail, so
-        // one setHex flips them all; the cap has its own instance (lighter
-        // shade) and flips alongside. Feet keep the shared dark-blue material.
-        const capMaterial = enemyGroup.userData.capMaterial;
-        if (canKillSpecificEnemy(enemyGroup)) {
-            if (bodyMesh) bodyMesh.material.color.setHex(0xFFEB3B); // Bright Yellow if killable
-            if (capMaterial) capMaterial.color.setHex(KILLABLE_CAP_COLOR);
-            enemyGroup.userData.killable = true; // effects.js drives the aura/wobble off this
-        } else {
-            if (bodyMesh) bodyMesh.material.color.setHex(0x03A9F4); // Electric Blue otherwise
-            if (capMaterial) capMaterial.color.setHex(NORMAL_CAP_COLOR);
-            enemyGroup.userData.killable = false;
+        // Killability is computed ONCE per enemy per frame and reused by the
+        // AI and collision branches below (nothing it depends on changes
+        // mid-iteration). The body material INSTANCE is shared by legs,
+        // ears, and tail, so one setHex flips them all; the cap has its own
+        // instance (lighter shade). Colors flip only on the killable-state
+        // TRANSITION (plan 020 P-6 — same pattern as effects.js's scared
+        // flip), not every frame.
+        const killableNow = canKillSpecificEnemy(enemyGroup);
+        if (killableNow !== enemyGroup.userData.killable) {
+            enemyGroup.userData.killable = killableNow; // effects.js drives the aura/wobble off this
+            const capMaterial = enemyGroup.userData.capMaterial;
+            if (bodyMesh) bodyMesh.material.color.setHex(killableNow ? 0xFFEB3B : 0x03A9F4); // Yellow = killable, Electric Blue = hunter
+            if (capMaterial) capMaterial.color.setHex(killableNow ? KILLABLE_CAP_COLOR : NORMAL_CAP_COLOR);
         }
 
         // --- Spawn telegraph: materialize before acting (tension pass) ---
@@ -321,7 +329,7 @@ export function updateEnemies(dt) {
 
         // --- Enemy AI: Movement Logic ---
         const distanceToPlayer = torusDistance(enemyGroup.position, state.player.position);
-        let combinedMovement = new THREE.Vector3();
+        const combinedMovement = moveScratch.set(0, 0, 0); // Re-zeroed per enemy (mutated below)
 
         // --- Random Movement Component (calculated for all states) ---
         enemyGroup.timeToChangeRandomVelocity -= dt;
@@ -335,7 +343,7 @@ export function updateEnemies(dt) {
             enemyGroup.timeToChangeRandomVelocity = Math.random() * 2 + 1;
         }
 
-        if (canKillSpecificEnemy(enemyGroup)) {
+        if (killableNow) {
             // --- Fleeing Behavior ---
             if (distanceToPlayer > 0) { // Avoid issues if somehow at the exact same spot
                 // Flee = the shortest-path direction to the player, negated
@@ -346,9 +354,9 @@ export function updateEnemies(dt) {
             // --- Normal Chase and Orbit Logic ---
             const chaseDirection = torusDelta(enemyGroup.position, state.player.position, tmpVec).normalize();
             if (distanceToPlayer < engagementRadius) {
-                // --- Orbiting Behavior ---
-                const orbitVector = new THREE.Vector3(-chaseDirection.z * enemyGroup.orbitDirection, 0, chaseDirection.x * enemyGroup.orbitDirection);
-                const chaseComponent = chaseDirection.clone().multiplyScalar(1.0 - orbitStrengthFactor);
+                // --- Orbiting Behavior (scratch vectors — plan 020 P-6) ---
+                const orbitVector = orbitScratch.set(-chaseDirection.z * enemyGroup.orbitDirection, 0, chaseDirection.x * enemyGroup.orbitDirection);
+                const chaseComponent = chaseScratch.copy(chaseDirection).multiplyScalar(1.0 - orbitStrengthFactor);
                 const orbitComponent = orbitVector.normalize().multiplyScalar(orbitStrengthFactor);
                 combinedMovement.add(chaseComponent).add(orbitComponent).normalize().multiplyScalar(state.actualEnemySpeed);
             } else {
@@ -393,7 +401,7 @@ export function updateEnemies(dt) {
         // --- Collision Detection (with player) ---
         setEnemyCollisionBox(scratchBox, enemyGroup); // Body block only (audit C-2)
         if (playerBox.intersectsBox(scratchBox)) {
-            if (canKillSpecificEnemy(enemyGroup)) {
+            if (killableNow) {
                 killEnemy(enemyGroup, i); // splice(i, 1) — safe going backwards
                 continue;
             } else {
@@ -424,7 +432,7 @@ export function killEnemy(enemyGroup, index) {
     // Death explosion (plan 015): burst in the enemy's CURRENT body color
     // (yellow, since it was killable) transitioning to food-lime — the
     // visual sentence "enemy becomes food". Origin at the body's center.
-    const bodyMesh = enemyGroup.getObjectByName('body');
+    const bodyMesh = enemyGroup.userData.bodyMesh;
     const burstColor = bodyMesh ? bodyMesh.material.color.getHex() : 0xFFEB3B;
     // Body center — plus the terrain under the enemy in endless (y = 0 classic)
     enemyDeathPosition.y = (enemyGroup.userData.bodyBaseY ?? 0.9) * enemyGroup.scale.y +
@@ -627,15 +635,17 @@ export function updateEnemyStreaming(dt) {
 function computeAvoidance(enemyGroup, out) {
     const avoidRadius = 7;
     out.set(0, 0, 0);
-    state.enemies.forEach((otherEnemyGroup) => {
-        if (otherEnemyGroup !== enemyGroup) {
-            const distance = torusDistance(enemyGroup.position, otherEnemyGroup.position);
-            if (distance > 0 && distance < avoidRadius) {
-                // Direction away from the other enemy, across the seam if shorter
-                torusDelta(otherEnemyGroup.position, enemyGroup.position, awayVec).normalize();
-                out.add(awayVec);
-            }
+    // Plain for loop (plan 020 P-6): this runs per enemy pair per frame —
+    // the forEach closure was allocation + call overhead in the hottest path.
+    for (let i = 0; i < state.enemies.length; i++) {
+        const otherEnemyGroup = state.enemies[i];
+        if (otherEnemyGroup === enemyGroup) continue;
+        const distance = torusDistance(enemyGroup.position, otherEnemyGroup.position);
+        if (distance > 0 && distance < avoidRadius) {
+            // Direction away from the other enemy, across the seam if shorter
+            torusDelta(otherEnemyGroup.position, enemyGroup.position, awayVec).normalize();
+            out.add(awayVec);
         }
-    });
+    }
     return out;
 }

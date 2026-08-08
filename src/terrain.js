@@ -121,6 +121,15 @@ let terrainMaterial = null;
 let rockMaterial = null;
 let waterMesh = null;
 let active = new Map(); // key "cx,cz" → { key, cx, cz, mesh, rocks }
+// Collision fast path (plan 020 P-8): the same chunks keyed by a packed int
+// — blockedByRock probes a 3x3 neighborhood per movement sample, and the
+// string keys were 9 concatenations per probe. The string `chunk.key` field
+// stays THE identity everywhere else (food/cloud ownership, terrainInfo).
+const activeByInt = new Map();
+
+function chunkIntKey(cx, cz) {
+    return ((cx & 0xFFFF) << 16) | (cz & 0xFFFF);
+}
 const meshPool = []; // Released chunk meshes, buffers reused by re-displacing
 const rockPool = []; // Released boulder groups (4 box children each)
 let queue = []; // Pending chunk builds: { key, cx, cz }
@@ -282,6 +291,7 @@ export function resetTerrainForNewRun() {
     if (!terrainRoot) return;
     for (const chunk of active.values()) releaseChunk(chunk);
     active.clear();
+    activeByInt.clear();
     queue = [];
     pending.clear();
     lastScanCx = null;
@@ -336,6 +346,7 @@ function scanWindow(cx, cz) {
     for (const chunk of active.values()) {
         if (Math.max(Math.abs(chunk.cx - cx), Math.abs(chunk.cz - cz)) > CHUNK_RELEASE_RADIUS) {
             active.delete(chunk.key);
+            activeByInt.delete(chunkIntKey(chunk.cx, chunk.cz));
             releaseChunk(chunk);
         }
     }
@@ -441,6 +452,7 @@ function buildChunk(key, cx, cz) {
     scatterFood(chunk, centerTrueX, centerTrueZ);
     spawnChunkCloud(key, cx, cz); // Seeded sky: ~1 cloud per 2-3 chunks (clouds.js pool)
     active.set(key, chunk);
+    activeByInt.set(chunkIntKey(cx, cz), chunk); // Collision fast path (plan 020 P-8)
 }
 
 function releaseChunk(chunk) {
@@ -562,9 +574,10 @@ function blockedByRock(tx, tz, radius) {
     const cz = Math.floor(tz / CHUNK_SIZE);
     // 3x3 chunk neighborhood: max rock radius + max entity radius stays far
     // below CHUNK_SIZE, so a circle can never span past adjacent chunks.
+    // Packed-int lookups (plan 020 P-8): no string keys in the probe loop.
     for (let dz = -1; dz <= 1; dz++) {
         for (let dx = -1; dx <= 1; dx++) {
-            const chunk = active.get((cx + dx) + ',' + (cz + dz));
+            const chunk = activeByInt.get(chunkIntKey(cx + dx, cz + dz));
             if (!chunk) continue;
             for (const c of chunk.colliders) {
                 const ddx = tx - c.x;

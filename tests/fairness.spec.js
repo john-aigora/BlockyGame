@@ -150,10 +150,13 @@ test('behind-camera enemies clamp their arrow to the BOTTOM edge, not mirrored t
   await waitGameSeconds(page, 0.15); // ≥1 rendered frame with the new position
   const arrow = await page.evaluate(() => {
     const ind = window.__game.state.enemyIndicators[0];
-    return { display: ind.style.display, top: parseFloat(ind.style.top) };
+    // Position rides the translate3d transform (plan 020 P-5 — left/top are
+    // CSS-pinned at 0); parse the Y component out of it.
+    const m = /translate3d\((-?[\d.]+)px, (-?[\d.]+)px/.exec(ind.style.transform);
+    return { display: ind.style.display, y: m ? parseFloat(m[2]) : NaN };
   });
   expect(arrow.display).toBe('block'); // Off-screen → the arrow is live
-  expect(arrow.top).toBeGreaterThan(rect.top + rect.h * 0.75); // BOTTOM edge (south)
+  expect(arrow.y).toBeGreaterThan(rect.top + rect.h * 0.75); // BOTTOM edge (south)
 });
 
 test('window blur clears held movement keys: no phantom walking after alt-tab (C-4)', async ({ page }) => {

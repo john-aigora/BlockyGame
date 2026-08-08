@@ -755,7 +755,11 @@ canvas {
 
 .enemy-indicator {
     position: absolute;
-    /* Positioned within the container */
+    /* Positioned within the container. left/top stay pinned at 0 — the
+       per-frame position rides the transform (translate3d), so moving an
+       arrow never triggers layout (plan 020 P-5). */
+    left: 0;
+    top: 0;
     width: 20px;
     /* Example size */
     height: 20px;
