@@ -16,3 +16,4 @@ docs/audit/
 # Agent-session local artifacts
 .claude/
 .elves/
+.vercel
