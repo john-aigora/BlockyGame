@@ -39,6 +39,13 @@
             title="Play the untouched May 2025 build — see how far the models have come">&#8646; ORIGINAL &rsquo;25</a>
         <div id="danger-vignette"></div>
         <div id="go-flourish">GO!</div>
+        <!-- KILL!/combo live INSIDE the play frame (audit UI-1): they are
+             absolutely positioned and #game-container is their positioned
+             ancestor — in #ui-container (static) they anchored to the
+             viewport and floated above the frame. Plan 026 will relocate
+             them per player half; ids stay stable. -->
+        <div id="kill-indicator" class="kill-indicator">KILL!</div>
+        <div id="combo-chip" class="combo-chip">COMBO x2</div>
         <div id="start-overlay">
             <h1>BLOCKY COLLECTOR 3D</h1>
             <p class="tagline">Collect. Grow. Hunt the yellow ones.</p>
@@ -72,8 +79,6 @@
     <div id="offscreen-indicator-container"></div>
 
     <div id="ui-container">
-        <div id="kill-indicator" class="kill-indicator">KILL!</div>
-        <div id="combo-chip" class="combo-chip">COMBO x2</div>
         <button id="mute-button" class="game-button" aria-pressed="false">&#128266;</button>
         <div class="ui-element">Score: <span id="score">0</span></div>
         <div class="ui-element" id="distance-display">Distance: <span id="distance">0</span></div>

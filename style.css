@@ -612,15 +612,19 @@ canvas {
     font-size: 16px;
 }
 
-/* Kill indicator styling */
+/* Kill indicator styling. Positioned against #game-container (audit UI-1 —
+   the markup lives inside the play frame now): top-center, below the
+   ORIGINAL '25 link (top 10px, ~36px tall) and clear of the corner buttons. */
 .kill-indicator {
     position: absolute;
-    top: 10px;
-    /* Keep small top offset */
+    top: 46px;
+    /* Inside the canvas top edge, under #original-link */
     left: 50%;
     /* Center horizontally */
     transform: translateX(-50%);
     /* Adjust for horizontal centering */
+    z-index: 50;
+    /* Above the vignettes (30/40), below #top-controls (100) and overlays */
     background-color: rgba(255, 69, 0, 0.8);
     /* Bright Orange-Red with transparency */
     color: #FFFFFF;
@@ -642,10 +646,12 @@ canvas {
    0.25s play retriggered from JS — no loop, no strobe). */
 .combo-chip {
     position: absolute;
-    top: 64px;
-    /* Just below the kill indicator (top: 10px + its height) */
+    top: 100px;
+    /* Just below the kill indicator (top: 46px + its ~48px height) */
     left: 50%;
     transform: translateX(-50%);
+    z-index: 50;
+    /* Same layer as the kill indicator it tucks under */
     background-color: rgba(0, 0, 0, 0.65);
     color: #FFEB3B;
     /* Bright Yellow — the kill/bounty color */
