@@ -6,10 +6,9 @@ import {
 } from './constants.js';
 import { state } from './state.js';
 import { canKillSpecificEnemy } from './enemies.js';
-import { recordScore } from './hiscores.js';
+import { recordScore, loadHiscores } from './hiscores.js';
 import { torusDistance } from './worldmath.js';
 import { unlockAudio, sfx, music, isMuted, setMuted, audioState } from './audio.js';
-import { loadHiscores } from './hiscores.js';
 import { onPlayerDeath, onNewBest, spawnTextPopup } from './effects.js';
 import { rumble } from './rumble.js';
 
@@ -417,6 +416,10 @@ export function updateDangerPulse(dt) {
     for (const enemyGroup of state.enemies) {
         if (canKillSpecificEnemy(enemyGroup)) {
             anyKillable = true;
+            // Disarm any stale near-miss: an armed hunter the player has
+            // since outgrown must not fire CLOSE ONE! if it ever un-flips
+            // (B5+B6 review ADV-5 — latent trap if rescaling ever lands).
+            enemyGroup.userData.nearMissArmed = false;
             continue; // Killable enemies flee — they are prey, not danger
         }
         const d = torusDistance(enemyGroup.position, state.player.position);

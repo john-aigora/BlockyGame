@@ -33,7 +33,7 @@ export const MILESTONE_STEP = 1.0; // playerScale interval that fires a growth-m
 // particles a kill scatters (grunts keep today's 4).
 export const ENEMY_SPECIES = {
     grunt: { speedFactor: 1.0, bodyColor: null, harmless: false, foodDrop: 4 },
-    sprinter: { speedFactor: 2.2, bodyColor: 0xFF7043, harmless: false, foodDrop: 4 }, // Orange; fast BUT small and always edible — it harasses, never guarantees a catch (3.3 u/s vs the player's 6)
+    sprinter: { speedFactor: 2.2, bodyColor: 0xFF7043, harmless: false, foodDrop: 4 }, // Orange; always edible, so it takes the FLEE branch — a fast RUNNER whose challenge is the chase (flee 3.3 u/s vs player 6; the catch is skill, not a gift)
     juja: { speedFactor: 2.6, bodyColor: 0x66BB6A, harmless: true, foodDrop: 2 } // Small green critter — skittish bonus snack, never a wall
 };
 

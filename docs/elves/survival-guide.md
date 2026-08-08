@@ -74,6 +74,12 @@
   benign residual, documented; no action planned.
 - H10 (adv.8, done in log): perf reference rig = the 3-enemy deterministic
   ring; 29f04d3's settled-run numbers are NOT the plan-028 baseline.
+- H11 (B4/B5/B6 gates): 3-worker schedule flake class (~1-in-3 fulls, rotating
+  choreography specs, always solo-green) — B9's wall-clock retirement drains.
+- H12 (B5+B6 review ADV-4, → B9): pending half of the threat-gate counter is
+  untested — assert a scheduled giant warn suppresses the next top-up.
+- Playtest brief accumulates in the execution log (B6 section) — feed it into
+  the B10 Elves report's human-next-steps.
 
 ## Decisions made
 

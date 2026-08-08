@@ -326,3 +326,38 @@ All five steps landed; suite grew 95 → 102 (+4 tension, +3 audio).
   the 3-worker H4/H11 load-flake class; each solo-green immediately and
   green in every subsequent full run; effects.js untouched by this batch.
   lint 0 at every slice; build exit 0.
+
+## 2026-08-08 — B5+B6 review: BLOCK (doc-only) → driver revision → resolved
+
+- Verdict: implementation APPROVED as-is; single blocker B-1 was DOCUMENTATION —
+  the readme told players to "stand your ground and gobble [sprinters] before
+  they reach you", but an always-edible enemy takes the FLEE branch: a
+  production sprinter is a fast RUNNER you chase down. The B6 log line
+  "measured ~3.3 u/s closing on a standing player" is hereby CORRECTED: that
+  measurement used scale-2 non-killable hunters the production rotation can
+  never create; production sprinters flee at ~3.3 u/s.
+- Driver revision: readme + constants comment now describe the true mechanic
+  (a catch-skill chase reward); ADV-5 stale nearMissArmed disarmed on the
+  killable path; ADV-8 duplicate hiscores import merged.
+- Reviewer also closed hard questions: threat-gate predicate is the exact
+  complement of edibility (no double-count/starve); title bed can never play
+  at volume 1 and cannot unlock on bypassed-gate boots; blob-shadow bendClone
+  re-arm real; sprinter burst >6.0 u/s needs drift alignment at ramp ≥1800u
+  vs an ungrown player for <3s — transient, not a catch (STOP condition holds).
+
+### FAMILY PLAYTEST BRIEF (accumulating — B6 additions)
+
+1. Sprinter design question (driver → owners): sprinters shipped as fast
+   FLEEING bonus prey (coherent, honest). If you want harass pressure that
+   runs AT you instead, that is a species-level flee exemption — say the word
+   and it becomes a follow-up plan.
+2. Juja past 1800u outruns a scale-1 player entirely (6.24 vs 6.0 flee) —
+   intended "earn it" or frustrating? (ADV-1)
+3. Dread music layer 2 + heartbeat are much rarer now that prey is plentiful
+   (3/8 spawns edible + threat-only gate) — listen for whether dread still
+   lands. (ADV-2)
+4. Field population steady-state roughly doubled (killables accumulate to the
+   hard cap 12) — busier board, watch the feel. (ADV-3)
+5. Mobile warn rings run 1.66s at rest (speed-scaled notice) — iPad check.
+6. Hardware: DB9 sticks via ?paddebug=1 — first wiggle claims the pad
+   (deliberately not acted on), then play. Both ports, one at a time.
