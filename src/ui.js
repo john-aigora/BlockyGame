@@ -486,9 +486,17 @@ export function updateOffscreenIndicators() {
         const behindCamera = indicatorViewPos.z > -state.camera.near;
         const screenPos = indicatorWorldPos.copy(enemyGroup.position).project(state.camera);
         if (behindCamera) {
-            const mag = Math.hypot(screenPos.x, screenPos.y) || 1;
-            screenPos.x = (-screenPos.x / mag) * 1000;
-            screenPos.y = (-screenPos.y / mag) * 1000;
+            // Mirror-correct the projection (negative w flipped both axes)
+            // and push it JUST past the NDC unit box along the true bearing:
+            // scaling by 1.001/max(|x|,|y|) saturates only the dominant
+            // axis, so the per-axis pixel clamp below lands on the TRUE
+            // edge point. The old fixed radius-1000 push blew BOTH axes
+            // past their clamps, corner-quantizing every non-axis-aligned
+            // bearing by up to ~25-30° (B2+B3 review, H7).
+            const major = Math.max(Math.abs(screenPos.x), Math.abs(screenPos.y)) || 1;
+            const push = 1.001 / major;
+            screenPos.x = -screenPos.x * push;
+            screenPos.y = -screenPos.y * push;
         }
 
         const isOffScreenX = screenPos.x < -1 || screenPos.x > 1;

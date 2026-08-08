@@ -188,6 +188,42 @@ test('behind-camera enemies clamp their arrow to the BOTTOM edge, not mirrored t
   expect(arrow.y).toBeGreaterThan(rect.top + rect.h * 0.75); // BOTTOM edge (south)
 });
 
+test('behind-camera DIAGONAL enemy: arrow lands on the true edge point, not the corner (H7)', async ({ page }) => {
+  await bootEndless(page);
+  await waitGameSeconds(page, 0.3);
+  // Park the boot enemy behind the camera plane AND well east: 60u south +
+  // 40u east of the player. The old fixed radius-1000 mirror push blew BOTH
+  // axes past their pixel clamps, so every such diagonal bearing landed in
+  // the exact bottom-right CORNER (~25-30 degrees of bearing error); the
+  // per-axis 1.001/max(|x|,|y|) push keeps the minor axis at its true
+  // proportional spot.
+  const rect = await page.evaluate(() => {
+    const s = window.__game.state;
+    const e = s.enemies[0];
+    e.position.set(s.player.position.x + 40, e.position.y, s.player.position.z + 60);
+    const r = s.gameCanvasRect;
+    return { left: r.left, top: r.top, w: r.width, h: r.height };
+  });
+  await waitGameSeconds(page, 0.15); // ≥1 rendered frame with the new position
+  const arrow = await page.evaluate(() => {
+    const ind = window.__game.state.enemyIndicators[0];
+    const m = /translate3d\((-?[\d.]+)px, (-?[\d.]+)px/.exec(ind.style.transform);
+    return { display: ind.style.display, x: m ? parseFloat(m[1]) : NaN, y: m ? parseFloat(m[2]) : NaN };
+  });
+  const pad = 15; // screenPadding in updateOffscreenIndicators
+  const cornerX = rect.left + rect.w - pad;
+  const cornerY = rect.top + rect.h - pad;
+  expect(arrow.display).toBe('block'); // Off-screen -> the arrow is live
+  // Bearing sanity: the enemy is south-east, so the arrow sits in the
+  // bottom-right QUADRANT of the frame...
+  expect(arrow.x).toBeGreaterThan(rect.left + rect.w / 2);
+  expect(arrow.y).toBeGreaterThan(rect.top + rect.h / 2);
+  // ...but NOT pinned to the exact corner point (both clamps saturated),
+  // which is where the old fixed-radius push quantized it.
+  const atCorner = Math.abs(arrow.x - cornerX) <= 1.5 && Math.abs(arrow.y - cornerY) <= 1.5;
+  expect(atCorner).toBe(false);
+});
+
 test('window blur clears held movement keys: no phantom walking after alt-tab (C-4)', async ({ page }) => {
   await bootEndless(page);
   await page.evaluate(() => {
