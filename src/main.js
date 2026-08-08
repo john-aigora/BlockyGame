@@ -1,6 +1,6 @@
 import { applySpeedMultiplier, speedUp, speedDown, forceWorldMode, perfInfo } from './game.js';
 import { state } from './state.js';
-import { spawnNearPlayer, spawnAtPosition } from './collectibles.js';
+import { spawnNearPlayer, spawnAtPosition, spawnChunkFood } from './collectibles.js';
 import { spawnNewEnemies, updateEnemyStreaming, resetEnemyStreaming, updateSpawnWarnings, debugSpawnSpecies, pendingSpawnInfo } from './enemies.js';
 import { onTouchStart, onTouchMove, onTouchEndOrCancel, gamepadVector, pollGamepad, isGamepadConnected, gamepadDebugInfo } from './input.js';
 import { sfx, isMuted, audioState, music } from './audio.js';
@@ -22,6 +22,10 @@ window.__game = {
     debug: {
         spawnNearPlayer,
         spawnAtPosition,
+        // A gold food at LOCAL (x, z) under a spec-owned chunk key (plan
+        // 025): never released by streaming, cleared by setupNewGame like
+        // every collectible. Production gold rides the seeded chunk scatter.
+        spawnGoldFood: (x, z) => spawnChunkFood(x, z, 'debug-gold', true),
         spawnNewEnemies,
         updateEnemyStreaming, // Bubble spawn path (endless spawn-band spec)
         updateSpawnWarnings, // Warn-pipeline tick — materializes pending spawns (plan 017)

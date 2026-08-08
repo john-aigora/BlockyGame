@@ -5,7 +5,7 @@ import {
     WATER_LEVEL, CURVE_STRENGTH, SPAWN_MESA_RADIUS,
     ROCKS_PER_CHUNK_MAX, ROCK_SPAWN_CLEARANCE,
     WATER_WALK_MARGIN, ROCK_COLLIDER_FACTOR,
-    FOOD_PER_CHUNK_MIN, FOOD_PER_CHUNK_MAX, FOOD_WATER_CLEARANCE,
+    FOOD_PER_CHUNK_MIN, FOOD_PER_CHUNK_MAX, FOOD_WATER_CLEARANCE, GOLD_CHUNK_CHANCE,
     minSpawnDistanceFromPlayer,
     BIOME_WAVELENGTH, BIOME_TINT_STRENGTH, SHORE_BAND_HEIGHT, SHORE_BAND_BOOST,
     WATER_DEPTH_RANGE, WATER_DEEP_TINT, WATER_SNAP
@@ -585,6 +585,16 @@ function scatterFood(chunk, centerTrueX, centerTrueZ) {
     let s = (Math.imul(chunk.cx, 2246822519) ^ Math.imul(chunk.cz, 3266489917) ^ (WORLD_SEED + 977)) >>> 0;
     const next = () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
     const count = FOOD_PER_CHUNK_MIN + Math.floor(next() * (FOOD_PER_CHUNK_MAX - FOOD_PER_CHUNK_MIN + 1));
+    // Gold prize (plan 025): ONE extra seeded roll, BEFORE the spot loop —
+    // the roll-all law keeps the stream aligned so rebuilds reproduce the
+    // identical layout, gold included. The same roll both decides (8% of
+    // chunks) and PICKS the spot (goldRoll/chance re-spread over [0,1) →
+    // uniform index). A gold spot that loses to water/rock rejection simply
+    // isn't grown — rarity stays honest, alignment untouched.
+    const goldRoll = next();
+    const goldIndex = goldRoll < GOLD_CHUNK_CHANCE
+        ? Math.floor((goldRoll / GOLD_CHUNK_CHANCE) * count)
+        : -1;
     for (let n = 0; n < count; n++) {
         // Roll ALL randoms before any rejection — the stream stays aligned,
         // so every rebuild reproduces the identical layout.
@@ -592,7 +602,7 @@ function scatterFood(chunk, centerTrueX, centerTrueZ) {
         const tz = centerTrueZ - HALF + 1.5 + next() * (CHUNK_SIZE - 3);
         if (!isFoodSpotTrue(tx, tz, chunk)) continue;
         if (Math.hypot(tx, tz) < minSpawnDistanceFromPlayer) continue; // Run-start clearance (classic rule)
-        spawnChunkFood(tx - state.worldOrigin.x, tz - state.worldOrigin.z, chunk.key);
+        spawnChunkFood(tx - state.worldOrigin.x, tz - state.worldOrigin.z, chunk.key, n === goldIndex);
     }
 }
 

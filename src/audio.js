@@ -84,8 +84,15 @@ export const sfx = {
     start: () => { [523, 659, 784].forEach((f, i) => blip({ freq: f, dur: 0.09, vol: 0.15, delay: i * 0.09 })); },
     // New-best fanfare (spectacle pass): a four-note rising C-major arpeggio
     // capped with a held two-voice chord — unmistakably bigger than the
-    // three-note boot jingle. Plays under the death screen at rank 0.
-    fanfare: () => {
+    // three-note boot jingle. Plays under the death screen at rank 0, and
+    // FULL again for the titan kill (plan 025). fanfare('short') is the
+    // same arpeggio at double speed with no held chord — the gold-food
+    // flourish: richer than a collect blip, humbler than a triumph.
+    fanfare: (variant) => {
+        if (variant === 'short') {
+            [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => blip({ freq: f, dur: 0.07, vol: 0.13, delay: i * 0.05 }));
+            return;
+        }
         [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => blip({ freq: f, dur: 0.12, vol: 0.16, delay: i * 0.11 }));
         blip({ freq: 1567.98, dur: 0.4, vol: 0.13, delay: 0.44 });
         blip({ freq: 783.99, type: 'triangle', dur: 0.4, vol: 0.12, delay: 0.44 });

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {
     growthFactor, enemyBaseHeight, speedMultipliers, SPEED_LADDER,
-    FOOD_POINTS, ENEMY_HEIGHT_FACTOR, MILESTONE_STEP,
+    FOOD_POINTS, GOLD_FOOD_POINTS, ENEMY_HEIGHT_FACTOR, MILESTONE_STEP,
     SPEED_GROWTH_FACTOR, SPEED_GROWTH_CAP,
     BASE_PLAYER_SPEED, BASE_ENEMY_SPEED, MOBILE_SPEED_MULTIPLIER,
     worldSize, initialFoodDensityArea,
@@ -400,10 +400,15 @@ function update(dt) {
             const collectible = state.collectibles[i];
             scratchBox.setFromObject(collectible);
             if (playerBox.intersectsBox(scratchBox)) {
+                // Gold food (plan 025): 5x points, everything else identical
+                // — same growth, same FULL clock reset. The clock is the
+                // survival axis; gold only sweetens the points axis, so the
+                // detour decision stays a routing choice, never a lifeline.
+                const isGold = collectible.userData.gold === true;
                 onCollect(collectible.position); // Lime burst + squash-stretch (plan 015)
                 state.scene.remove(collectible);
                 state.collectibles.splice(i, 1);
-                state.score += FOOD_POINTS;
+                state.score += isGold ? GOLD_FOOD_POINTS : FOOD_POINTS;
                 updateScoreDisplay();
                 const prevScale = state.playerScale;
                 state.playerScale += growthFactor;
@@ -423,7 +428,20 @@ function update(dt) {
                 }
                 spawnNearPlayer();
                 resetCollectClock();
-                sfx.collect();
+                if (isGold) {
+                    // The gold beat: a "+5 GOLD!" popup over the head and the
+                    // short fanfare INSTEAD of the collect blip (layering both
+                    // would mush; the fanfare carries the reward). Fired after
+                    // the milestone block so a same-frame growth jingle never
+                    // buries the gold popup as the last text.
+                    milestoneOrigin.x = state.player.position.x;
+                    milestoneOrigin.y = state.player.position.y + state.playerScale + 0.6;
+                    milestoneOrigin.z = state.player.position.z;
+                    spawnTextPopup(milestoneOrigin, `+${GOLD_FOOD_POINTS} GOLD!`, '#FFD54F');
+                    sfx.fanfare('short');
+                } else {
+                    sfx.collect();
+                }
                 rumble(35, 0.25); // Soft pad pulse (no-op if no actuator)
             }
         }

@@ -45,6 +45,11 @@ export const NEAR_MISS_FACTOR = 1.5; // CLOSE ONE! arms inside this × (player+e
 
 // --- World identity & late game (plan 025) ---
 export const REGION_DISCOVER_DEBOUNCE = 1.5; // Game-seconds a NEW biome region must hold before DISCOVERED fires — shoreline wiggles flicker the bin, and a banner that stutters is no banner
+// Gold food: a visible routing prize — worth a detour, not a strategy.
+// 5x points, same full clock reset as normal food; the VALUE is the detour
+// decision, so rarity does the balancing, not the clock.
+export const GOLD_FOOD_POINTS = 5; // One gold block = five normal blocks
+export const GOLD_CHUNK_CHANCE = 0.08; // Chunks growing ONE gold block (~1 per 12 chunks ≈ every screen or two of travel): rare enough to point at, common enough to chase
 
 // Tension systems (awesome pass): make danger and urgency legible.
 export const DANGER_MUSIC_THRESHOLD = 0.12; // dangerOpacity above this (with NO prey alive) lifts the music to the danger layer (2) — just past the vignette's first visible breath, so the pad arrives with the dread, not before

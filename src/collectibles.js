@@ -14,15 +14,31 @@ export const COLLECTIBLE_MATERIAL = new THREE.MeshStandardMaterial({ color: 0x76
 // Same horizon bend as terrain — without this, far food reads as floating sky cubes.
 applyWorldBend(COLLECTIBLE_MATERIAL);
 
-// Builds a collectible mesh (small lime-green cube) on the shared resources.
-function buildCollectible() {
-    const collectible = new THREE.Mesh(COLLECTIBLE_GEOMETRY, COLLECTIBLE_MATERIAL);
+// Gold food (plan 025): ONE shared material for every gold block — steady
+// self-emissive amber (deliberately NOT riding the lime glow pulse: gold
+// must read as the different thing at a glance, even across a lake).
+const GOLD_FOOD_MATERIAL = new THREE.MeshStandardMaterial({
+    color: 0xFFD54F,
+    emissive: 0xFFB300,
+    emissiveIntensity: 0.45
+});
+applyWorldBend(GOLD_FOOD_MATERIAL);
+const GOLD_FOOD_SCALE = 1.25; // Slightly larger than normal food — a prize, not a snack
+
+// Builds a collectible mesh (small lime-green cube — or the gold prize) on
+// the shared resources.
+function buildCollectible(gold = false) {
+    const collectible = new THREE.Mesh(COLLECTIBLE_GEOMETRY, gold ? GOLD_FOOD_MATERIAL : COLLECTIBLE_MATERIAL);
     // No castShadow (plan 020 / audit P-1): a 0.7u glowing cube's shadow is
     // invisible at gameplay zoom, but every food block was a shadow-pass draw.
     collectible.receiveShadow = true; // Though small, good practice
     // Per-item phase so the rotate/bob idle animation (effects.js) doesn't
     // move every cube in visible lockstep.
     collectible.userData.phase = Math.random() * Math.PI * 2;
+    if (gold) {
+        collectible.userData.gold = true; // The collect block pays GOLD_FOOD_POINTS on this flag
+        collectible.scale.setScalar(GOLD_FOOD_SCALE);
+    }
     return collectible;
 }
 
@@ -71,9 +87,10 @@ export function spawnCollectible(pickPosition) {
 
 // --- Per-chunk seeded food (endless streaming; called by terrain.js) ---
 // The chunk scatter already validated the spot (land, rock clearance), so
-// this places directly — no picker, no retry, deterministic layout.
-export function spawnChunkFood(localX, localZ, chunkKey) {
-    const collectible = buildCollectible();
+// this places directly — no picker, no retry, deterministic layout. `gold`
+// rides the chunk's own seeded roll (terrain.js scatterFood).
+export function spawnChunkFood(localX, localZ, chunkKey, gold = false) {
+    const collectible = buildCollectible(gold);
     const groundY = groundHeightAt(localX, localZ);
     collectible.position.set(localX, groundY + 0.45, localZ);
     collectible.userData.baseY = groundY; // Rebase-invariant height cache (plan 020 P-4)

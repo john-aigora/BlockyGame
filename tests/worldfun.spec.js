@@ -161,6 +161,45 @@ test('crossing into a new region fires DISCOVERED and the death screen counts RE
   await expect(page.locator('#final-distance-line')).toContainText('REGIONS 2');
 });
 
+test('gold food: seeded scatter grows it; collecting pays +5 with the gold beat', async ({ page }) => {
+  await openWorld(page);
+  // Production path: the DEFAULT world's boot window (49 chunks) grows gold
+  // deterministically — live-probed fixture at seed 20260726: 3 gold blocks,
+  // nearest (23.5, 5.6) in the synchronously-built inner ring. A changed
+  // default seed re-fixtures this test (re-probe via state.collectibles).
+  await page.waitForFunction(() => window.__game.debug.terrainInfo().activeChunks >= 49, null, { timeout: 30000 });
+  const gold = await page.evaluate(() =>
+    window.__game.state.collectibles
+      .filter((c) => c.userData.gold === true)
+      .map((c) => ({ x: c.position.x, z: c.position.z })));
+  expect(gold.length).toBeGreaterThanOrEqual(1);
+  const nearest = gold.reduce((a, b) => (Math.hypot(a.x, a.z) <= Math.hypot(b.x, b.z) ? a : b));
+  expect(Math.hypot(nearest.x, nearest.z)).toBeLessThan(40); // Reachable fixture, not a horizon rumor
+
+  await startGame(page);
+  const before = await page.evaluate((n) => {
+    const s = window.__game.state;
+    s.collectTimeLeft = 5; // A LOW clock proves the gold collect fully resets it
+    s.player.position.x = n.x; // Teleport ONTO the gold block — collected next frame
+    s.player.position.z = n.z;
+    return { score: s.score, count: s.collectibles.length };
+  }, nearest);
+  await expect.poll(
+    () => page.evaluate(() => window.__game.debug.effectsInfo().lastPopupText),
+    { timeout: 30000 }
+  ).toBe('+5 GOLD!');
+  const after = await page.evaluate(() => ({
+    score: window.__game.state.score,
+    clock: window.__game.state.collectTimeLeft,
+    goldLeft: window.__game.state.collectibles.filter((c) => c.userData.gold === true).length
+  }));
+  // >= not ===: the teleport may sweep an adjacent normal block in the same
+  // frame (+1); the popup above already pins that the GOLD branch paid.
+  expect(after.score - before.score).toBeGreaterThanOrEqual(5);
+  expect(after.clock).toBeGreaterThan(10); // Full reset toward 15, same as normal food
+  expect(after.goldLeft).toBe(gold.length - 1); // The prize is gone — collected, not respawned
+});
+
 test('?daily=1 resolves the daily seed without the toggle', async ({ page }) => {
   await openWorld(page, '?daily=1');
   const daily = await pageDailySeed(page);

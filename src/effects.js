@@ -125,6 +125,15 @@ export function initEffects() {
         state.scene.add(sprite);
         popups.push({ sprite, texture, ctx2d, life: 0, baseY: 0 });
     }
+    // Pre-upload every popup canvas texture NOW (plan 025): a CanvasTexture
+    // otherwise reaches the GPU only on its sprite's first VISIBLE render —
+    // so each popup pool slot's first-ever use mid-run was a one-time
+    // texture allocation (a moving +1 in the resource-plateau specs, and a
+    // micro-hitch landing exactly on a celebratory beat). With the pool now
+    // serving more beat kinds (score, DISTANCE, DISCOVERED, gold, titan),
+    // several slots debut in any long walk. initTexture makes the claim
+    // above literally true: ALL popup GPU resources exist from boot.
+    for (const p of popups) state.renderer.initTexture(p.texture);
 
     // Panic food arrow: a 4-sided cone reads as a blocky pyramid — on-theme.
     // The tip is pre-rotated to +Z so a single rotation.y aims it. It wears
