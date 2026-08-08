@@ -36,6 +36,8 @@ Endless world only (classic arena is retired; original May 2025 build remains at
 - **Jump**: Space or pad **A** (hop rocks, not lakes).
 - **Speed**: F cycles; **R** or pad **X** slows one step; pad **Y** speeds up. Ladder: 0.5× → 1× → 1.5× → 2× → 3× → 5×.
 - **Pad (F310 on Mac: back switch D)**: A jump, Start pause, Select mute, LB/RB zoom, Start+Select restart.
+  Classic DB9 joysticks via dual-port USB adapters work — each port is a
+  separate pad; wiggle the stick once to claim.
 - **Grow**: grab a LIME block at least every 15 seconds — food is worth 1 point
   and makes you taller.
 - **Hunt**: when you're taller than an enemy it turns YELLOW and runs. Touch it

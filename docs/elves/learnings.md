@@ -35,6 +35,7 @@
 - [2026-07-25] Push to origin is DENIED (account RBrownHOPE is read-only on john-aigora/BlockyGame) and the user forbade pushing anyway. Never `git push` this run.
 - [2026-07-25] `isMobile` UA-sniffing falsely matches touch laptops (until plan 012 replaces it with `pointer: coarse`).
 - [2026-07-25] npm's shebang (`#!/usr/bin/env node`) fails if node isn't on PATH even when called by absolute path — always export PATH first.
+- [2026-08-07] Dual-port DB9→USB adapters (HuiJia, VID 0e8f PID 3013) enumerate a permanently-connected ghost interface, often with the SAME id string as the live socket. Pad selection must re-scan all pads for activity EVERY poll — never hold a preferred lock on an idle pad when another pad is producing input (plan 018) — and identity is by `gamepad.index` only, never id/name.
 - [2026-07-26] Game time is NOT wall time in tests. Concurrent Playwright suites (or other agents on the machine) push headless software rendering below 20fps, and the MAX_DELTA=0.05 clamp in `src/game.js` then dilates game time to a fraction of wall clock. Specs must time gameplay against `state.runTime` (the dt-accumulated run clock) or condition-based waits with generous wall ceilings — never `performance.now()` deltas or fixed `waitForTimeout`s around game-clock behavior. See `tests/helpers.js` (`waitForGameOver`, `waitGameSeconds`).
 
 ## Retired Learnings
