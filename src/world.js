@@ -143,10 +143,14 @@ export function createWorld() {
     state.camera.lookAt(0, 0, 0); // Camera looks at the center of the scene
 
     // 3. Renderer: Draws the scene from the camera's perspective.
-    state.renderer = new THREE.WebGLRenderer({ antialias: true }); // antialias for smoother edges
-    state.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Sharp on retina; cap 2 — dpr 3+ costs GPU for invisible gains
+    // MOBILE TIER (plan 020 P-10): coarse-pointer devices trade MSAA, the
+    // retina DPR cap, and shadows for frame rate — phone GPUs were paying
+    // desktop-tier fill cost on a 6x smaller screen. init() resolves
+    // state.isMobile BEFORE calling createWorld (ordering contract).
+    state.renderer = new THREE.WebGLRenderer({ antialias: !state.isMobile });
+    state.renderer.setPixelRatio(Math.min(window.devicePixelRatio, state.isMobile ? 1.5 : 2)); // Desktop cap 2 — dpr 3+ costs GPU for invisible gains
     state.renderer.setSize(state.gameContainer.clientWidth, state.gameContainer.clientHeight);
-    state.renderer.shadowMap.enabled = true; // Enable shadows in the scene
+    state.renderer.shadowMap.enabled = !state.isMobile; // Shadows are a desktop luxury
     // Add the renderer's canvas element to the game container div
     state.gameContainer.insertBefore(state.renderer.domElement, state.gameContainer.firstChild);
 
@@ -190,7 +194,7 @@ export function onWindowResize() {
 
     state.camera.aspect = newWidth / newHeight; // Update camera aspect ratio
     state.camera.updateProjectionMatrix(); // Apply changes to camera
-    state.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Window may have moved to a display with a different dpr
+    state.renderer.setPixelRatio(Math.min(window.devicePixelRatio, state.isMobile ? 1.5 : 2)); // Same tier rule as createWorld; the window may have moved displays
     state.renderer.setSize(newWidth, newHeight); // Resize renderer
 }
 

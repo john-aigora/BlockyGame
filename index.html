@@ -12,6 +12,12 @@
     <meta property="og:description" content="Collect. Grow. Hunt the yellow ones. A father/son browser arcade game.">
     <meta property="og:type" content="website">
     <link rel="stylesheet" href="style.css">
+    <!-- Preconnect (plan 020 P-11): the fonts stylesheet lives on
+         googleapis and the woff2 files on gstatic — warming both TLS
+         handshakes in parallel with the stylesheet fetch shaves the font
+         swap delay on first load. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 </head>
 
