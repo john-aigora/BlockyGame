@@ -39,15 +39,22 @@
 
 ## Next action
 
-- **NOW**: Launch B1 worker (plan 017). After its completion: verify gates
-  myself, fresh-subagent review, reconcile, mark B1 in session json + execution
-  log, commit `[feat/audit-coop-2026 · Batch 1/10 · Close] …`, re-read this
-  guide, proceed to B2.
+- **NOW**: Launch B2 worker (plan 018 THEN plan 021, sequentially, one worker —
+  both touch readme.md). After completion: driver verify (lint + log + scope),
+  fresh-subagent review of the batch diff, reconcile, guide update, proceed B3.
+- Loop for every batch: worker → driver verify → fresh review → reconcile
+  (Review-phase commit) → guide/log update → next batch. B1 pattern worked.
 
 ## Deferred hygiene
 
-(bank advisory nits here; drain at terminal)
-- none yet
+(bank advisory nits here; drain at terminal — mostly plan 027 territory)
+- H1 (B1 review): tests/hiscores.spec.js:55-63 corrupt-storage spec stranded on
+  dead classic key — convert to endless key so the try/catch is actually tested.
+- H2 (B1 review): ranking specs seed rank-correlated score+distance — seed one
+  low-score/high-distance row so distance-first ranking is discriminated.
+- H3 (B1 worker+review): camera.spec.js:26 latent enemy-contact race (32 live
+  clicks vs idle death) — despawn-then-click or drive zoom via debug handle.
+- H4 (B1 review): effects.spec.js:97 missing the 200ms settle its siblings use.
 
 ## Decisions made
 

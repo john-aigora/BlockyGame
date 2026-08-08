@@ -31,3 +31,16 @@
   stale "61 tests" now points at `--list`.
 - Gate: `npm test` twice consecutively → 79 passed / 0 failed (4.6m, 4.7m).
   No plan STOP conditions hit. Plan 017 row → DONE.
+
+## 2026-08-07 — B1 review + driver reconcile
+
+- Fresh-context review verdict: APPROVE-WITH-ADVISORIES, zero blockers. Every
+  rewritten spec still fails on its original bug (cap path, pool premises, and
+  ranking traced to source); scope clean; ci.yml valid by line-read.
+- Reconciled now (driver, Review phase): workers CI-aware (`CI ? 1 : 3` +
+  `retries CI ? 1 : 0` — 3 workers on a 2-4 vCPU runner is worse contention
+  than the 4-of-10 that flaked locally); ci.yml hardening (permissions,
+  concurrency-cancel, timeout-minutes 30); main.js handle comment no longer
+  claims read-only; .gitignore now covers .claude/ and .elves/.
+- Banked to deferred hygiene: H1 stranded corrupt-storage spec, H2 ranking
+  discrimination seed, H3 camera:26 race, H4 settle consistency (drain in B9).

@@ -9,7 +9,9 @@ import { terrainHeight, groundHeightAt, terrainInfo, isWalkable, canMove, terrai
 import { cloudInfo } from './clouds.js';
 import { movementDebug } from './movement-continuous.js';
 
-// Read-only debug/test handle; production code must never read it.
+// Test/debug handle; production code must never read it. (Not strictly
+// read-only: some entries — spawners, streaming/warn ticks — mutate sim
+// state on purpose so specs can drive the game deterministically.)
 // `debug` exposes spawners for the Playwright suites (world/resources/
 // balance specs), audio state introspection (audio spec — real audio output
 // can't be asserted headlessly), and the raw touch handlers (touch spec —
