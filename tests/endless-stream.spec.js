@@ -300,6 +300,11 @@ test('bubble spawns rotate size bands: prey appears, not only giants', async ({ 
     let tries = 0;
     while (s.enemies.length < 3 && tries < 40) {
       d.updateEnemyStreaming(5); // Big dt clears the cooldown each call
+      // The streaming tick only QUEUES a warn disc now (0.95s red warn
+      // before materializing — src/enemies.js); tick the warn pipeline
+      // 2.0 game-seconds so the queued spawn lands in state.enemies
+      // (plan 017 endless-semantics rewrite).
+      for (let i = 0; i < 40; i++) d.updateSpawnWarnings(0.05);
       tries++;
     }
     // Scaled BODY height of each spawn vs the player's height — read the
