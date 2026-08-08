@@ -54,7 +54,7 @@ which hardened BlockyGame's own pad code for dual-port DB9 adapters).
 | 018 | Gamepad reliability: rescan-first selection, honest scoring, per-pad edges | P1 | M | 017 | DONE — code+tests landed, gamepad spec 10/10, hardware check pending family; full-suite criterion BLOCKED by pre-existing balance.spec.js:42 combo race (exposed by schedule shift; see execution log 2026-08-08 B2) |
 | 019 | Fairness pass: honest hitboxes, truthful arrows, input integrity | P1 | M | 017 | DONE |
 | 020 | Perf pass 1: perfInfo hook, shadow diet, culling, hot-loop hygiene, mobile tier | P1 | M | 017 | DONE |
-| 021 | Docs truth + root CLAUDE.md + Node pinning | P2 | S | 017 | TODO |
+| 021 | Docs truth + root CLAUDE.md + Node pinning | P2 | S | 017 | DONE |
 | 022 | Debt/UI/security bundle (15 small items) | P2 | M | 017; item 1 before 026 | TODO |
 | 023 | Fun 1: blob shadows, survival beats, danger music layer, title warmth | P2 | M | 017 (020 first preferred) | TODO |
 | 024 | Fun 2: enemy species (sprinter/juja), prey supply, reachable combos, speed-aware warns | P2 | M-L | 017, 019, 022.1, 023 | TODO |

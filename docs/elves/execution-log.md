@@ -124,3 +124,21 @@
   math, B8 pickup-box unification + builder signature, B9 DPR pin, B10 cull
   hardening; H9 benign residual documented). Two plan-scope self-contradictions
   (019 terrain helper, 020 style.css) corrected in the plan files.
+
+## 2026-08-08 — B2b worker: 021 landed (docs truth + CLAUDE.md), B2 resolved
+
+- Every readme claim verified against code before writing (plan STOP rule):
+  cap 12, distance-ranked endless board (score tiebreak), Space=jump with
+  P/Enter pause, floating origin confirmed (game.js:201), milestone 250u,
+  kill flash 1 Hz. No contradictions found — no STOP hit.
+- Readme rewritten (0b69ae5): endless-only intro + test-path classic note,
+  real structure map from ls, two-mode world fact, Node 20.19+/22.12+ with
+  PATH note; 018's DB9 line preserved; driver-granted sentence added (first
+  press on a not-yet-active pad only claims it — press once, then play).
+- CLAUDE.md promoted to root + learnings.md:29 torus invariant corrected and
+  retired (87771ab cited); engines + .nvmrc landed, lint still 0 (8e3fc14).
+- todo spike truth + 016 acceptance strikes + controls-hint single-sourced in
+  index.html (ui.js overwrite deleted; no spec pinned the string) +
+  grok_tips.md → docs/history with header + referrers (a77b7b9).
+- Gate: 92 passed / 0 failed x2 consecutive (4.8m each) + lint 0. B2 flipped
+  blocked → resolved in session json (018 in B2, 021 here, race ended in B3).
