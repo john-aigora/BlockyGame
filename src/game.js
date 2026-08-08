@@ -23,7 +23,7 @@ import { initClouds, setCloudMode, updateClouds, shiftClouds } from './clouds.js
 import { initEffects, updateEffects, resetEffects, onCollect, onGrowthMilestone, shiftActiveParticles, spawnTextPopup, onJumpTakeoff, onJumpLand } from './effects.js';
 import { keys, moveVector, clearTransientInput, onKeyDown, onKeyUp, setupTouchControls, setupGamepad, pollGamepad } from './input.js';
 import { rumble } from './rumble.js';
-import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension, resetIndicators, showGoFlourish, initModePicker, updateModePicker, updateDistanceDisplay, resetDistanceDisplay } from './ui.js';
+import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension, resetIndicators, showGoFlourish, updateModeHud, updateDistanceDisplay, resetDistanceDisplay } from './ui.js';
 import { resetCollectClock, tickCollectClock, tickComboClock } from './timers.js';
 import { loadWorldMode, saveWorldMode } from './hiscores.js';
 import { unlockAudio, sfx, music } from './audio.js';
@@ -50,8 +50,7 @@ function init() {
     // (worldmath.js dispatches on it). Classic exists only via forceWorldMode
     // for the torus regression suite.
     state.worldMode = loadWorldMode();
-    // Mode picker removed from the UI; keep init no-op-safe if markup absent.
-    if (typeof initModePicker === 'function') initModePicker(setWorldMode);
+    updateModeHud(); // Endless-only HUD bits (jump hint, distance readout)
 
     // Mobile detection and speed adjustment (plan 012): capability +
     // form-factor, not UA sniffing. A touch-laptop with a mouse reports
@@ -548,30 +547,16 @@ function shiftEntityForRebase(group, dx, dz) {
 }
 
 // --- World mode (product = endless only) ---
-// setWorldMode remains for tests/debug that still switch to classic torus.
-// The start overlay no longer exposes a picker.
-export function setWorldMode(mode) {
-    if (mode !== 'classic' && mode !== 'endless') return;
-    if (mode === state.worldMode) return;
-    // Product path never leaves the start screen when switching; tests may
-    // call this before start. Allow anytime on the overlay; mid-run only via
-    // forceWorldMode (debug).
-    if (!state.onStartScreen) return;
-    state.worldMode = mode;
-    saveWorldMode(mode);
-    applyWorldEnvironment();
-    updateModePicker();
-    setupNewGame();
-}
-
 // Test/debug: force classic torus (or endless) even mid-session. Used by
-// world.spec wrap tests after the product retired the arena UI.
+// world.spec wrap tests after the product retired the arena UI. The old
+// user-facing setWorldMode picker path is gone (audit D-4) — this is the
+// ONE remaining mode switch.
 export function forceWorldMode(mode) {
     if (mode !== 'classic' && mode !== 'endless') return;
     state.worldMode = mode;
     saveWorldMode(mode);
     applyWorldEnvironment();
-    updateModePicker();
+    updateModeHud();
     if (state.onStartScreen) setupNewGame();
 }
 

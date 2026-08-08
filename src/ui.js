@@ -26,8 +26,6 @@ export const el = {
     finalScore: null,
     startOverlay: null,
     startButton: null,
-    modeClassic: null,
-    modeEndless: null,
     endlessHint: null,
     controlsHint: null,
     jumpButton: null,
@@ -55,8 +53,6 @@ export function initUI() {
     el.finalScore = document.getElementById('final-score');
     el.startOverlay = document.getElementById('start-overlay');
     el.startButton = document.getElementById('start-button');
-    el.modeClassic = document.getElementById('mode-classic');
-    el.modeEndless = document.getElementById('mode-endless');
     el.endlessHint = document.getElementById('endless-hint');
     el.controlsHint = document.getElementById('controls-hint');
     el.jumpButton = document.getElementById('jump-button');
@@ -81,33 +77,16 @@ export function showGoFlourish() {
     el.goFlourish.classList.add('go-play');
 }
 
-// --- World-mode picker (retired UI; classic is test/debug only) ---
-// Markup may be absent. Still safe to call so forceWorldMode can refresh HUD.
-export function initModePicker(onPick) {
-    for (const [button, mode] of [[el.modeClassic, 'classic'], [el.modeEndless, 'endless']]) {
-        if (!button) continue;
-        button.addEventListener('pointerdown', (e) => e.stopPropagation());
-        button.addEventListener('click', (e) => {
-            e.stopPropagation();
-            sfx.click();
-            onPick(mode);
-        });
-    }
-    updateModePicker();
-}
-
-export function updateModePicker() {
+// --- Per-mode HUD visibility (audit D-4) ---
+// The mode-picker UI is retired (classic is a test/debug path via
+// forceWorldMode only); what survives is the LIVE per-mode HUD state: the
+// jump hint and the distance readout exist only in the endless world.
+// Controls-hint text is single-sourced in index.html (#controls-hint) —
+// the old per-mode textContent overwrite is gone (plan 021); classic is a
+// test-only path and keeps the endless wording.
+export function updateModeHud() {
     const endless = state.worldMode === 'endless';
-    if (el.modeClassic && el.modeEndless) {
-        el.modeClassic.classList.toggle('mode-selected', !endless);
-        el.modeEndless.classList.toggle('mode-selected', endless);
-        el.modeClassic.setAttribute('aria-pressed', String(!endless));
-        el.modeEndless.setAttribute('aria-pressed', String(endless));
-    }
     if (el.endlessHint) el.endlessHint.style.display = endless ? '' : 'none';
-    // Controls-hint text is single-sourced in index.html (#controls-hint) —
-    // the old per-mode textContent overwrite here is gone (plan 021); classic
-    // is a test-only path and keeps the endless wording.
     if (el.distanceDisplay) {
         el.distanceDisplay.style.display = endless ? '' : 'none';
     }
