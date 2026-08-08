@@ -23,6 +23,20 @@ export const COMBO_WINDOW = 4; // seconds after a kill in which the next kill es
 export const COMBO_MAX = 5; // combo multiplier cap (x1..x5)
 export const MILESTONE_STEP = 1.0; // playerScale interval that fires a growth-milestone celebration
 
+// --- Enemy species (plan 024, capability CAP-2) ---
+// speedFactor multiplies actualEnemySpeed for THIS enemy only. The owner rule
+// (see BASE_ENEMY_SPEED below: doubling the player must NOT speed enemies up)
+// binds the GLOBAL enemy pace; species are per-body character, and the fast
+// ones are small and ALWAYS edible — the sanctioned pressure valve. bodyColor
+// null = the classic electric blue (0x03A9F4). harmless: contact while NOT
+// killable never ends the run (a snack species, not a threat). foodDrop: food
+// particles a kill scatters (grunts keep today's 4).
+export const ENEMY_SPECIES = {
+    grunt: { speedFactor: 1.0, bodyColor: null, harmless: false, foodDrop: 4 },
+    sprinter: { speedFactor: 2.2, bodyColor: 0xFF7043, harmless: false, foodDrop: 4 }, // Orange; fast BUT small and always edible — it harasses, never guarantees a catch (3.3 u/s vs the player's 6)
+    juja: { speedFactor: 2.6, bodyColor: 0x66BB6A, harmless: true, foodDrop: 2 } // Small green critter — skittish bonus snack, never a wall
+};
+
 // Survival feedback beats (plan 023 DT-10): the game finally celebrates the
 // SURVIVAL axis — escapes and near-misses — not just acquisition.
 export const SURVIVAL_BEAT_COOLDOWN = 6; // Game-seconds between survival popups (PHEW!/CLOSE ONE! share one clock) — beats stay special, never spam

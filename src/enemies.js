@@ -10,7 +10,7 @@ import {
     ENEMY_COLLIDER_HALF_WIDTH, ENEMY_WEDGE_TIME, ENEMY_DETOUR_TIME,
     ENDLESS_ENEMY_TARGET, ENDLESS_ENEMY_CAP, ENEMY_DESPAWN_RADIUS,
     ENDLESS_SPAWN_MIN, ENDLESS_SPAWN_MAX, ENDLESS_SPAWN_INTERVAL, RAMP_HEIGHT_STEP,
-    PLAYER_COLLIDER_HALF_WIDTH
+    PLAYER_COLLIDER_HALF_WIDTH, ENEMY_SPECIES
 } from './constants.js';
 import { state } from './state.js';
 import { createCharacter, disposeCharacter, shadeColor, CAP_LIGHTEN } from './characters.js';
@@ -89,14 +89,27 @@ export function setEnemyCollisionBox(box, enemyGroup) {
 
 // The cap (top-face highlight) flips shade-for-shade with the body color —
 // computed once here from the same shade factor characters.js builds with.
+// The un-flip side is per-enemy (ud.baseCapColor): species carry their own
+// base colors now (plan 024).
 const KILLABLE_CAP_COLOR = shadeColor(0xFFEB3B, CAP_LIGHTEN);
-const NORMAL_CAP_COLOR = shadeColor(0x03A9F4, CAP_LIGHTEN);
 
-export function createEnemy() {
+export function createEnemy(speciesKey = 'grunt') {
+    // Species stats bag (plan 024): per-enemy speed factor, body color,
+    // harmless flag, and food drop — all data from the GAME BALANCE table.
+    const species = ENEMY_SPECIES[speciesKey] ?? ENEMY_SPECIES.grunt;
+    const baseBodyColor = species.bodyColor ?? 0x03A9F4; // null = classic Electric Blue
     // perInstanceBodyMaterial: each enemy's body color flips independently
-    // between killable-yellow and blue, so the material cannot be shared.
-    // menacing: pointed ears, tail, back spikes, underbite jaw (characters.js).
-    const enemyGroup = createCharacter({ baseSize: enemyBaseHeight, bodyColor: 0x03A9F4, faceColor: 0x222222, perInstanceBodyMaterial: true, menacing: true }); // Electric Blue body, dark grey face
+    // between killable-yellow and its species base, so the material cannot be
+    // shared. menacing: pointed ears, tail, back spikes, underbite jaw
+    // (characters.js).
+    const enemyGroup = createCharacter({ baseSize: enemyBaseHeight, bodyColor: baseBodyColor, faceColor: 0x222222, perInstanceBodyMaterial: true, menacing: true });
+    enemyGroup.userData.species = species;
+    enemyGroup.userData.speciesKey = speciesKey;
+    // The killable flip must RESTORE these on un-flip — stored per enemy, so
+    // a sprinter goes back to orange, never to a hard-coded blue (plan 024
+    // maintenance note).
+    enemyGroup.userData.baseBodyColor = baseBodyColor;
+    enemyGroup.userData.baseCapColor = shadeColor(baseBodyColor, CAP_LIGHTEN);
 
     // --- Enemy AI Properties ---
     enemyGroup.randomVelocity = new THREE.Vector3(0, 0, 0);
@@ -290,7 +303,8 @@ export function updateEnemies(dt) {
     setPlayerCollisionBox(playerBox);
     for (let i = state.enemies.length - 1; i >= 0; i--) {
         const enemyGroup = state.enemies[i];
-        const bodyMesh = enemyGroup.userData.bodyMesh; // Tagged at build (plan 020 P-6 — no name lookup)
+        const ud = enemyGroup.userData;
+        const bodyMesh = ud.bodyMesh; // Tagged at build (plan 020 P-6 — no name lookup)
 
         // Killability is computed ONCE per enemy per frame and reused by the
         // AI and collision branches below (nothing it depends on changes
@@ -298,13 +312,20 @@ export function updateEnemies(dt) {
         // ears, and tail, so one setHex flips them all; the cap has its own
         // instance (lighter shade). Colors flip only on the killable-state
         // TRANSITION (plan 020 P-6 — same pattern as effects.js's scared
-        // flip), not every frame.
+        // flip), not every frame. Un-flip restores the STORED species base
+        // color, never a literal (plan 024). A harmless species (juja) skips
+        // the color flip entirely — it is always edible, so the yellow "now
+        // killable" repaint would be noise on its green identity; the aura/
+        // scared face (effects.js, driven off ud.killable) still telegraph
+        // edibility.
         const killableNow = canKillSpecificEnemy(enemyGroup);
-        if (killableNow !== enemyGroup.userData.killable) {
-            enemyGroup.userData.killable = killableNow; // effects.js drives the aura/wobble off this
-            const capMaterial = enemyGroup.userData.capMaterial;
-            if (bodyMesh) bodyMesh.material.color.setHex(killableNow ? 0xFFEB3B : 0x03A9F4); // Yellow = killable, Electric Blue = hunter
-            if (capMaterial) capMaterial.color.setHex(killableNow ? KILLABLE_CAP_COLOR : NORMAL_CAP_COLOR);
+        if (killableNow !== ud.killable) {
+            ud.killable = killableNow; // effects.js drives the aura/wobble off this
+            if (!ud.species.harmless) {
+                const capMaterial = ud.capMaterial;
+                if (bodyMesh) bodyMesh.material.color.setHex(killableNow ? 0xFFEB3B : ud.baseBodyColor); // Yellow = killable, species base = hunter
+                if (capMaterial) capMaterial.color.setHex(killableNow ? KILLABLE_CAP_COLOR : ud.baseCapColor);
+            }
         }
 
         // --- Spawn telegraph: materialize before acting (tension pass) ---
@@ -312,7 +333,6 @@ export function updateEnemies(dt) {
         // size), so the forming enemy wears its true colors; everything
         // below — AI, movement, and the player-collision AABB test — is
         // skipped until it finishes scaling in.
-        const ud = enemyGroup.userData;
         if (ud.materializing !== undefined) {
             if (ud.materializeBurstPending) {
                 // First live frame: puff of the body color at the spawn spot
@@ -349,6 +369,12 @@ export function updateEnemies(dt) {
         // --- Enemy AI: Movement Logic ---
         const distanceToPlayer = torusDistance(enemyGroup.position, state.player.position);
         const combinedMovement = moveScratch.set(0, 0, 0); // Re-zeroed per enemy (mutated below)
+        // Species speed (plan 024): this enemy's own pace — the four speed
+        // sites (flee, orbit, chase, and the total cap) all read it, so a
+        // species can't outrun its own separation steering. Random drift and
+        // avoidance deliberately stay on the GLOBAL speed (plan 024: only
+        // the four sites thread the factor).
+        const speciesSpeed = state.actualEnemySpeed * ud.species.speedFactor;
 
         // --- Random Movement Component (calculated for all states) ---
         enemyGroup.timeToChangeRandomVelocity -= dt;
@@ -367,7 +393,7 @@ export function updateEnemies(dt) {
             if (distanceToPlayer > 0) { // Avoid issues if somehow at the exact same spot
                 // Flee = the shortest-path direction to the player, negated
                 const fleeDirection = torusDelta(enemyGroup.position, state.player.position, tmpVec).normalize().negate();
-                combinedMovement.copy(fleeDirection).multiplyScalar(state.actualEnemySpeed);
+                combinedMovement.copy(fleeDirection).multiplyScalar(speciesSpeed);
             }
         } else {
             // --- Normal Chase and Orbit Logic ---
@@ -377,10 +403,10 @@ export function updateEnemies(dt) {
                 const orbitVector = orbitScratch.set(-chaseDirection.z * enemyGroup.orbitDirection, 0, chaseDirection.x * enemyGroup.orbitDirection);
                 const chaseComponent = chaseScratch.copy(chaseDirection).multiplyScalar(1.0 - orbitStrengthFactor);
                 const orbitComponent = orbitVector.normalize().multiplyScalar(orbitStrengthFactor);
-                combinedMovement.add(chaseComponent).add(orbitComponent).normalize().multiplyScalar(state.actualEnemySpeed);
+                combinedMovement.add(chaseComponent).add(orbitComponent).normalize().multiplyScalar(speciesSpeed);
             } else {
                 // --- Pure Chase Behavior (outside engagement radius) ---
-                combinedMovement.copy(chaseDirection).multiplyScalar(state.actualEnemySpeed);
+                combinedMovement.copy(chaseDirection).multiplyScalar(speciesSpeed);
             }
         }
 
@@ -395,8 +421,9 @@ export function updateEnemies(dt) {
         }
 
         // Cap total speed; the 1.25 headroom lets separation win slightly
-        // over chase without runaway speed.
-        const maxSpeed = state.actualEnemySpeed * 1.25;
+        // over chase without runaway speed. The cap rides the SPECIES speed
+        // (plan 024) so a sprinter keeps its separation headroom.
+        const maxSpeed = speciesSpeed * 1.25;
         if (combinedMovement.length() > maxSpeed) {
             combinedMovement.normalize().multiplyScalar(maxSpeed);
         }
@@ -546,6 +573,23 @@ export function spawnNewEnemies() {
         // Red ground flash first — monster appears after SPAWN_WARN_TIME.
         scheduleEnemySpawn(spawnX, spawnZ, newEnemyScaleFactor);
     }
+}
+
+// --- Test/debug species spawner (plan 024; plan 025's boss reuses it) ---
+// A fully-formed enemy of the given species at (x, z): no warn disc, no
+// materialize scale-in, so specs measure species behavior from the first
+// frame. scaleFactor is the caller's choice — species and size are
+// orthogonal axes in the machinery (the ROTATION couples them for real
+// spawns). Production code must never call this.
+export function debugSpawnSpecies(speciesKey, x, z, scaleFactor = 1) {
+    const enemy = createEnemy(speciesKey);
+    enemy.scale.setScalar(scaleFactor);
+    enemy.position.set(
+        x,
+        state.worldMode === 'endless' ? groundHeightAt(x, z) : 0,
+        z
+    );
+    return enemy;
 }
 
 // --- Endless collision movement (axis-separated slide + anti-wedge) ---
