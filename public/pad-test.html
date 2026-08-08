@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pad test — Logitech D / DirectInput</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1412;
+      --panel: #12201c;
+      --line: #1e3a34;
+      --text: #e0f2f1;
+      --muted: #7a9e98;
+      --live: #76ff03;
+      --warn: #ffab40;
+      --idle: #546e7a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 14px/1.45 system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 1.25rem 1.5rem 3rem;
+    }
+    h1 {
+      font-size: 1.15rem;
+      font-weight: 600;
+      margin: 0 0 0.35rem;
+    }
+    .sub {
+      color: var(--muted);
+      margin: 0 0 1.25rem;
+      max-width: 52rem;
+    }
+    .sub code {
+      font-size: 0.9em;
+      color: #b2dfdb;
+    }
+    #status {
+      margin: 0 0 1rem;
+      padding: 0.65rem 0.85rem;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+    #status strong { color: var(--live); }
+    .grid {
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+    }
+    .pad {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0.85rem 1rem 1rem;
+    }
+    .pad.live { border-color: #4caf50; }
+    .pad.ghost { opacity: 0.72; }
+    .pad h2 {
+      margin: 0 0 0.4rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem 0.65rem;
+      align-items: baseline;
+    }
+    .badge {
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 0.15rem 0.4rem;
+      border-radius: 3px;
+      background: #1a332e;
+      color: var(--muted);
+    }
+    .badge.live { background: #1b3d14; color: var(--live); }
+    .badge.di { background: #3e2723; color: var(--warn); }
+    .badge.xi { background: #0d47a1; color: #90caf9; }
+    .meta {
+      color: var(--muted);
+      font-size: 0.8rem;
+      margin-bottom: 0.75rem;
+      word-break: break-word;
+    }
+    .sticks {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 0.85rem;
+    }
+    .stick-box {
+      flex: 0 0 auto;
+    }
+    .stick-box label {
+      display: block;
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-bottom: 0.25rem;
+    }
+    canvas {
+      display: block;
+      width: 96px;
+      height: 96px;
+      background: #0a1210;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+    }
+    .nums {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.78rem;
+      color: #b2dfdb;
+      margin-top: 0.25rem;
+    }
+    .axes, .buttons {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.75rem;
+    }
+    .axes div, .buttons span {
+      display: flex;
+      gap: 0.4rem;
+      align-items: center;
+      margin: 0.12rem 0;
+    }
+    .bar {
+      height: 6px;
+      background: #1a2e2a;
+      border-radius: 2px;
+      flex: 1;
+      min-width: 4rem;
+      overflow: hidden;
+    }
+    .bar > i {
+      display: block;
+      height: 100%;
+      background: #26a69a;
+      width: 0%;
+    }
+    .bar > i.hot { background: var(--live); }
+    .buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      margin-top: 0.5rem;
+    }
+    .buttons span {
+      min-width: 2rem;
+      justify-content: center;
+      padding: 0.2rem 0.35rem;
+      border-radius: 3px;
+      background: #152420;
+      color: var(--idle);
+      border: 1px solid transparent;
+    }
+    .buttons span.on {
+      color: var(--live);
+      border-color: #4caf50;
+      background: #1b3d14;
+    }
+    .hint {
+      margin-top: 1.5rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+      max-width: 52rem;
+    }
+    .hint ol { margin: 0.4rem 0 0 1.1rem; padding: 0; }
+    .empty {
+      color: var(--muted);
+      padding: 1.5rem;
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Pad test (Logitech D / DirectInput)</h1>
+  <p class="sub">
+    Open this while both sticks are plugged in. On F310, set the back switch to
+    <strong>D</strong> (not X). Wiggle each stick and press face buttons.
+    Live pads light green. A second port that never moves is often a ghost HID
+    interface on dual adapters — not a game bug.
+  </p>
+  <p class="sub">
+    Local: <code>npm run dev</code> then
+    <code>http://localhost:5173/pad-test.html</code>
+    · Production: <code>/pad-test.html</code> on the same host as the game.
+  </p>
+
+  <div id="status">Waiting for <code>navigator.getGamepads()</code>…</div>
+  <div id="grid" class="grid"></div>
+
+  <div class="hint">
+    <strong>How to read this for Blocky</strong>
+    <ol>
+      <li>Each card is one <code>gamepad.index</code>. Dual DB9 USB adapters often show <strong>two</strong> cards with the same name: one is live, one stays at zero (ghost).</li>
+      <li>Blocky solo uses the pad with the highest activity. 2P seats claim only after a stick or D-pad move clears the deadzone.</li>
+      <li>F310 on <strong>D</strong>: mapping is empty / DirectInput. Left stick is axes 0 and 1. A is button 1, B is 2, X is 0, Y is 3, Back is 8, Start is 9.</li>
+      <li>If one stick never moves axes 0/1 here, Blocky cannot drive a hero with it either — try the other USB port, unplug/replug, or Chrome’s gamepad list after a refresh.</li>
+    </ol>
+  </div>
+
+  <script>
+    const DEAD = 0.18;
+    const grid = document.getElementById('grid');
+    const statusEl = document.getElementById('status');
+
+    /** @type {Map<number, {card: HTMLElement, left: HTMLCanvasElement, right: HTMLCanvasElement}>} */
+    const cards = new Map();
+
+    function axisVal(ax, i) {
+      const v = ax[i];
+      return typeof v === 'number' && Number.isFinite(v) ? v : 0;
+    }
+
+    function pressed(b) {
+      if (!b) return false;
+      return !!(b.pressed || (typeof b.value === 'number' && b.value >= 0.5));
+    }
+
+    function activityScore(gp) {
+      let score = 0;
+      const ax = gp.axes || [];
+      for (let i = 0; i < ax.length; i++) score += Math.abs(axisVal(ax, i));
+      const btns = gp.buttons || [];
+      for (let i = 0; i < btns.length; i++) {
+        if (pressed(btns[i])) score += 2;
+      }
+      if (score > 0 && gp.mapping === 'standard') score += 0.25;
+      return score;
+    }
+
+    function stickMag(gp) {
+      const ax = gp.axes || [];
+      const x = axisVal(ax, 0);
+      const y = axisVal(ax, 1);
+      const mag = Math.hypot(x, y);
+      return mag > DEAD ? mag : 0;
+    }
+
+    function isDirectInput(gp) {
+      if (!gp) return false;
+      if (gp.mapping === 'standard') return false;
+      const id = (gp.id || '').toLowerCase();
+      return id.includes('f310') || id.includes('dual action') || id.includes('logitech')
+        || gp.mapping === '' || gp.mapping === 'none';
+    }
+
+    function drawStick(canvas, x, y) {
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width;
+      const h = canvas.height;
+      const cx = w / 2;
+      const cy = h / 2;
+      const r = Math.min(w, h) * 0.38;
+      ctx.clearRect(0, 0, w, h);
+      ctx.strokeStyle = '#1e3a34';
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx - r, cy);
+      ctx.lineTo(cx + r, cy);
+      ctx.moveTo(cx, cy - r);
+      ctx.lineTo(cx, cy + r);
+      ctx.stroke();
+      // Deadzone ring
+      ctx.strokeStyle = '#2e4a44';
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * DEAD, 0, Math.PI * 2);
+      ctx.stroke();
+      const px = cx + x * r;
+      const py = cy + y * r;
+      const live = Math.hypot(x, y) > DEAD;
+      ctx.fillStyle = live ? '#76ff03' : '#546e7a';
+      ctx.beginPath();
+      ctx.arc(px, py, 6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function ensureCard(gp) {
+      let entry = cards.get(gp.index);
+      if (entry) return entry;
+
+      const card = document.createElement('article');
+      card.className = 'pad';
+      card.innerHTML = `
+        <h2>
+          <span class="title"></span>
+          <span class="badge idx"></span>
+          <span class="badge map"></span>
+          <span class="badge act"></span>
+        </h2>
+        <div class="meta"></div>
+        <div class="sticks">
+          <div class="stick-box">
+            <label>Axes 0/1 (left stick on F310 D)</label>
+            <canvas width="96" height="96" class="left"></canvas>
+            <div class="nums left-n"></div>
+          </div>
+          <div class="stick-box">
+            <label>Axes 2/3 (often right stick)</label>
+            <canvas width="96" height="96" class="right"></canvas>
+            <div class="nums right-n"></div>
+          </div>
+        </div>
+        <div class="axes"></div>
+        <div class="buttons"></div>
+      `;
+      grid.appendChild(card);
+      entry = {
+        card,
+        left: card.querySelector('canvas.left'),
+        right: card.querySelector('canvas.right'),
+      };
+      cards.set(gp.index, entry);
+      return entry;
+    }
+
+    function pruneCards(liveIndices) {
+      for (const [idx, entry] of cards) {
+        if (!liveIndices.has(idx)) {
+          entry.card.remove();
+          cards.delete(idx);
+        }
+      }
+    }
+
+    function tick() {
+      const list = navigator.getGamepads ? navigator.getGamepads() : [];
+      const seen = new Set();
+      const pads = [];
+
+      for (let i = 0; i < list.length; i++) {
+        const gp = list[i];
+        if (!gp || !gp.connected) continue;
+        pads.push(gp);
+        seen.add(gp.index);
+      }
+
+      pruneCards(seen);
+
+      if (pads.length === 0) {
+        statusEl.innerHTML = 'No gamepads. Plug in, press any button, or wiggle a stick. On Mac Chrome, a wake press is often required.';
+        requestAnimationFrame(tick);
+        return;
+      }
+
+      // Best activity (same idea as Blocky solo lock)
+      let best = null;
+      let bestScore = 0;
+      for (const gp of pads) {
+        const s = activityScore(gp);
+        if (s > bestScore) {
+          bestScore = s;
+          best = gp;
+        }
+      }
+
+      statusEl.innerHTML = `<strong>${pads.length}</strong> pad(s) connected`
+        + (best && bestScore > 0.15
+          ? ` · Blocky solo would lock index <strong>${best.index}</strong> (score ${bestScore.toFixed(2)})`
+          : ' · no live activity yet — wiggle a stick')
+        + ` · deadzone ${DEAD}`;
+
+      for (const gp of pads) {
+        const { card, left, right } = ensureCard(gp);
+        const ax = gp.axes || [];
+        const btns = gp.buttons || [];
+        const score = activityScore(gp);
+        const mag01 = stickMag(gp);
+        const live = score > 0.15;
+        const ghost = mag01 === 0 && score < 0.05;
+
+        card.classList.toggle('live', live);
+        card.classList.toggle('ghost', ghost && !live);
+
+        card.querySelector('.title').textContent = (gp.id || 'Gamepad').split('(')[0].trim();
+        card.querySelector('.idx').textContent = `index ${gp.index}`;
+        const mapBadge = card.querySelector('.map');
+        if (gp.mapping === 'standard') {
+          mapBadge.textContent = 'XInput / standard';
+          mapBadge.className = 'badge map xi';
+        } else {
+          mapBadge.textContent = isDirectInput(gp) ? 'DirectInput (D)' : `mapping: ${gp.mapping || 'empty'}`;
+          mapBadge.className = 'badge map di';
+        }
+        const actBadge = card.querySelector('.act');
+        actBadge.textContent = live ? 'live' : (ghost ? 'idle / ghost?' : 'quiet');
+        actBadge.className = 'badge act' + (live ? ' live' : '');
+
+        card.querySelector('.meta').textContent =
+          `id: ${gp.id || '(none)'} · buttons ${btns.length} · axes ${ax.length}`
+          + ` · activity ${score.toFixed(2)}`
+          + (best && best.index === gp.index && bestScore > 0.15 ? ' · SOLO LOCK' : '');
+
+        const x0 = axisVal(ax, 0);
+        const y0 = axisVal(ax, 1);
+        const x1 = axisVal(ax, 2);
+        const y1 = axisVal(ax, 3);
+        drawStick(left, x0, y0);
+        drawStick(right, x1, y1);
+        card.querySelector('.left-n').textContent =
+          `x=${x0.toFixed(3)}  y=${y0.toFixed(3)}  |v|=${Math.hypot(x0, y0).toFixed(3)}`;
+        card.querySelector('.right-n').textContent =
+          `x=${x1.toFixed(3)}  y=${y1.toFixed(3)}  |v|=${Math.hypot(x1, y1).toFixed(3)}`;
+
+        const axesEl = card.querySelector('.axes');
+        let axesHtml = '';
+        for (let i = 0; i < ax.length; i++) {
+          const v = axisVal(ax, i);
+          const pct = Math.min(100, Math.abs(v) * 100);
+          const hot = Math.abs(v) > DEAD;
+          axesHtml += `<div><span style="width:3.2rem">a${i}</span>`
+            + `<span style="width:4.2rem">${v.toFixed(3)}</span>`
+            + `<span class="bar"><i class="${hot ? 'hot' : ''}" style="width:${pct}%"></i></span></div>`;
+        }
+        axesEl.innerHTML = axesHtml || '<div class="meta">no axes</div>';
+
+        const buttonsEl = card.querySelector('.buttons');
+        let bHtml = '';
+        for (let i = 0; i < btns.length; i++) {
+          const on = pressed(btns[i]);
+          bHtml += `<span class="${on ? 'on' : ''}" title="button ${i}">${i}</span>`;
+        }
+        // F310 D labels
+        if (isDirectInput(gp) && btns.length >= 10) {
+          bHtml += `<span style="width:100%;margin-top:0.35rem;color:#7a9e98;font-size:0.7rem;border:0;background:transparent">`
+            + `D map: 0=X 1=A 2=B 3=Y 4=LB 5=RB 6=LT 7=RT 8=Back 9=Start</span>`;
+        }
+        buttonsEl.innerHTML = bHtml || '<span>no buttons</span>';
+      }
+
+      requestAnimationFrame(tick);
+    }
+
+    window.addEventListener('gamepadconnected', (e) => {
+      statusEl.textContent = `Connected: ${e.gamepad.id} (index ${e.gamepad.index})`;
+    });
+    window.addEventListener('gamepaddisconnected', (e) => {
+      statusEl.textContent = `Disconnected: index ${e.gamepad.index}`;
+    });
+
+    // First user gesture helps some browsers expose pads
+    window.addEventListener('keydown', () => {}, { once: true });
+    window.addEventListener('pointerdown', () => {}, { once: true });
+
+    requestAnimationFrame(tick);
+  </script>
+</body>
+</html>
