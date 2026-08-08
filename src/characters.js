@@ -432,6 +432,10 @@ export function disposeCharacter(group) {
     }
 }
 
+// P2's palette (plan 026): teal body — instantly tellable from P1's
+// orange-red at a glance across the whole screen. A look, not balance.
+export const P2_BODY_COLOR = 0x26C6DA;
+
 // Builds the hero for one player slot (plan 026: seat-indexed; P2 gets its
 // own palette via bodyColor). Tags the mesh with a back-reference to its
 // player state so effects.js walk/shadow/blink can stay player-generic.

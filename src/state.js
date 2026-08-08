@@ -28,9 +28,11 @@ export function makePlayerState(seat = 0) {
         lastSurvivalBeat: -SURVIVAL_BEAT_COOLDOWN, // PHEW!/CLOSE ONE! rate limit, per player
         heartbeatClock: 0, // Game-clock seconds to THEIR next danger heartbeat
         // Camera zoom model: the smoothed actual offsets (zoom LEVEL is shared
-        // world state — per-player zoom is out of v1 scope).
+        // world state — per-player zoom is out of v1 scope). camAnchorY is the
+        // endless vertical-follow smoothing (world.js) — per camera.
         camY: INITIAL_CAMERA_Y_OFFSET,
         camZ: INITIAL_CAMERA_Z_OFFSET,
+        camAnchorY: 0,
         // Region tracking (plan 025 → per player): the CONFIRMED region THIS
         // player is in + the debounce candidate. regionsVisited stays SHARED
         // on state — discovery is a world-level, either-player event.

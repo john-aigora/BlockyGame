@@ -1,7 +1,7 @@
-import { applySpeedMultiplier, speedUp, speedDown, forceWorldMode, perfInfo } from './game.js';
+import { applySpeedMultiplier, speedUp, speedDown, forceWorldMode, perfInfo, setPlayerCount } from './game.js';
 import { state } from './state.js';
 import { spawnNearPlayer, spawnAtPosition, spawnChunkFood } from './collectibles.js';
-import { spawnNewEnemies, updateEnemyStreaming, resetEnemyStreaming, updateSpawnWarnings, debugSpawnSpecies, pendingSpawnInfo } from './enemies.js';
+import { spawnNewEnemies, updateEnemyStreaming, resetEnemyStreaming, updateSpawnWarnings, debugSpawnSpecies, pendingSpawnInfo, clearPendingSpawns } from './enemies.js';
 import { onTouchStart, onTouchMove, onTouchEndOrCancel, gamepadVector, pollGamepad, isGamepadConnected, gamepadDebugInfo } from './input.js';
 import { sfx, isMuted, audioState, music } from './audio.js';
 import { spawnBurst, spawnScorePopup, effectsInfo } from './effects.js';
@@ -35,11 +35,17 @@ window.__game = {
         spawnSpecies: (key, x, z, scaleFactor) =>
             state.enemies.indexOf(debugSpawnSpecies(key, x, z, scaleFactor)),
         pendingSpawnInfo, // Plain-data pending-warn queue (plan 024: kill-wave band + warn-time specs)
+        clearPendingSpawns, // Drops every warn disc — spec death-proofing needs the PIPELINE cleared, not just live bodies (effects pool spec)
         resetEnemyStreaming,
         applySpeedMultiplier, // Speed recompute path (balance spec — size speed bonus)
         speedUp,
         speedDown,
         forceWorldMode, // Classic torus for wrap regression tests only
+        // Two-player split-screen (plan 026): flips the roster; on the start
+        // overlay this re-runs setup so both heroes spawn. startTwoPlayer is
+        // the coop spec's entry; setPlayerCount(1) returns to solo.
+        setPlayerCount,
+        startTwoPlayer: () => setPlayerCount(2),
         touchHandlers: { onTouchStart, onTouchMove, onTouchEndOrCancel },
         gamepadVector, // Stick/D-pad unit vector (gamepad spec)
         pollGamepad, // Edge actions — tests drive a mocked navigator.getGamepads

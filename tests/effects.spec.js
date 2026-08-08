@@ -35,9 +35,14 @@ test('50 bursts + 10 collects do not grow the geometry count (pool discipline)',
       // loop, then the frozen death clock hangs every game-clock wait).
       // The measurement is pool discipline, not survival — despawn them
       // each hop. Enemy bodies share geometry (characters.js), so removal
-      // cannot move the geometry count (plan 017).
+      // cannot move the geometry count (plan 017). The warn PIPELINE must
+      // clear too: a pending disc despawn-proofing missed could materialize
+      // a giant right on a teleport landing and end the run mid-loop
+      // (observed under 3-worker load — death at 0:03 froze every
+      // game-clock wait; the warn queue holds no geometry either).
       s.enemies.forEach((e) => s.scene.remove(e));
       s.enemies = [];
+      window.__game.debug.clearPendingSpawns();
       const food = s.collectibles[0];
       if (food) s.player.position.set(food.position.x, 0, food.position.z);
     });
@@ -64,9 +69,10 @@ test('50 bursts + 10 collects do not grow the geometry count (pool discipline)',
     await page.evaluate(() => {
       const s = window.__game.state;
       // Same death-proofing as the warm-up loop (shared geometry — no
-      // effect on the measured count).
+      // effect on the measured count), warn pipeline included.
       s.enemies.forEach((e) => s.scene.remove(e));
       s.enemies = [];
+      window.__game.debug.clearPendingSpawns();
       const food = s.collectibles[0];
       if (food) s.player.position.set(food.position.x, 0, food.position.z);
     });

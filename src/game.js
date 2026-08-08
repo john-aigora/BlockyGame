@@ -14,11 +14,11 @@ import {
 } from './constants.js';
 import { initContinuousMovement, resetContinuousMovement, updateContinuousMovement } from './movement-continuous.js';
 import { wrapPosition, torusDeltaComponent } from './worldmath.js';
-import { state } from './state.js';
-import { createPlayer, disposeCharacter } from './characters.js';
+import { state, makePlayerState } from './state.js';
+import { createPlayer, disposeCharacter, P2_BODY_COLOR } from './characters.js';
 import { createEnemy, updateEnemies, updateEnemyStreaming, resetEnemyStreaming, playerBox, scratchBox, setPlayerCollisionBox, beginMaterialize, updateSpawnWarnings, clearPendingSpawns, shiftPendingSpawns, reimagePendingSpawns, scheduleEnemySpawn, currentEnemyScaleFactor } from './enemies.js';
 import { spawnNearPlayer, spawnAnywhere, setCollectibleBox } from './collectibles.js';
-import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoomIn, zoomOut, updateGroundScroll } from './world.js';
+import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoomIn, zoomOut, updateGroundScroll, createCameraFor, renderFrame } from './world.js';
 import { initTerrain, setTerrainActive, resetTerrainForNewRun, updateTerrain, shiftTerrain, groundHeightAt, slideMove, isRockWedged, biomeRegion, isWalkable } from './terrain.js';
 import { initClouds, setCloudMode, updateClouds, shiftClouds } from './clouds.js';
 import { initEffects, updateEffects, resetEffects, onCollect, onGrowthMilestone, shiftActiveParticles, spawnTextPopup, onJumpTakeoff, onJumpLand } from './effects.js';
@@ -761,6 +761,36 @@ function shiftEntityForRebase(group, dx, dz) {
     }
 }
 
+// --- Player count (plan 026) ---
+// THE 1P/2P switch: adds or parks the second seat. The P2 state+mesh are
+// built once and cached for the session (going 2P→1P→2P re-uses the same
+// hero — no resource churn, the pool-plateau law holds). A switch on the
+// start overlay resets the game so the new roster spawns properly; the
+// Stage F entry buttons and the debug handle both land here.
+let cachedSecondPlayer = null;
+
+export function setPlayerCount(count) {
+    const want = count === 2 ? 2 : 1;
+    if (want === state.players.length) return;
+    if (want === 2) {
+        const p2 = cachedSecondPlayer ?? makePlayerState(1);
+        cachedSecondPlayer = p2;
+        state.players.push(p2);
+        if (!p2.mesh) {
+            createPlayer(p2, { bodyColor: P2_BODY_COLOR }); // Teal partner (plan 026 palette)
+        } else {
+            state.scene.add(p2.mesh);
+        }
+        if (!p2.camera) createCameraFor(p2);
+        applySpeedMultiplier(); // The new seat needs its actualSpeed resolved
+    } else {
+        const p2 = state.players.pop();
+        if (p2 && p2.mesh) state.scene.remove(p2.mesh); // Parked, not disposed (cached above)
+    }
+    onWindowResize(); // Re-aspect every camera for the new layout
+    if (state.onStartScreen) setupNewGame(); // Fresh roster, fresh spawn positions
+}
+
 // --- World mode (product = endless only) ---
 // Test/debug: force classic torus (or endless) even mid-session. Used by
 // world.spec wrap tests after the product retired the arena UI. The old
@@ -842,6 +872,14 @@ function animate(now) {
     const dt = Math.min((now - lastFrameTime) / 1000, MAX_DELTA);
     lastFrameTime = now;
     const frameStart = performance.now(); // perfInfo probe — see above
+    // Frame-scoped draw counters (plan 026): three resets info on EVERY
+    // render() call, which would report only the LAST half's pass in 2P.
+    // Manual reset once per frame makes perfInfo count the WHOLE frame —
+    // byte-identical numbers in solo (one render per frame).
+    if (state.renderer) {
+        state.renderer.info.autoReset = false;
+        state.renderer.info.reset();
+    }
     // Gamepad runs every frame — start/death/pause need button edges even
     // when update() early-returns (paused or no active run).
     pollGamepad();
@@ -861,7 +899,7 @@ function animate(now) {
     // Camera follow and rendering run every frame regardless of pause or
     // game over — the frozen scene must stay visible behind the message box.
     updateCameraPosition(dt);
-    state.renderer.render(state.scene, state.camera);
+    renderFrame(); // Solo: the exact single full-rect render; 2P: both halves
     // Exponential average of the whole update+render body (perfInfo).
     frameMsAvg += (performance.now() - frameStart - frameMsAvg) * 0.05;
 }
