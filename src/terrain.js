@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import {
     CHUNK_SIZE, CHUNK_SEGMENTS, CHUNK_WINDOW_RADIUS, CHUNK_RELEASE_RADIUS,
-    CHUNK_BUILDS_PER_FRAME, TERRAIN_AMPLITUDE, TERRAIN_WAVELENGTH, TERRAIN_SEED,
+    CHUNK_BUILDS_PER_FRAME, TERRAIN_AMPLITUDE, TERRAIN_WAVELENGTH, WORLD_SEED,
     WATER_LEVEL, CURVE_STRENGTH, SPAWN_MESA_RADIUS,
     ROCKS_PER_CHUNK_MAX, ROCK_SPAWN_CLEARANCE,
     WATER_WALK_MARGIN, ROCK_COLLIDER_FACTOR,
@@ -31,7 +31,7 @@ import { spawnChunkCloud, releaseChunkCloud } from './clouds.js';
 // Same (x, z) in TRUE world coordinates always yields the same height,
 // across chunks, rebuilds, and floating-origin rebases.
 function hash2(ix, iz) {
-    let h = (ix * 374761393 + iz * 668265263 + TERRAIN_SEED * 144665) | 0;
+    let h = (ix * 374761393 + iz * 668265263 + WORLD_SEED * 144665) | 0;
     h = Math.imul(h ^ (h >>> 13), 1274126177);
     h ^= h >>> 16;
     return (h >>> 0) / 4294967296; // [0, 1)
@@ -502,7 +502,7 @@ function getRockGeometry() {
 
 function scatterRocks(chunk, centerTrueX, centerTrueZ) {
     // Per-chunk seeded RNG: same chunk always grows the same boulders.
-    let s = (Math.imul(chunk.cx, 668265263) ^ Math.imul(chunk.cz, 374761393) ^ TERRAIN_SEED) >>> 0;
+    let s = (Math.imul(chunk.cx, 668265263) ^ Math.imul(chunk.cz, 374761393) ^ WORLD_SEED) >>> 0;
     const next = () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
     const count = 1 + Math.floor(next() * ROCKS_PER_CHUNK_MAX);
     for (let n = 0; n < count; n++) {
@@ -543,7 +543,7 @@ function scatterRocks(chunk, centerTrueX, centerTrueZ) {
 // boulders and the run-start point. Collected food regrows only after the
 // chunk is released AND rebuilt (the world regenerating behind you).
 function scatterFood(chunk, centerTrueX, centerTrueZ) {
-    let s = (Math.imul(chunk.cx, 2246822519) ^ Math.imul(chunk.cz, 3266489917) ^ (TERRAIN_SEED + 977)) >>> 0;
+    let s = (Math.imul(chunk.cx, 2246822519) ^ Math.imul(chunk.cz, 3266489917) ^ (WORLD_SEED + 977)) >>> 0;
     const next = () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
     const count = FOOD_PER_CHUNK_MIN + Math.floor(next() * (FOOD_PER_CHUNK_MAX - FOOD_PER_CHUNK_MIN + 1));
     for (let n = 0; n < count; n++) {

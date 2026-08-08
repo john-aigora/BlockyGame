@@ -58,8 +58,20 @@
                  ui.js showStartOverlay; stays hidden when no runs exist. -->
             <p class="tagline" id="family-best" style="display: none">FAMILY BEST: <span
                     id="family-best-distance">0</span>u</p>
+            <!-- Daily world toggle (plan 025): reuses the retired mode-picker
+                 container + .mode-button CSS. ONE shared seeded world per
+                 local date — the family races the same map. ui.js wires it
+                 (sessionStorage flag + reload; seed resolves at module load). -->
+            <div id="mode-picker">
+                <button id="daily-toggle" class="game-button mode-button"
+                    title="One shared world per day &mdash; race the family on the same map">TODAY'S
+                    WORLD</button>
+            </div>
             <button id="start-button" class="game-button">&#9654; START</button>
             <p class="start-hint">or press any key / gamepad button</p>
+            <!-- Active world seed (plan 025): small, but visible — determinism
+                 you can point at. ui.js fills it (adds "· DAILY" on daily). -->
+            <p class="start-hint" id="seed-line">SEED <span id="seed-value">0</span></p>
         </div>
         <div id="message-box" class="message-box">
             <h2 id="death-title">GAME OVER</h2>

@@ -332,9 +332,11 @@ canvas {
     padding: 12px 24px;
 }
 
-/* World-mode picker (endless mode): two toggle buttons above START. The
-   selected mode wears the lime edge — same accent language as the button
-   hover glow. Unselected sits dimmed so the choice reads at a glance. */
+/* World toggle row above START (originally the classic/endless mode picker;
+   plan 025 reuses the container + .mode-button rules for the TODAY'S WORLD
+   daily toggle). The selected state wears the lime edge — same accent
+   language as the button hover glow. Unselected sits dimmed so the choice
+   reads at a glance. */
 #mode-picker {
     display: flex;
     gap: 12px;

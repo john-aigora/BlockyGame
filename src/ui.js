@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import {
     MAX_ENEMY_INDICATORS, DANGER_RADIUS, DANGER_VIGNETTE_MAX, HEARTBEAT_BPM, DEATH_SCREEN_DELAY,
     SURVIVAL_BEAT_COOLDOWN, PHEW_PEAK_MIN, NEAR_MISS_FACTOR,
-    PLAYER_COLLIDER_HALF_WIDTH, ENEMY_COLLIDER_HALF_WIDTH, DANGER_MUSIC_THRESHOLD
+    PLAYER_COLLIDER_HALF_WIDTH, ENEMY_COLLIDER_HALF_WIDTH, DANGER_MUSIC_THRESHOLD,
+    WORLD_SEED, DAILY_WORLD
 } from './constants.js';
 import { state } from './state.js';
 import { canKillSpecificEnemy } from './enemies.js';
@@ -39,7 +40,9 @@ export const el = {
     speedButton: null,
     hiscoreSlot: null,
     muteButton: null,
-    goFlourish: null
+    goFlourish: null,
+    dailyToggle: null,
+    seedValue: null
 };
 
 export function initUI() {
@@ -69,7 +72,37 @@ export function initUI() {
     el.hiscoreSlot = document.getElementById('hiscore-slot');
     el.muteButton = document.getElementById('mute-button');
     el.goFlourish = document.getElementById('go-flourish');
+    el.dailyToggle = document.getElementById('daily-toggle');
+    el.seedValue = document.getElementById('seed-value');
     initMuteToggle();
+    initDailyToggle();
+}
+
+// --- TODAY'S WORLD toggle + seed line (plan 025) ---
+// The seed resolves ONCE at module load (constants.js WORLD_SEED), so the
+// toggle persists the flag and NAVIGATES to re-resolve — a world cannot be
+// reseeded under a live run. The rebuilt URL drops ?seed/?daily so the
+// sessionStorage flag alone decides; every other param (move, paddebug)
+// survives. The seed line makes determinism visible: same number = same
+// world, today's number = the map the whole family is racing.
+function initDailyToggle() {
+    if (el.seedValue) {
+        el.seedValue.textContent = `${WORLD_SEED}${DAILY_WORLD ? ' · DAILY' : ''}`;
+    }
+    if (!el.dailyToggle) return;
+    el.dailyToggle.classList.toggle('mode-selected', DAILY_WORLD);
+    // The start overlay itself starts the run on ANY pointerdown — the
+    // toggle must not (same reason the START button needs no guard: its
+    // action IS starting). Stop the press here, act on the click.
+    el.dailyToggle.addEventListener('pointerdown', (e) => e.stopPropagation());
+    el.dailyToggle.addEventListener('click', () => {
+        try { sessionStorage.setItem('blocky.daily', DAILY_WORLD ? '0' : '1'); }
+        catch { /* blocked storage — the reload below just keeps the default world */ }
+        const url = new URL(location.href);
+        url.searchParams.delete('seed');
+        url.searchParams.delete('daily');
+        location.href = url.toString();
+    });
 }
 
 // --- GO! flourish (spectacle pass) ---

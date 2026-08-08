@@ -4,7 +4,7 @@ import {
     CLOUD_BOB_AMPLITUDE, CLOUD_BOB_SPEED, CLOUD_OPACITY,
     CLASSIC_CLOUD_COUNT, CLOUD_CHUNK_CHANCE, CLOUD_APPEAR_TIME,
     CLOUD_CLEAR_NEAR, CLOUD_CLEAR_FAR,
-    TERRAIN_SEED, CHUNK_SIZE, worldBoundary
+    WORLD_SEED, CHUNK_SIZE, worldBoundary
 } from './constants.js';
 import { state } from './state.js';
 import { wrapCoord, torusDeltaComponent } from './worldmath.js';
@@ -45,7 +45,7 @@ let cloudAllocCount = 0; // Debug: pool discipline is testable
 
 // Deterministic per-cloud RNG (same mulberry-ish step as the rock scatter).
 function seededRng(seedA, seedB) {
-    let s = (Math.imul(seedA, 2654435761) ^ Math.imul(seedB, 1597334677) ^ (TERRAIN_SEED + 733)) >>> 0;
+    let s = (Math.imul(seedA, 2654435761) ^ Math.imul(seedB, 1597334677) ^ (WORLD_SEED + 733)) >>> 0;
     return () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
 }
 

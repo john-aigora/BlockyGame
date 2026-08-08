@@ -6,6 +6,7 @@ import { onTouchStart, onTouchMove, onTouchEndOrCancel, gamepadVector, pollGamep
 import { sfx, isMuted, audioState, music } from './audio.js';
 import { spawnBurst, spawnScorePopup, effectsInfo } from './effects.js';
 import { terrainHeight, groundHeightAt, terrainInfo, isWalkable, canMove, terrainTint, isRockFree } from './terrain.js';
+import { WORLD_SEED, DAILY_WORLD } from './constants.js';
 import { cloudInfo } from './clouds.js';
 import { movementDebug } from './movement-continuous.js';
 
@@ -48,6 +49,9 @@ window.__game = {
         spawnScorePopup, // Score-popup pool-discipline checks (effects spec)
         effectsInfo, // { reducedMotion, activeParticles, poolSize }
         perfInfo, // { calls, triangles, geometries, textures, frameMsAvg } — plan 020 measurement hook
+        // The resolved world seed + whether the daily flag drove it (plan
+        // 025) — the worldfun spec pins ?seed=/daily resolution through this.
+        worldSeedInfo: () => ({ seed: WORLD_SEED, daily: DAILY_WORLD }),
         terrainHeight, // Pure seeded height sampler (endless) — determinism checks
         groundHeightAt, // Origin-aware local-coordinate sampler (endless)
         terrainInfo, // { activeChunks, pooledMeshes, queued, builds, ... } — streaming/pool checks

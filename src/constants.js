@@ -140,7 +140,48 @@ export const CHUNK_RELEASE_RADIUS = 4; // Chunks released to the pool beyond thi
 export const CHUNK_BUILDS_PER_FRAME = 2; // Build-queue budget — nearest chunks first
 export const TERRAIN_AMPLITUDE = 3.75; // Height scale: typical rolling hills ~±2.5, rare tail extremes ~±3.4
 export const TERRAIN_WAVELENGTH = 24; // Feature wavelength of the hill octave (continents run 4x longer)
-export const TERRAIN_SEED = 20260726; // World seed — deterministic terrain, rocks, and food scatter
+export const TERRAIN_SEED = 20260726; // DEFAULT world seed — deterministic terrain, rocks, and food scatter
+// --- World-seed resolution (plan 025): ONE source of truth ---
+// Every seed consumer (terrain noise, rock/food scatter streams, clouds)
+// reads WORLD_SEED — never TERRAIN_SEED directly (that is only the default
+// input here). Resolved ONCE at module load: a world's seed cannot change
+// mid-session, so the toggle below navigates to re-resolve. Priority:
+//   1. `?seed=<int>` URL param — a shareable, explicit world;
+//   2. the DAILY WORLD flag (`?daily=1`, or the start-overlay TODAY'S WORLD
+//      toggle persisted in sessionStorage 'blocky.daily') — seed = local
+//      YYYYMMDD, so the whole family races the same map all day;
+//   3. the default TERRAIN_SEED above.
+// The typeof guards keep this module Node-importable (specs import it in
+// plain Node — same pattern as CONTINUOUS_MOVEMENT at the bottom).
+export function dailySeed(date = new Date()) {
+    return date.getFullYear() * 10000 + (date.getMonth() + 1) * 100 + date.getDate();
+}
+
+function readDailyFlag() {
+    if (typeof location !== 'undefined' &&
+        new URLSearchParams(location.search).get('daily') === '1') return true;
+    try {
+        return typeof sessionStorage !== 'undefined' &&
+            sessionStorage.getItem('blocky.daily') === '1';
+    } catch { return false; /* blocked storage — the daily toggle just reads off */ }
+}
+
+function resolveWorldSeed() {
+    if (typeof location !== 'undefined') {
+        const param = new URLSearchParams(location.search).get('seed');
+        // Integer param only; `| 0` wraps huge values into int32 — the same
+        // domain the seeded hashes mix in, so any input is a valid world.
+        if (param !== null && /^-?\d{1,10}$/.test(param)) {
+            return { seed: param | 0, daily: false };
+        }
+    }
+    if (readDailyFlag()) return { seed: dailySeed(), daily: true };
+    return { seed: TERRAIN_SEED, daily: false };
+}
+
+const resolvedSeed = resolveWorldSeed();
+export const WORLD_SEED = resolvedSeed.seed;
+export const DAILY_WORLD = resolvedSeed.daily; // True only when the daily flag DROVE the seed (daily runs also record to the daily board)
 export const WATER_LEVEL = -0.9; // Terrain below this is lake (~25% of the world at this amplitude)
 export const CURVE_STRENGTH = 0.0012; // Curved-horizon bend: y -= dist^2 * this (≈4.3u drop at 60u)
 export const REBASE_DISTANCE = 2048; // |player x/z| beyond this triggers a floating-origin rebase
