@@ -23,6 +23,11 @@ export const state = {
   // you don't "discover" it.
   regionKey: null,
   regionsVisited: new Set(),
+  // The 1000u titan (plan 025): true once this run's boss beat has fired —
+  // one titan per run, reset by setupNewGame (which also disposes a live
+  // boss with the rest of state.enemies and drops a pending boss warn via
+  // clearPendingSpawns — the despawn exemption never outlives its run).
+  bossSpawned: false,
   // Jump (endless only; game.js owns the physics on the game clock).
   // jumpOffset is the height ABOVE the terrain — player y = ground + offset.
   // The retired classic test path never jumps (tryJump guards on the mode):

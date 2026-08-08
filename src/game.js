@@ -9,16 +9,17 @@ import {
     CHUNK_SIZE, REBASE_DISTANCE,
     PLAYER_COLLIDER_HALF_WIDTH, RAMP_DISTANCE, RAMP_SPEED_STEP, RAMP_SPEED_MAX,
     DISTANCE_MILESTONE_STEP, REGION_DISCOVER_DEBOUNCE,
+    BOSS_DISTANCE, BOSS_LEAD_DISTANCE, BOSS_SCALE_MULT, ENEMY_COLLIDER_HALF_WIDTH,
     JUMP_APEX_HEIGHT, JUMP_APEX_GROWTH, JUMP_AIRTIME, JUMP_AIRTIME_GROWTH
 } from './constants.js';
 import { initContinuousMovement, resetContinuousMovement, updateContinuousMovement } from './movement-continuous.js';
 import { wrapPosition, torusDeltaComponent } from './worldmath.js';
 import { state } from './state.js';
 import { createPlayer, disposeCharacter } from './characters.js';
-import { createEnemy, updateEnemies, updateEnemyStreaming, resetEnemyStreaming, playerBox, scratchBox, beginMaterialize, updateSpawnWarnings, clearPendingSpawns, shiftPendingSpawns, reimagePendingSpawns } from './enemies.js';
+import { createEnemy, updateEnemies, updateEnemyStreaming, resetEnemyStreaming, playerBox, scratchBox, beginMaterialize, updateSpawnWarnings, clearPendingSpawns, shiftPendingSpawns, reimagePendingSpawns, scheduleEnemySpawn, currentEnemyScaleFactor } from './enemies.js';
 import { spawnNearPlayer, spawnAnywhere } from './collectibles.js';
 import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoomIn, zoomOut, updateGroundScroll } from './world.js';
-import { initTerrain, setTerrainActive, resetTerrainForNewRun, updateTerrain, shiftTerrain, groundHeightAt, slideMove, isRockWedged, biomeRegion } from './terrain.js';
+import { initTerrain, setTerrainActive, resetTerrainForNewRun, updateTerrain, shiftTerrain, groundHeightAt, slideMove, isRockWedged, biomeRegion, isWalkable } from './terrain.js';
 import { initClouds, setCloudMode, updateClouds, shiftClouds } from './clouds.js';
 import { initEffects, updateEffects, resetEffects, onCollect, onGrowthMilestone, shiftActiveParticles, spawnTextPopup, onJumpTakeoff, onJumpLand } from './effects.js';
 import { keys, moveVector, clearTransientInput, onKeyDown, onKeyUp, setupTouchControls, setupGamepad, pollGamepad } from './input.js';
@@ -141,6 +142,8 @@ function setupNewGame() {
     state.playerScale = 1.0; // Player's initial scale (acts as height for 1x1x1 geometry)
     state.furthestDistance = 0; // Endless progress + difficulty ramp reset BEFORE the
     state.endlessRampLevel = 0; // speed recompute below (ramp feeds enemy speed)
+    state.bossSpawned = false; // Fresh run, fresh titan (plan 025) — a live boss
+    // dies with state.enemies below; a pending boss warn dies in clearPendingSpawns
     state.jumpOffset = 0; // A restart mid-arc lands instantly:
     state.jumpVelocity = 0; // fresh runs always start grounded
     state.jumpGravity = 0;
@@ -553,6 +556,45 @@ function updateRegionDiscovery(p) {
     }
 }
 
+// --- The 1000u titan trigger (plan 025 Step 5) ---
+// Fires ONCE per run, on the first frame furthestDistance stands at or past
+// BOSS_DISTANCE: schedules a grunt at currentEnemyScaleFactor x
+// BOSS_SCALE_MULT, BOSS_LEAD_DISTANCE ahead along the player's heading
+// (live input direction; a stationary crossing falls back to "outward" —
+// away from the run start, the direction the run is pushing), with the 2x
+// warn + the SOMETHING BIG COMES... banner. Placement respects walkability;
+// if the whole fan ahead is water THIS frame, the flag stays unset and the
+// trigger simply retries next frame — the titan may arrive a step late,
+// never in a lake.
+function tryScheduleBoss(p) {
+    const mv = moveVector();
+    let hx = mv.x, hz = mv.z;
+    if (hx === 0 && hz === 0) {
+        const tx = p.x + state.worldOrigin.x;
+        const tz = p.z + state.worldOrigin.z;
+        const len = Math.hypot(tx, tz) || 1;
+        hx = tx / len;
+        hz = tz / len;
+    }
+    const scale = currentEnemyScaleFactor() * BOSS_SCALE_MULT;
+    const radius = scale * ENEMY_COLLIDER_HALF_WIDTH;
+    const baseAngle = Math.atan2(hz, hx);
+    for (let attempt = 0; attempt < 12; attempt++) {
+        // Dead ahead first, then fan up to ±90° around the heading.
+        const angle = baseAngle + (attempt === 0 ? 0 : (Math.random() - 0.5) * Math.PI);
+        const spawnX = p.x + Math.cos(angle) * BOSS_LEAD_DISTANCE;
+        const spawnZ = p.z + Math.sin(angle) * BOSS_LEAD_DISTANCE;
+        if (!isWalkable(spawnX, spawnZ, radius)) continue;
+        scheduleEnemySpawn(spawnX, spawnZ, scale, 'grunt', true);
+        state.bossSpawned = true;
+        milestoneOrigin.x = p.x;
+        milestoneOrigin.y = p.y + state.playerScale + 0.6; // The dread banner rides over the head like every beat
+        milestoneOrigin.z = p.z;
+        spawnTextPopup(milestoneOrigin, 'SOMETHING BIG COMES...', '#FF5252');
+        return;
+    }
+}
+
 function updateEndlessProgress() {
     const p = state.player.position;
     // Region tracking runs EVERY frame — wandering back into new lands must
@@ -579,6 +621,13 @@ function updateEndlessProgress() {
             state.endlessRampLevel = level;
             applySpeedMultiplier(); // Enemy speed carries the ramp factor
         }
+    }
+    // Titan check AFTER the progress block: on the crossing frame the
+    // DISTANCE 1000! chime fires first and SOMETHING BIG COMES... lands as
+    // the headline. Outside the block so a water-blocked placement retries
+    // even while the player stands still at the mark.
+    if (!state.bossSpawned && state.furthestDistance >= BOSS_DISTANCE) {
+        tryScheduleBoss(p);
     }
 }
 

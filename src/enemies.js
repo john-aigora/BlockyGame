@@ -12,16 +12,17 @@ import {
     ENDLESS_ENEMY_TARGET, ENDLESS_ENEMY_CAP, ENEMY_DESPAWN_RADIUS,
     ENDLESS_SPAWN_MIN, ENDLESS_SPAWN_MAX, ENDLESS_SPAWN_INTERVAL, RAMP_HEIGHT_STEP,
     PLAYER_COLLIDER_HALF_WIDTH, ENEMY_SPECIES,
-    KILL_SPAWN_PREY_MIN, KILL_SPAWN_PREY_MAX
+    KILL_SPAWN_PREY_MIN, KILL_SPAWN_PREY_MAX,
+    BOSS_WARN_MULT, BOSS_BOUNTY_MULT, BOSS_FOOD_DROP, BOSS_FOOD_RING_RADIUS
 } from './constants.js';
 import { state } from './state.js';
 import { createCharacter, disposeCharacter, shadeColor, CAP_LIGHTEN } from './characters.js';
 import { groundHeightAt, isWalkable, slideMove, applyWorldBend } from './terrain.js';
-import { spawnAtPosition } from './collectibles.js';
+import { spawnAtPosition, spawnCollectible } from './collectibles.js';
 import { endGame, updateScoreDisplay, showComboChip } from './ui.js';
 import { wrapPosition, torusDelta, torusDistance } from './worldmath.js';
 import { sfx } from './audio.js';
-import { onEnemyKilled, spawnScorePopup, spawnBurst } from './effects.js';
+import { onEnemyKilled, spawnScorePopup, spawnTextPopup, spawnBurst } from './effects.js';
 import { triggerKillShake } from './world.js';
 import { rumble } from './rumble.js';
 
@@ -195,8 +196,10 @@ function releaseWarnDisc(mesh) {
 }
 
 // Queue a monster: red ground flash first, then materialize. speciesKey
-// rides the pending entry so the warn's monster keeps its species (plan 024).
-export function scheduleEnemySpawn(spawnX, spawnZ, scaleFactor, speciesKey = 'grunt') {
+// rides the pending entry so the warn's monster keeps its species (plan
+// 024); `boss` rides it too so the titan's crown/rules attach the moment it
+// materializes (plan 025).
+export function scheduleEnemySpawn(spawnX, spawnZ, scaleFactor, speciesKey = 'grunt', boss = false) {
     if (!state.scene) return;
     const mesh = acquireWarnDisc();
     const y = state.worldMode === 'endless'
@@ -210,13 +213,17 @@ export function scheduleEnemySpawn(spawnX, spawnZ, scaleFactor, speciesKey = 'gr
     // the CURRENT player speed so notice is constant in player-travel, not
     // seconds. Clamped [1.0, 2.2] — never shorter than the classic 0.95s,
     // never a stale disc parade. Captured per entry at schedule time.
-    const warnTime = SPAWN_WARN_TIME * Math.min(2.2, Math.max(1.0,
+    let warnTime = SPAWN_WARN_TIME * Math.min(2.2, Math.max(1.0,
         (state.actualPlayerSpeed ?? SPAWN_WARN_SPEED_REF) / SPAWN_WARN_SPEED_REF));
+    // The titan telegraphs LONG (plan 025): 2x on top of the speed scaling —
+    // dread needs time to land, and the thing it announces is worth it.
+    if (boss) warnTime *= BOSS_WARN_MULT;
     pendingSpawns.push({
         x: spawnX,
         z: spawnZ,
         scaleFactor,
         species: speciesKey,
+        boss,
         t: warnTime,
         warnTime,
         mesh
@@ -236,6 +243,7 @@ export function pendingSpawnInfo() {
         z: p.z,
         scaleFactor: p.scaleFactor,
         species: p.species,
+        boss: p.boss === true,
         t: p.t,
         warnTime: p.warnTime
     }));
@@ -306,7 +314,30 @@ export function updateSpawnWarnings(dt) {
             p.z
         );
         if (state.worldMode !== 'endless') wrapPosition(enemy.position);
+        if (p.boss) markBoss(enemy); // Crown + rules before the scale-in shows it (plan 025)
         beginMaterialize(enemy);
+    }
+}
+
+// --- The 1000u titan (plan 025) ---
+// ud.boss changes exactly four things: a gold crown (below), a 2x warn
+// (schedule time), a 3x payout + feast drop (killEnemy), and despawn
+// immunity (updateEnemyStreaming). Everything else — edibility by height,
+// AI, collision, the kill path — is stock: the titan is a giant, not a new
+// system.
+const BOSS_CAP_COLOR = 0xFFD700; // Crown gold — read at a glance over the horizon
+const BOSS_CAP_SCALE = 1.3; // The cap oversized into a visible crown
+
+function markBoss(enemyGroup) {
+    const ud = enemyGroup.userData;
+    ud.boss = true;
+    const capMaterial = ud.capMaterial; // Per-instance since plan 024 — safe to recolor
+    if (capMaterial) {
+        capMaterial.color.setHex(BOSS_CAP_COLOR);
+        // The cap mesh is the bodyMesh child wearing capMaterial (characters.js
+        // stores the material, not the mesh — resolve it by identity).
+        const capMesh = ud.bodyMesh && ud.bodyMesh.children.find((m) => m.material === capMaterial);
+        if (capMesh) capMesh.scale.setScalar(BOSS_CAP_SCALE);
     }
 }
 
@@ -350,7 +381,9 @@ export function updateEnemies(dt) {
             if (!ud.species.harmless) {
                 const capMaterial = ud.capMaterial;
                 if (bodyMesh) bodyMesh.material.color.setHex(killableNow ? 0xFFEB3B : ud.baseBodyColor); // Yellow = killable, species base = hunter
-                if (capMaterial) capMaterial.color.setHex(killableNow ? KILLABLE_CAP_COLOR : ud.baseCapColor);
+                // The titan's crown never flips (plan 025): the BODY going
+                // yellow is the edibility signal; the gold cap is identity.
+                if (capMaterial && !ud.boss) capMaterial.color.setHex(killableNow ? KILLABLE_CAP_COLOR : ud.baseCapColor);
             }
         }
 
@@ -503,7 +536,10 @@ export function killEnemy(enemyGroup, index) {
     // it on the game clock, and ui.js resets it on death / new game.
     state.comboCount = state.comboTimeLeft > 0 ? Math.min(state.comboCount + 1, COMBO_MAX) : 1;
     state.comboTimeLeft = COMBO_WINDOW;
-    const payout = bounty * state.comboCount;
+    // Titan jackpot (plan 025): the payout (bounty x combo) triples — the
+    // size bounty already scales with height, the multiplier makes the beat.
+    const boss = enemyGroup.userData.boss === true;
+    const payout = bounty * state.comboCount * (boss ? BOSS_BOUNTY_MULT : 1);
 
     // Death explosion (plan 015): burst in the enemy's CURRENT body color
     // (killable yellow — or the species base for a juja, which never flips)
@@ -532,10 +568,32 @@ export function killEnemy(enemyGroup, index) {
     if (state.comboCount > 1) showComboChip(state.comboCount);
 
     // Enemy becomes food — the drop count is species data (plan 024): grunts
-    // and sprinters keep the classic 4, the juja snack pays 2.
-    const foodDrop = enemyGroup.userData.species.foodDrop;
-    for (let i = 0; i < foodDrop; i++) {
-        spawnAtPosition(enemyDeathPosition);
+    // and sprinters keep the classic 4, the juja snack pays 2. The titan
+    // (plan 025) replaces its species drop with the FEAST: BOSS_FOOD_DROP
+    // pieces laid on a ~6u ring around the fall (evenly-angled pickers with
+    // jitter through the normal water/rock-validated spawn path — a skipped
+    // wet piece stays skipped; the banquet look survives), then the full
+    // fanfare and the TITAN DOWN! banner. The banner fires LAST so it is
+    // the beat's headline (and the spec's lastPopupText).
+    if (boss) {
+        for (let i = 0; i < BOSS_FOOD_DROP; i++) {
+            const baseAngle = (i / BOSS_FOOD_DROP) * Math.PI * 2;
+            spawnCollectible(() => {
+                const a = baseAngle + (Math.random() - 0.5) * 0.35;
+                const r = BOSS_FOOD_RING_RADIUS + (Math.random() - 0.5) * 0.9;
+                return {
+                    x: enemyDeathPosition.x + Math.cos(a) * r,
+                    z: enemyDeathPosition.z + Math.sin(a) * r
+                };
+            });
+        }
+        sfx.fanfare(); // The FULL fanfare — this is the run's landmark kill
+        enemyDeathPosition.y = enemyBaseHeight * enemyGroup.scale.y * 0.6; // Banner up at the fallen titan's chest height
+        spawnTextPopup(enemyDeathPosition, 'TITAN DOWN!', '#FFD700');
+    } else {
+        for (let i = 0; i < enemyGroup.userData.species.foodDrop; i++) {
+            spawnAtPosition(enemyDeathPosition);
+        }
     }
 
     spawnNewEnemies();
@@ -544,7 +602,9 @@ export function killEnemy(enemyGroup, index) {
 // The ramped enemy scale factor: the classic height rule, times the endless
 // distance ramp (+RAMP_HEIGHT_STEP per level — foes visibly tower the
 // further out you push). Classic reads the ramp as level 0, factor 1.
-function currentEnemyScaleFactor() {
+// EXPORTED for the titan (plan 025): the boss is this formula x
+// BOSS_SCALE_MULT — one giant rule, never a fork.
+export function currentEnemyScaleFactor() {
     let targetHeight = state.playerScale * 1.0 * ENEMY_HEIGHT_FACTOR;
     if (state.worldMode === 'endless') {
         targetHeight *= 1 + state.endlessRampLevel * RAMP_HEIGHT_STEP;
@@ -701,6 +761,11 @@ export function resetEnemyStreaming() {
 export function updateEnemyStreaming(dt) {
     for (let i = state.enemies.length - 1; i >= 0; i--) {
         const enemy = state.enemies[i];
+        // The titan never streams out (plan 025): it keeps marching after a
+        // fleeing player — killed or run's end only. Scoped to this run by
+        // construction: setupNewGame disposes state.enemies wholesale, so
+        // the exemption cannot leak a boss across a restart.
+        if (enemy.userData.boss) continue;
         if (torusDistance(enemy.position, state.player.position) > ENEMY_DESPAWN_RADIUS) {
             state.scene.remove(enemy);
             disposeCharacter(enemy); // Per-instance body/cap materials released

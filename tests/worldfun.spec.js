@@ -200,6 +200,164 @@ test('gold food: seeded scatter grows it; collecting pays +5 with the gold beat'
   expect(after.goldLeft).toBe(gold.length - 1); // The prize is gone — collected, not respawned
 });
 
+test('1000u titan: long warn + dread banner, despawn immunity, and a restart clears it', async ({ page }) => {
+  test.setTimeout(120000);
+  await openWorld(page);
+  await startGame(page);
+  // Cross the mark through the REAL trigger path: a progress frame at 1005u.
+  await page.evaluate(() => {
+    const s = window.__game.state;
+    s.collectTimeLeft = 900;
+    s.player.position.x = 1005;
+  });
+  await expect.poll(
+    () => page.evaluate(() => window.__game.debug.pendingSpawnInfo().some((p) => p.boss)),
+    { timeout: 30000 }
+  ).toBe(true);
+  const warn = await page.evaluate(() => ({
+    entry: window.__game.debug.pendingSpawnInfo().find((p) => p.boss),
+    popup: window.__game.debug.effectsInfo().lastPopupText
+  }));
+  expect(warn.popup).toBe('SOMETHING BIG COMES...'); // Headline over the same-frame DISTANCE chime
+  expect(warn.entry.warnTime).toBeCloseTo(0.95 * 2, 5); // 2x the (1x-speed) warn — dread takes time
+  // Boss size = the live giant formula x 1.6: ramp level 6 at 1005u →
+  // (1.0 x 1.5 x 2.2 / 1.2) x 1.6 = 4.4.
+  expect(warn.entry.scaleFactor).toBeCloseTo(4.4, 2);
+  expect(warn.entry.species).toBe('grunt');
+
+  // Wait out warn + materialize; the titan arrives INEDIBLE, crown gold.
+  await expect.poll(
+    () => page.evaluate(() => window.__game.state.enemies.some(
+      (e) => e.userData.boss && e.userData.materializing === undefined)),
+    { timeout: 60000 }
+  ).toBe(true);
+  const arrived = await page.evaluate(() => {
+    const boss = window.__game.state.enemies.find((e) => e.userData.boss);
+    return {
+      killable: window.__game.state.playerScale * 1.0 > 1.2 * boss.scale.y,
+      capHex: boss.userData.capMaterial.color.getHex()
+    };
+  });
+  expect(arrived.killable).toBe(false); // No edibility bypass — it towers, you grow
+  expect(arrived.capHex).toBe(0xFFD700);
+
+  // Despawn immunity: flee 150u — every normal enemy streams out past 80u,
+  // the titan keeps marching. And no SECOND titan arms (flag consumed).
+  await page.evaluate(() => { window.__game.state.player.position.x += 150; });
+  await waitGameSeconds(page, 1.5);
+  const fled = await page.evaluate(() => {
+    const s = window.__game.state;
+    const boss = s.enemies.find((e) => e.userData.boss);
+    return {
+      bossAlive: !!boss,
+      bossDist: boss ? Math.hypot(boss.position.x - s.player.position.x, boss.position.z - s.player.position.z) : 0,
+      pendingBoss: window.__game.debug.pendingSpawnInfo().filter((p) => p.boss).length,
+      flag: s.bossSpawned
+    };
+  });
+  expect(fled.bossAlive).toBe(true);
+  expect(fled.bossDist).toBeGreaterThan(80); // Beyond the radius every other enemy despawns at
+  expect(fled.pendingBoss).toBe(0);
+  expect(fled.flag).toBe(true);
+
+  // STOP-condition check (plan 025): a mid-run restart must clear the
+  // exempt titan — setupNewGame disposes it with the rest of the roster.
+  await page.locator('#restart-game-button').click();
+  await expect(page.locator('#start-overlay')).toBeVisible();
+  const cleared = await page.evaluate(() => ({
+    bosses: window.__game.state.enemies.filter((e) => e.userData.boss).length,
+    pendingBoss: window.__game.debug.pendingSpawnInfo().filter((p) => p.boss).length,
+    flag: window.__game.state.bossSpawned
+  }));
+  expect(cleared).toEqual({ bosses: 0, pendingBoss: 0, flag: false });
+});
+
+test('titan kill: 3x payout, the 10-food feast ring, TITAN DOWN!, and no second titan', async ({ page }) => {
+  test.setTimeout(150000);
+  await openWorld(page);
+  await startGame(page);
+  await page.evaluate(() => {
+    const s = window.__game.state;
+    s.collectTimeLeft = 900;
+    s.player.position.x = 1005;
+  });
+  await expect.poll(
+    () => page.evaluate(() => window.__game.state.enemies.some(
+      (e) => e.userData.boss && e.userData.materializing === undefined)),
+    { timeout: 60000 }
+  ).toBe(true);
+
+  // Come home to the spawn mesa (dry, rock-cleared) and let the streaming
+  // window fully settle so the food count is a stable baseline.
+  await page.evaluate(() => {
+    const s = window.__game.state;
+    s.collectTimeLeft = 900;
+    s.player.position.x = 0;
+    s.player.position.z = 0;
+  });
+  await page.waitForFunction(() => window.__game.debug.terrainInfo().queued === 0, null, { timeout: 30000 });
+  await waitGameSeconds(page, 0.5);
+
+  // Atomic kill setup (one evaluate — no frame races): bystanders shipped
+  // out (they despawn unpaid), the titan placed at +5u — inside the
+  // gameplay contact reach (player half 3.12 + boss half 2.64 = 5.76u) but
+  // far enough that the feast ring (radius <= 3.1 around the fall) lands
+  // beyond ANY render-box reach. The player is made TALL in gameplay terms
+  // only — state.playerScale drives edibility and the enemy-contact box,
+  // while the pickup box still reads the RENDER scale (game.js
+  // setFromObject; plan-026/H6 may unify them — this test then needs a
+  // post-kill shrink instead) — so the winner cannot gulp its own feast
+  // and all 10 pieces are countable. (At an 0.9u boss offset this raced:
+  // a min-radius ring roll could graze the scarf-side render box — one
+  // bite synced the render scale via the collect path and the giant
+  // hoovered all 10, +10 score. Frame-probed, ~1 in 4.)
+  const before = await page.evaluate(() => {
+    const g = window.__game;
+    const s = g.state;
+    const boss = s.enemies.find((e) => e.userData.boss);
+    for (const e of s.enemies) {
+      if (!e.userData.boss) { e.position.x = s.player.position.x + 500; }
+    }
+    boss.position.set(5, g.debug.groundHeightAt(5, 0), 0);
+    s.playerScale = 1.2 * boss.scale.y + 0.5; // Taller than the titan — killable
+    s.collectTimeLeft = 900;
+    return {
+      score: s.score,
+      combo: s.comboCount,
+      food: s.collectibles.length,
+      bossScaleY: boss.scale.y
+    };
+  });
+  expect(before.combo).toBe(0); // Fresh chain: the payout below is combo x1
+
+  await expect.poll(
+    () => page.evaluate(() => window.__game.state.enemies.some((e) => e.userData.boss)),
+    { timeout: 30000 }
+  ).toBe(false);
+  const after = await page.evaluate(() => ({
+    score: window.__game.state.score,
+    food: window.__game.state.collectibles.length,
+    popup: window.__game.debug.effectsInfo().lastPopupText,
+    flag: window.__game.state.bossSpawned
+  }));
+  // Payout = (KILL_POINTS 25 + 5 x floor(1.2 x scaleY)) x combo 1 x BOSS 3.
+  const bounty = 25 + 5 * Math.floor(1.2 * before.bossScaleY);
+  expect(after.score - before.score).toBeGreaterThanOrEqual(3 * bounty);
+  expect(after.score - before.score).toBeLessThanOrEqual(3 * bounty + 2); // Headroom only for a stray crumb
+  expect(after.food - before.food).toBe(10); // The feast ring, intact on the mesa
+  expect(after.popup).toBe('TITAN DOWN!');
+  expect(after.flag).toBe(true);
+
+  // Further distance never wakes a second titan this run.
+  await page.evaluate(() => { window.__game.state.player.position.x = 1300; });
+  await waitGameSeconds(page, 1);
+  const again = await page.evaluate(() => ({
+    bosses: window.__game.state.enemies.filter((e) => e.userData.boss).length,
+    pendingBoss: window.__game.debug.pendingSpawnInfo().filter((p) => p.boss).length
+  }));
+  expect(again).toEqual({ bosses: 0, pendingBoss: 0 });
+});
+
 test('?daily=1 resolves the daily seed without the toggle', async ({ page }) => {
   await openWorld(page, '?daily=1');
   const daily = await pageDailySeed(page);

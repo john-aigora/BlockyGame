@@ -50,6 +50,18 @@ export const REGION_DISCOVER_DEBOUNCE = 1.5; // Game-seconds a NEW biome region 
 // decision, so rarity does the balancing, not the clock.
 export const GOLD_FOOD_POINTS = 5; // One gold block = five normal blocks
 export const GOLD_CHUNK_CHANCE = 0.08; // Chunks growing ONE gold block (~1 per 12 chunks ≈ every screen or two of travel): rare enough to point at, common enough to chase
+// The 1000u titan: ONE scripted boss beat per run at the first BOSS_DISTANCE
+// crossing — a late-game landmark where the flat escalation used to just
+// keep escalating (audit DT-8). It obeys every normal rule (edibility by
+// height, the single kill path); only its size, warn, bounty, and its
+// refusal to stream out are special.
+export const BOSS_DISTANCE = 1000; // Furthest-distance mark whose FIRST crossing spawns the titan (once per run)
+export const BOSS_LEAD_DISTANCE = 40; // The titan lands this far ahead along the player's heading — seen coming, never dropped on your head
+export const BOSS_SCALE_MULT = 1.6; // x the current giant formula: unmistakably the biggest thing yet, still huntable after growth
+export const BOSS_WARN_MULT = 2; // Titan warn disc lasts 2x the (speed-scaled) warn — a long, dreadful telegraph
+export const BOSS_BOUNTY_MULT = 3; // Titan kill payout multiplier — the late-game jackpot, worth growing for
+export const BOSS_FOOD_DROP = 10; // Titan death feast: food pieces on the ring below (replaces the species drop)
+export const BOSS_FOOD_RING_RADIUS = 2.65; // Mean feast ring radius (~6u circle across, jittered) — a banquet, not a pile
 
 // Tension systems (awesome pass): make danger and urgency legible.
 export const DANGER_MUSIC_THRESHOLD = 0.12; // dangerOpacity above this (with NO prey alive) lifts the music to the danger layer (2) — just past the vignette's first visible breath, so the pad arrives with the dread, not before
