@@ -29,6 +29,15 @@ test('50 bursts + 10 collects do not grow the geometry count (pool discipline)',
   for (let i = 0; i < 10; i++) {
     await page.evaluate(() => {
       const s = window.__game.state;
+      // Endless sizes bubble spawns to the player, so taller hunters exist
+      // at ANY scale and the cross-chunk collect chase can end the run
+      // under parallel-suite load (observed: "The enemy caught you" mid-
+      // loop, then the frozen death clock hangs every game-clock wait).
+      // The measurement is pool discipline, not survival — despawn them
+      // each hop. Enemy bodies share geometry (characters.js), so removal
+      // cannot move the geometry count (plan 017).
+      s.enemies.forEach((e) => s.scene.remove(e));
+      s.enemies = [];
       const food = s.collectibles[0];
       if (food) s.player.position.set(food.position.x, 0, food.position.z);
     });
@@ -54,6 +63,10 @@ test('50 bursts + 10 collects do not grow the geometry count (pool discipline)',
   for (let i = 0; i < 10; i++) {
     await page.evaluate(() => {
       const s = window.__game.state;
+      // Same death-proofing as the warm-up loop (shared geometry — no
+      // effect on the measured count).
+      s.enemies.forEach((e) => s.scene.remove(e));
+      s.enemies = [];
       const food = s.collectibles[0];
       if (food) s.player.position.set(food.position.x, 0, food.position.z);
     });
