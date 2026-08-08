@@ -617,3 +617,76 @@ All five steps landed; suite grew 95 → 102 (+4 tension, +3 audio).
   collect squash (ADV-6), perfInfo accumulates a paused-zoom render (ADV-8).
   LEARNINGS: classic+2P via forceWorldMode is seat-0-only (ADV-10 — latent,
   debug path only).
+
+## 2026-08-08 — B9 (plan 027): test depth + hygiene drain — COMPLETE
+
+- `debug.advance(seconds)` landed (the batch's only game-code surface, per
+  plan scope): `advanceGameTime` in game.js cancels the ONE pending rAF
+  (animate re-requests at frame top, so `state.animationFrameId` is always
+  the in-flight handle), loops the REAL `update(1/60)` `ceil(seconds*60)`
+  times, nulls `lastFrameTime`, re-requests. Guard: throws on a dead run
+  unless `{allowMenu:true}` (paused steps are deliberate no-ops — the game
+  clock IS frozen under pause; that is the tested invariant, not a stepper
+  gap). Single-rAF handback pinned by a Chromium rAF-id consumption probe
+  (~2 ids/frame healthy vs ~3 doubled; lower bound also catches a dead loop).
+- New deterministic-kill choreography now shared by balance/timing/gamepad:
+  hang the hero MID-JUMP over a debug-spawned fixed-scale grunt — the
+  flattened enemy-contact box makes the kill, the unflattened pickup box
+  ignores the scattered food, so score deltas are PURE payout. Exact asserts
+  all HOLD against live code (no real-bug STOP fired anywhere in B9):
+  35 = 25+5*floor(1.2*2) at x1; 175 = bounty*5 at the seeded x5 cap (stays
+  5, window refreshed); combo expiry at advance(4.5) zeroes count/window and
+  hides a VISIBLE chip (two chained kills first).
+- Rotation pinned: 8 consecutive overlay-deterministic schedules classify to
+  SPAWN_SIZE_PATTERN exactly — species sequence + per-band height ratios
+  (giants exactly 1.5, juja exactly 0.35, prey/peer/sprinter in-range);
+  schedule-then-clear per slot keeps the threat gate out of the picture.
+- Pause invariants: combo window + runTime byte-frozen across a 1s in-page
+  wall wait (kill and pause land in ONE evaluate — live CDP-gap frames had
+  ticked the window in the first draft); music off under pause, back on
+  resume; spawn cooldown freeze proven over a 5s wall pause (0 scheduled)
+  then ≤1 top-up inside the first 1.25s interval and ≥1 by 1.37s, all
+  stepped inside a single evaluate so no live frame can pollute the window.
+- New tests/spawnwarn.spec.js (4): schedule→disc-in-scene (RingGeometry at
+  the warn coords)→zero enemies all window→exactly one after, at the disc's
+  spot; 10 schedule/materialize cycles with real rendered frames between →
+  geometry delta ≤1; death mid-warn FREEZES the pipeline (pending timer
+  byte-identical across 40 rendered frames, nothing materializes over the
+  death screen, advance() throws on the dead run, restart clears the disc);
+  5x speed e2e — warnTime exactly 0.95*2.2, still pending at 1.9gs,
+  delivered by 2.2gs. DRIFT NOTE: plan 027's step 4c phrase "disc cleared on
+  the death frame" contradicts plan 019's own landed guard (C-1 freeze;
+  "warn discs already clear there [setupNewGame]" — 019 Step 1 text). The
+  spec asserts the LANDED freeze+restart-clear invariant; game code
+  untouched. Flagged for the driver as drift, not a bug.
+- Jump: apex(3)/apex(1) matches (1.55+0.75*2)/1.55 ±5% from real
+  Space-launched arcs stepped per-frame; gravity float-identical across a
+  mid-air scale-12 mutation (locked per arc). Rumble: spy vibrationActuator
+  on the mock pad — kill fires the 55ms kick, death the 180ms pulse, BOTH
+  while muted (rumble deliberately ignores mute; current behavior asserted
+  per plan, with a flip-me comment). Bind sweep: every bind in input.js's
+  header comment now has a spec — added D-pad move, A jump, B pause,
+  Select mute (aria + storage), Y/X speed steps, LB/RB zoom, Start+Select
+  chord (Select half provably not firing its single bind); a sweep map
+  comment in gamepad.spec.js indexes bind → spec.
+- Hygiene drained (survival-guide bank): H1 corrupt-storage now corrupts the
+  ENDLESS key the death screen reads; H2 ranking seeds a 5-pt/900u row that
+  must render FIRST; H3 zoom click-loops run over a calmed world (+ live
+  gameActive proof); H4 popup spec got the drain-then-settle order; H5
+  deviceScaleFactor:3 pins the 1.5 DPR cap exactly; H12 pending-threat gate
+  (4 shrunk-hero discs suppress the top-up; clearing reopens it); H14 coop
+  tiebreak reseeded so stable sort without the term fails 3 asserts.
+- Wall-clock retirement: all 17 non-audio waitForTimeout sites converted —
+  frame-settles (new helpers.settleFrames: rendered-rAF chain, the honest
+  axis for GPU registration and for frozen-clock death/pause stability),
+  game-clock waits (hop loops, touch integration, the reduced-motion 5s play
+  — now death-proofed so the game-clock wait can never hang on a frozen
+  death clock), and in-page setTimeout ONLY where "wall time passes, game
+  must not move" is itself the assertion. audio.spec's two Web-Audio waits
+  annotated + eslint-disabled. New tests/-scoped no-restricted-syntax rule
+  bans page.waitForTimeout ("use waitGameSeconds/advance (game clock ≠ wall
+  clock)") — proven firing on a probe file before removal.
+- Gates: suite 129 → 150 (21 new cases, 1 new spec file), 150/150 twice
+  consecutively at workers:3 (7.2m, 7.1m) with ZERO flakes either run — the
+  H4/H11 load-flake class did not reappear post-retirement; lint 0; build
+  exit 0. Commits e8839d2, 1a2d926, e92d42a, f2a7c19, 650b716, 60f87bd.

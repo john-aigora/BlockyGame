@@ -557,9 +557,76 @@
       "plans": [
         "027"
       ],
-      "title": "Test depth",
-      "status": "pending",
-      "acceptance": []
+      "title": "Test depth + deferred-hygiene drain",
+      "status": "complete",
+      "acceptance": [
+        {
+          "id": "027-1",
+          "criterion": "npm test 0 failed x2 . lint 0",
+          "met": true,
+          "evidence": "150 passed / 0 failed twice consecutively at final content HEAD (7.2m, 7.1m, workers:3, zero flakes either run — 129+21 new); npm run lint exit 0 at every slice; npm run build exit 0"
+        },
+        {
+          "id": "027-2",
+          "criterion": "debug.advance exists and is used by >=5 specs",
+          "met": true,
+          "evidence": "advanceGameTime (game.js: cancel rAF -> loop real update(1/60) -> resume, gameActive guard w/ allowMenu) exposed as debug.advance (main.js); used by 5 spec files: balance, gamepad, spawnwarn, timing, toys; single-rAF handback pinned by the timing spec's id-consumption probe"
+        },
+        {
+          "id": "027-3",
+          "criterion": "grep waitForTimeout tests/ minus audio.spec -> only eslint-disabled or zero matches",
+          "met": true,
+          "evidence": "grep exit 1 (zero non-audio matches; 17 sites converted to settleFrames/waitGameSeconds/advance); audio.spec keeps its 2 Web-Audio waits under eslint-disable-next-line comments; the tests/ no-restricted-syntax rule proven firing on a probe file (1 error) then probe removed"
+        },
+        {
+          "id": "027-4",
+          "criterion": "plans/README.md updated",
+          "met": true,
+          "evidence": "row 027 TODO -> DONE with the coverage + retirement summary (Close commit)"
+        },
+        {
+          "id": "H1",
+          "criterion": "hiscores corrupt-storage spec exercises the LIVE key",
+          "met": true,
+          "evidence": "seed moved blocky.hiscores.v1 -> blocky.hiscores.endless.v1 (the key the death screen reads), so loadHiscores' try/catch actually runs; spec green"
+        },
+        {
+          "id": "H2",
+          "criterion": "distance-first ranking discriminated from score ordering",
+          "met": true,
+          "evidence": "ranking spec now seeds a 5-pt/900u row stored BELOW the 50-pt/400u row and asserts it renders FIRST ('900u — 5 pts') — score ordering or a deleted distance term fails it"
+        },
+        {
+          "id": "H3",
+          "criterion": "camera zoom-clamp click loops no longer race a live death",
+          "met": true,
+          "evidence": "calmRun() (despawn + clearPendingSpawns + 900s collect clock) before all three click-loop tests; zoom-in test additionally asserts gameActive at the end so the clamp reads are provably off a live run; clamp assertions unchanged"
+        },
+        {
+          "id": "H4",
+          "criterion": "effects popup spec gets the drain-then-settle its sibling uses",
+          "met": true,
+          "evidence": "settleFrames(3) added AFTER the terrain-queue drain and before the `before` snapshot (plus the old wall settles converted to frame settles suite-wide in Step 6)"
+        },
+        {
+          "id": "H5",
+          "criterion": "mobile-tier DPR assertion pins the 1.5 cap",
+          "met": true,
+          "evidence": "deviceScaleFactor: 3 added to the mobile test.use; spec asserts devicePixelRatio === 3 AND renderer.getPixelRatio() === 1.5 exactly (was min(1,1.5) — vacuous)"
+        },
+        {
+          "id": "H12",
+          "criterion": "PENDING half of the plan-024 threat gate tested",
+          "met": true,
+          "evidence": "species.spec: 4 discs scheduled vs a scale-2.5 hero, hero shrunk to 1 -> all 4 pending are future giants; updateEnemyStreaming(5) schedules NOTHING (pending stays 4), clearing the queue makes the identical tick schedule 1 — deleting the gate's pendingSpawns loop fails the suppression assert"
+        },
+        {
+          "id": "H14",
+          "criterion": "coop-board tiebreak leg unmasked from stable sort",
+          "met": true,
+          "evidence": "reseeded so the 12-pt/999u row is stored AFTER a 12-pt/15u row; expected order [50,40,12/999,12/40(new),12/15] — without the maxDistance term a stable sort yields 15u above 999u and the new run last, failing three asserts (board[2/4].maxDistance + is-new position)"
+        }
+      ]
     },
     {
       "id": "B10",
