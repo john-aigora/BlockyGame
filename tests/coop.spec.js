@@ -436,6 +436,24 @@ test('each seat has its own speed multiplier (pad Y/X and debug seat arg)', asyn
   expect(cycled.i1).toBe(stepped.i1);
   expect(cycled.s0).toBeCloseTo(6 * 1.5, 5);
   expect(cycled.s1).toBeCloseTo(stepped.s1, 5);
+
+  // Enemy mult uses max VALUE not max index ([1,1.5,2,3,5,0.5] — index 5 is 0.5x).
+  const enemyMult = await page.evaluate(() => {
+    const g = window.__game;
+    const s = g.state;
+    s.players[0].speedMultiplierIndex = 5; // 0.5x
+    s.players[1].speedMultiplierIndex = 4; // 5.0x
+    g.debug.applySpeedMultiplier();
+    // BASE_ENEMY_SPEED 1.5 × 5 at 1x ramp, endless may apply ramp factor ≥1
+    return {
+      enemy: s.actualEnemySpeed,
+      s0: s.players[0].actualSpeed,
+      s1: s.players[1].actualSpeed,
+    };
+  });
+  expect(enemyMult.s0).toBeCloseTo(6 * 0.5, 5);
+  expect(enemyMult.s1).toBeCloseTo(6 * 5, 5);
+  expect(enemyMult.enemy).toBeGreaterThanOrEqual(1.5 * 5 - 1e-6); // 5x wins over 0.5x
 });
 
 test('per-half danger vignette: a hunter stalking P2 reddens ONLY P2\'s half — and the CSS rule actually paints it', async ({ page }) => {

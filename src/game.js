@@ -833,11 +833,13 @@ export function setPlayerCount(count) {
             state.scene.add(p2.mesh);
         }
         if (!p2.camera) createCameraFor(p2);
-        applySpeedMultiplier(); // The new seat needs its actualSpeed resolved
     } else {
         const p2 = state.players.pop();
         if (p2 && p2.mesh) state.scene.remove(p2.mesh); // Parked, not disposed (cached above)
     }
+    // Always recompute: new seat needs actualSpeed; dropping P2 must clear a
+    // stale dual HUD label and any enemy mult that was max(P1,P2).
+    applySpeedMultiplier();
     onWindowResize(); // Re-aspect every camera for the new layout
     updateHudMode(); // Swap the solo id HUD ↔ the per-seat columns (plan 026)
     if (state.onStartScreen) setupNewGame(); // Fresh roster, fresh spawn positions
@@ -1025,29 +1027,35 @@ export function togglePause() {
 // changes there, so the size factor must be recomputed).
 export function applySpeedMultiplier() {
     const baseSpeedForDevice = state.isMobile ? BASE_PLAYER_SPEED * MOBILE_SPEED_MULTIPLIER : BASE_PLAYER_SPEED;
-    let enemyMultIndex = 0;
+    // Compare MULTIPLIER VALUES, not indices: speedMultipliers is
+    // [1, 1.5, 2, 3, 5, 0.5] so index 5 (0.5x) is NOT "max" of index 4 (5x).
+    let enemyMult = 0;
     let foundEnemySeat = false;
     for (const p of state.players) {
         const idx = Number.isInteger(p.speedMultiplierIndex) ? p.speedMultiplierIndex : 0;
         const safeIdx = ((idx % speedMultipliers.length) + speedMultipliers.length) % speedMultipliers.length;
         if (safeIdx !== p.speedMultiplierIndex) p.speedMultiplierIndex = safeIdx;
+        const seatMult = speedMultipliers[safeIdx];
         const sizeFactor = Math.min(1 + (p.scale - 1) * SPEED_GROWTH_FACTOR, SPEED_GROWTH_CAP);
-        p.actualSpeed = baseSpeedForDevice * speedMultipliers[safeIdx] * sizeFactor;
+        p.actualSpeed = baseSpeedForDevice * seatMult * sizeFactor;
         // 2P live run: only living heroes set the enemy mult (a dead seat's
         // 5x must not keep the pack hot for the survivor). Solo / overlay:
         // every seat counts (there is only one).
         if (state.players.length >= 2 && state.gameActive && !p.alive) continue;
-        if (!foundEnemySeat || safeIdx > enemyMultIndex) enemyMultIndex = safeIdx;
+        if (!foundEnemySeat || seatMult > enemyMult) enemyMult = seatMult;
         foundEnemySeat = true;
     }
-    if (!foundEnemySeat) enemyMultIndex = state.players[0]?.speedMultiplierIndex ?? 0;
+    if (!foundEnemySeat) {
+        const i0 = state.players[0]?.speedMultiplierIndex ?? 0;
+        enemyMult = speedMultipliers[i0] ?? 1;
+    }
     // Enemy speed is DECOUPLED from the player base (owner: the 2x player
     // rebase must not touch enemies). BASE_ENEMY_SPEED is the pre-rebase
     // effective value; the mobile boost stays so enemies are byte-identical
-    // to before on every device. Toy mult = max living seat (solo = that seat).
+    // to before on every device. Toy mult = max living seat VALUE (solo = that seat).
     state.actualEnemySpeed = BASE_ENEMY_SPEED
         * (state.isMobile ? MOBILE_SPEED_MULTIPLIER : 1)
-        * speedMultipliers[enemyMultIndex];
+        * enemyMult;
     if (state.worldMode === 'endless') {
         // Distance difficulty ramp: +RAMP_SPEED_STEP per level, capped so a
         // ramped enemy (BASE_ENEMY_SPEED * RAMP_SPEED_MAX = 2.4 u/s) can
