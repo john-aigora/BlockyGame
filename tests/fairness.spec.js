@@ -149,6 +149,19 @@ test('F cycles the speed multiplier mid-run, never on the start overlay', async 
   expect(after.speed).toBeCloseTo(6.0 * 1.5, 5); // BASE_PLAYER_SPEED × multiplier (scale 1)
 });
 
+test('modifier chords never fire game actions: Cmd/Ctrl+F does not cycle speed (C-10)', async ({ page }) => {
+  await openGame(page);
+  await startGame(page);
+  // Cmd+F (find) and Ctrl+F are the browser's, never the game's — the F
+  // branch used to fire underneath them.
+  await page.keyboard.press('Meta+f');
+  await page.keyboard.press('Control+f');
+  expect(await page.evaluate(() => window.__game.state.currentSpeedMultiplierIndex)).toBe(0);
+  // A plain F still works — the chord guard must not eat the unmodified key.
+  await page.keyboard.press('f');
+  expect(await page.evaluate(() => window.__game.state.currentSpeedMultiplierIndex)).toBe(1);
+});
+
 test('behind-camera enemies clamp their arrow to the BOTTOM edge, not mirrored to the top (C-3)', async ({ page }) => {
   await bootEndless(page);
   await waitGameSeconds(page, 0.3);

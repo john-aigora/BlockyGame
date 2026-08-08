@@ -554,6 +554,13 @@ export function onKeyDown(event) {
 
     const key = event.key.toLowerCase();
 
+    // Modifier chords are the browser's, never the game's (audit C-10):
+    // Cmd/Ctrl/Alt+key means find, reload, tab-switch... — firing a game
+    // action underneath (F used to cycle speed on Cmd+F) fights the OS.
+    // Bail before every game bind. Held movement keys are unaffected: a
+    // chord's keydown simply never latches, and keyup still clears as usual.
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+
     // Space = JUMP, P = pause — one bind set in every world mode (audit
     // D-6: the classic-only Space-as-pause fork is gone; classic is a
     // test/debug path and shares the endless binds, and tryJump itself
