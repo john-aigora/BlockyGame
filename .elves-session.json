@@ -17,7 +17,7 @@
   "landing": { "merge_authorized": false, "push_allowed": false, "reason": "LOCAL-ONLY: origin read-only for this account; owner forbade pushing; owner merges after family playtest" },
   "environment": { "node_path_export": "export PATH=\"$HOME/.local/elves-tools/node/bin:$PATH\"" },
   "batches": [
-    { "id": "B1", "plans": ["017"], "title": "Baseline repair + CI", "status": "pending", "acceptance": [] },
+    { "id": "B1", "plans": ["017"], "title": "Baseline repair + CI", "status": "in_progress", "acceptance": [] },
     { "id": "B2", "plans": ["018", "021"], "title": "Gamepad reliability + docs/CLAUDE.md", "status": "pending", "acceptance": [] },
     { "id": "B3", "plans": ["019", "020"], "title": "Fairness + perf pass 1 (019 first, then 020)", "status": "pending", "acceptance": [] },
     { "id": "B4", "plans": ["022"], "title": "Debt/UI/security bundle", "status": "pending", "acceptance": [] },

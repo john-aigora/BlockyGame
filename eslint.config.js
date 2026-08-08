@@ -12,5 +12,6 @@ export default [
     }
   },
   // public/original/ is the byte-for-byte May 2025 museum build — never linted, never touched.
-  { ignores: ['dist/', 'node_modules/', 'playwright-report/', 'test-results/', 'public/original/'] }
+  // video/ is a separate npm project (Remotion tooling) with its own deps; not linted here.
+  { ignores: ['dist/', 'node_modules/', 'playwright-report/', 'test-results/', 'public/original/', 'video/'] }
 ];
