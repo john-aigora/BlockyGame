@@ -52,8 +52,15 @@ export const HEARTBEAT_BPM = 72; // Danger heartbeat tempo (one low lub-dub per 
 export const SPAWN_MATERIALIZE_TIME = 0.5; // Seconds a newly spawned enemy takes to scale in (no move/collide while forming)
 export const SPAWN_MATERIALIZE_START_SCALE = 0.05; // Fraction of full size a materializing enemy starts at
 // Red ground warn BEFORE the monster appears — notice time for the player.
-export const SPAWN_WARN_TIME = 0.95; // Seconds the red pulse sits on the ground before materialize
+export const SPAWN_WARN_TIME = 0.95; // Seconds the red pulse sits on the ground before materialize (the 1x baseline)
 export const SPAWN_WARN_RADIUS = 1.35; // Base ring radius (scaled up a bit with the enemy)
+// Speed-aware warn scaling (plan 024, audit DT-9): notice is measured in
+// player-travel, not seconds — at 5x speed a fixed 0.95s covered a fifth of
+// the ground it promised at 1x, exactly when reaction time mattered most.
+// Warn duration = SPAWN_WARN_TIME x clamp(actualPlayerSpeed / this ref,
+// 1.0, 2.2): never shorter than the classic feel, capped at the same 2.2
+// ceiling as the size speed bonus so warns stay snappy.
+export const SPAWN_WARN_SPEED_REF = 6.0; // The 1x desktop player speed the 0.95s warn was tuned against
 
 // Spectacle systems (awesome pass): title, death, and finish.
 export const DEATH_SQUASH_TIME = 0.32; // Seconds the player takes to squash flat before bursting (skipped under reduced motion)

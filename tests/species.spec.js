@@ -183,6 +183,33 @@ test('after one kill, a chainable killable enemy exists within 30u (DT-2)', asyn
   expect(await page.evaluate(() => window.__game.state.gameActive)).toBe(true);
 });
 
+test('warn rings scale with player speed: 5x multiplier doubles the notice (DT-9)', async ({ page }) => {
+  // Deterministic on the paused start overlay: nothing ticks the warn
+  // pipeline, so scheduled entries hold their full lifetime for reading.
+  // Baseline at 1x (ratio exactly 1.0 -> the classic 0.95s), then the 5x
+  // multiplier (actualPlayerSpeed 30 -> ratio 5, clamped to 2.2): every new
+  // warn must live at least twice the 1x notice.
+  const out = await page.evaluate(() => {
+    const g = window.__game;
+    const s = g.state;
+    g.debug.spawnNewEnemies(); // Queues warns at 1x
+    const base = g.debug.pendingSpawnInfo().map((w) => w.warnTime);
+    s.currentSpeedMultiplierIndex = 4; // speedMultipliers[4] = 5.0
+    g.debug.applySpeedMultiplier();
+    const before = base.length;
+    g.debug.spawnNewEnemies(); // Queues warns at 5x
+    const fast = g.debug.pendingSpawnInfo().slice(before).map((w) => w.warnTime);
+    return { base, fast };
+  });
+  expect(out.base.length).toBeGreaterThanOrEqual(1);
+  expect(out.fast.length).toBeGreaterThanOrEqual(1);
+  for (const w of out.base) expect(w).toBeCloseTo(0.95, 5); // SPAWN_WARN_TIME x 1.0 exactly
+  for (const w of out.fast) {
+    expect(w).toBeGreaterThanOrEqual(2 * 0.95 - 1e-9); // At least 2x the 1x notice...
+    expect(w).toBeLessThanOrEqual(2.2 * 0.95 + 1e-9); // ...and clamped at the 2.2 ceiling
+  }
+});
+
 test('a juja kill drops exactly its species foodDrop (2 food)', async ({ page }) => {
   // CLASSIC mode on purpose: endless food placement validates spots and can
   // silently fail near rocks/water (spawnCollectible), which would make an

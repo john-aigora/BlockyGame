@@ -7,7 +7,7 @@ import {
     SPRINTER_HEIGHT_RANGE, JUJA_HEIGHT_FACTOR,
     SIZE_BOUNTY_PER_UNIT, COMBO_WINDOW, COMBO_MAX,
     SPAWN_MATERIALIZE_TIME, SPAWN_MATERIALIZE_START_SCALE,
-    SPAWN_WARN_TIME, SPAWN_WARN_RADIUS,
+    SPAWN_WARN_TIME, SPAWN_WARN_RADIUS, SPAWN_WARN_SPEED_REF,
     ENEMY_COLLIDER_HALF_WIDTH, ENEMY_WEDGE_TIME, ENEMY_DETOUR_TIME,
     ENDLESS_ENEMY_TARGET, ENDLESS_ENEMY_CAP, ENEMY_DESPAWN_RADIUS,
     ENDLESS_SPAWN_MIN, ENDLESS_SPAWN_MAX, ENDLESS_SPAWN_INTERVAL, RAMP_HEIGHT_STEP,
@@ -157,7 +157,7 @@ export function beginMaterialize(enemyGroup) {
 // --- Pre-spawn red warn (owner request: notice before monsters appear) ---
 // A pulsing red disc on the ground for SPAWN_WARN_TIME, then the enemy
 // materializes there. Disc is pooled; nothing is allocated after warm-up.
-const pendingSpawns = []; // { x, z, scaleFactor, species, t, mesh }
+const pendingSpawns = []; // { x, z, scaleFactor, species, t, warnTime, mesh }
 const warnDiscPool = [];
 let warnMaterial = null;
 const WARN_GEO = new THREE.RingGeometry(0.35, 1.0, 28);
@@ -206,12 +206,19 @@ export function scheduleEnemySpawn(spawnX, spawnZ, scaleFactor, speciesKey = 'gr
     const r = SPAWN_WARN_RADIUS * Math.max(0.85, scaleFactor);
     mesh.scale.set(r, r, r);
     state.scene.add(mesh);
+    // Speed-aware notice (plan 024, audit DT-9): warn duration scales with
+    // the CURRENT player speed so notice is constant in player-travel, not
+    // seconds. Clamped [1.0, 2.2] — never shorter than the classic 0.95s,
+    // never a stale disc parade. Captured per entry at schedule time.
+    const warnTime = SPAWN_WARN_TIME * Math.min(2.2, Math.max(1.0,
+        (state.actualPlayerSpeed ?? SPAWN_WARN_SPEED_REF) / SPAWN_WARN_SPEED_REF));
     pendingSpawns.push({
         x: spawnX,
         z: spawnZ,
         scaleFactor,
         species: speciesKey,
-        t: SPAWN_WARN_TIME,
+        t: warnTime,
+        warnTime,
         mesh
     });
 }
@@ -229,7 +236,8 @@ export function pendingSpawnInfo() {
         z: p.z,
         scaleFactor: p.scaleFactor,
         species: p.species,
-        t: p.t
+        t: p.t,
+        warnTime: p.warnTime
     }));
 }
 
@@ -267,17 +275,19 @@ export function reimagePendingSpawns(fn) {
 // Advances warn discs; fires the real spawn when the timer ends.
 export function updateSpawnWarnings(dt) {
     // Shared material: one global pulse for all discs (per-disc opacity
-    // would fight each other when multiple warns overlap).
+    // would fight each other when multiple warns overlap). Phase runs on
+    // each entry's OWN elapsed time (warnTime - t): durations vary per
+    // schedule-time player speed (plan 024 DT-9).
     if (pendingSpawns.length > 0 && warnMaterial) {
-        const t0 = pendingSpawns[0].t;
-        const pulse = 0.5 + 0.5 * Math.sin((SPAWN_WARN_TIME - t0) * 10);
+        const p0 = pendingSpawns[0];
+        const pulse = 0.5 + 0.5 * Math.sin((p0.warnTime - p0.t) * 10);
         warnMaterial.opacity = 0.3 + 0.45 * pulse;
     }
     for (let i = pendingSpawns.length - 1; i >= 0; i--) {
         const p = pendingSpawns[i];
         p.t -= dt;
         // Per-mesh scale throb (opacity is global above).
-        const pulse = 0.5 + 0.5 * Math.sin((SPAWN_WARN_TIME - p.t) * 10);
+        const pulse = 0.5 + 0.5 * Math.sin((p.warnTime - p.t) * 10);
         const r = SPAWN_WARN_RADIUS * Math.max(0.85, p.scaleFactor) * (0.92 + 0.12 * pulse);
         p.mesh.scale.set(r, r, r);
         // Keep grounded if the origin rebased under the disc.
