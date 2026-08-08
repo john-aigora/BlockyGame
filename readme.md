@@ -55,7 +55,7 @@ Requires Node 20+.
 ```bash
 npm install
 npm run dev        # dev server at http://localhost:5173
-npm test           # Playwright test suite (61 tests)
+npm test           # Playwright test suite (see `npx playwright test --list`)
 npm run lint       # ESLint
 npm run build      # production build into dist/
 npm run preview    # serve the production build locally
