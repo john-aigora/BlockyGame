@@ -522,6 +522,10 @@ export function killPlayer(player, reason) {
     if (el.seatWaits[player.seat]) el.seatWaits[player.seat].style.display = 'block';
     // Their half's transient overlays go dark — nothing to fight the chip.
     if (el.seatKills[player.seat]) el.seatKills[player.seat].style.display = 'none';
+    // Death breaks THEIR chain (B8 review ADV-7): zero the state with the
+    // chip, or the frozen window sits live until tickComboClock drains it.
+    player.comboCount = 0;
+    player.comboTimeLeft = 0;
     hideComboChip(player);
     if (el.seatVignettes[player.seat]) {
         el.seatVignettes[player.seat].__lastCss = null;
@@ -913,12 +917,47 @@ const indicatorWorldPos = new THREE.Vector3();
 // transform (left/top are pinned to 0 in CSS — the old per-frame left/top
 // writes forced layout), and every style write is skipped when unchanged
 // (cached on the element). resetIndicators keeps the display cache honest.
+//
+// PER-VIEW passes (B8 review BLOCK-4): solo is ONE full-rect pass through
+// seat 0's camera over the whole pool — arithmetically identical to the
+// pre-2P code. 2P runs one pass per LIVING seat, each projecting through
+// THAT seat's camera and clamping inside THAT seat's half of the canvas
+// (the seam is an edge like any other), with the pool split half/half and
+// colors judged by THAT viewer's edibility. A dead seat's half is the
+// partner-cam spectator view — it carries no arrows of its own.
 export function updateOffscreenIndicators() {
-    let indicatorsUsed = 0;
-    const screenPadding = 15; // How far from the game edge indicators should sit (reduced slightly)
+    if (coopMode()) {
+        const poolHalf = Math.floor(MAX_ENEMY_INDICATORS / 2);
+        // Same seam renderFrame draws (world.js): left half [0, halfW),
+        // right half [halfW, width).
+        const halfW = Math.floor(state.gameCanvasRect.width / 2);
+        for (const player of state.players) {
+            const poolStart = player.seat * poolHalf;
+            if (player.alive && player.camera) {
+                const rectLeft = player.seat === 0 ? 0 : halfW;
+                const rectWidth = player.seat === 0 ? halfW : state.gameCanvasRect.width - halfW;
+                updateIndicatorsForView(player.camera, player, rectLeft, rectWidth,
+                    poolStart, poolStart + poolHalf);
+            } else {
+                hideIndicatorRange(poolStart, poolStart + poolHalf);
+            }
+        }
+        return;
+    }
+    updateIndicatorsForView(state.camera, state.players[0], 0, state.gameCanvasRect.width,
+        0, MAX_ENEMY_INDICATORS);
+}
+
+// One view's indicator pass: project every enemy through `camera`, place
+// arrows for the off-view ones inside [rectLeft, rectLeft+rectWidth) of the
+// canvas using pool slots [poolStart, poolEnd), colored by `viewer`'s own
+// edibility. Solo passes the full rect and the whole pool.
+function updateIndicatorsForView(camera, viewer, rectLeft, rectWidth, poolStart, poolEnd) {
+    let indicatorsUsed = poolStart;
+    const screenPadding = 15; // How far from the view edge indicators should sit (reduced slightly)
 
     for (const enemyGroup of state.enemies) {
-        if (indicatorsUsed >= MAX_ENEMY_INDICATORS) break;
+        if (indicatorsUsed >= poolEnd) break;
         // Truthful arrows (audit C-3): project() divides by a NEGATIVE w for
         // points behind the camera plane, mirroring both axes — enemies ≳30u
         // "south" (+Z) of the player are routinely behind it, and their
@@ -926,9 +965,9 @@ export function updateOffscreenIndicators() {
         // (z > -near means behind); for those, negate the mirrored
         // projection to recover the true screen direction and push it far
         // outside the frustum so the edge clamp below owns the placement.
-        indicatorViewPos.copy(enemyGroup.position).applyMatrix4(state.camera.matrixWorldInverse);
-        const behindCamera = indicatorViewPos.z > -state.camera.near;
-        const screenPos = indicatorWorldPos.copy(enemyGroup.position).project(state.camera);
+        indicatorViewPos.copy(enemyGroup.position).applyMatrix4(camera.matrixWorldInverse);
+        const behindCamera = indicatorViewPos.z > -camera.near;
+        const screenPos = indicatorWorldPos.copy(enemyGroup.position).project(camera);
         if (behindCamera) {
             // Mirror-correct the projection (negative w flipped both axes)
             // and push it JUST past the NDC unit box along the true bearing:
@@ -949,22 +988,25 @@ export function updateOffscreenIndicators() {
         if (isOffScreenX || isOffScreenY) {
             const indicator = state.enemyIndicators[indicatorsUsed];
 
-            // Color by killability (yellow = killable, blue = hunter)
-            const color = canKillSpecificEnemy(enemyGroup)
+            // Color by killability FOR THIS VIEWER (yellow = killable by
+            // them, blue = hunts them) — each half tells its own truth.
+            const color = canKillSpecificEnemy(enemyGroup, viewer)
                 ? 'rgba(255, 235, 59, 0.8)'
                 : 'rgba(3, 169, 244, 0.8)';
 
-            // Convert NDC to pixels relative to gameCanvasRect origin
-            const x = (screenPos.x * state.gameCanvasRect.width / 2) + state.gameCanvasRect.width / 2;
+            // Convert NDC to pixels within THIS view's rect of the canvas
+            const x = (screenPos.x * rectWidth / 2) + rectWidth / 2 + rectLeft;
             const y = -(screenPos.y * state.gameCanvasRect.height / 2) + state.gameCanvasRect.height / 2;
 
-            // Clamp to the canvas edges (padding), in viewport coordinates
+            // Clamp to the view's edges (padding), in viewport coordinates
             // (#offscreen-indicator-container is viewport-sized).
-            const clampedX = Math.max(screenPadding, Math.min(x, state.gameCanvasRect.width - screenPadding)) + state.gameCanvasRect.left;
+            const clampedX = Math.max(rectLeft + screenPadding, Math.min(x, rectLeft + rectWidth - screenPadding)) + state.gameCanvasRect.left;
             const clampedY = Math.max(screenPadding, Math.min(y, state.gameCanvasRect.height - screenPadding)) + state.gameCanvasRect.top;
 
-            // Angle from the canvas center to the clamped screen position
-            const angle = Math.atan2(clampedY - state.gameCanvasCenterY, clampedX - state.gameCanvasCenterX) * 180 / Math.PI;
+            // Angle from the VIEW center (the viewer's hero is centered in
+            // their own half) to the clamped screen position
+            const centerX = state.gameCanvasRect.left + rectLeft + rectWidth / 2;
+            const angle = Math.atan2(clampedY - state.gameCanvasCenterY, clampedX - centerX) * 180 / Math.PI;
 
             const transform = `translate3d(${Math.round(clampedX)}px, ${Math.round(clampedY)}px, 0) translate(-50%, -50%) rotate(${Math.round(angle + 90)}deg)`;
             if (indicator.__lastDisplay !== 'block') {
@@ -984,8 +1026,12 @@ export function updateOffscreenIndicators() {
         }
     }
 
-    // Hide any unused indicators from the pool
-    for (let i = indicatorsUsed; i < MAX_ENEMY_INDICATORS; i++) {
+    // Hide this view's unused slice of the pool
+    hideIndicatorRange(indicatorsUsed, poolEnd);
+}
+
+function hideIndicatorRange(from, to) {
+    for (let i = from; i < to; i++) {
         const indicator = state.enemyIndicators[i];
         if (indicator.__lastDisplay !== 'none') {
             indicator.style.display = 'none';
