@@ -29,8 +29,79 @@ row when done.
 | 013 | Docs truth pass + favicon/meta + Vercel deployment | P2 | S | 001 (hard); 002-012 (soft — run LAST) | DONE (deploy = Path A docs; human clicks Vercel import) |
 | 014 | SPIKE: Little Big Snake continuous movement + boost, behind `?move=continuous` | P3 | M | 003, 012 | DONE (writeup: `plans/design/lbs-movement-notes.md`; verdict: adapt-don't-adopt-as-is, pending family playtest) |
 | 015 | Visual "juice" pass — particles, walk animation, living ground, glow (user-mandated creative latitude) | P2 | M | 007 | DONE |
+| 016 | Gamepad-complete play (F310 + slow-down); expanded mid-plan: classic arena retired + in-app gate | P2 | M | 012 | DONE (three acceptance rows reference the mode picker retired by its own expansion — see plans/audit-2026-07-31.md DOC-5) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJECTED (with one-line rationale)
+
+## 2026-07-31 deep audit
+
+A second full audit (commit `128d18e`, after 016 merged) lives in
+[audit-2026-07-31.md](audit-2026-07-31.md): red-baseline attribution (7 stale
+specs + lint), ~60 vetted technical findings with stable IDs, 10 design tensions,
+capability map, and the fun-catalog index. NOTE: the suite is RED on main —
+see finding BASE-1; plan 017 repairs it and gates everything else.
+
+## 2026-07-31 run: plans 017–028 (owner selected "all", plus two new owner requests)
+
+Owner requests folded in: **two-player split-screen mode** (026) and **fix the
+joysticks** (018 — root cause: pad-selection lock never rescans + unconditional
+standard-mapping bias; reference implementation in sibling repo battle-paddle,
+which hardened BlockyGame's own pad code for dual-port DB9 adapters).
+
+| Plan | Title | Priority | Effort | Depends on | Status |
+|------|-------|----------|--------|------------|--------|
+| 017 | Baseline repair: green lint+tests, failure artifacts, CI | P1 | M | — (GATES ALL) | TODO |
+| 018 | Gamepad reliability: rescan-first selection, honest scoring, per-pad edges | P1 | M | 017 | TODO |
+| 019 | Fairness pass: honest hitboxes, truthful arrows, input integrity | P1 | M | 017 | TODO |
+| 020 | Perf pass 1: perfInfo hook, shadow diet, culling, hot-loop hygiene, mobile tier | P1 | M | 017 | TODO |
+| 021 | Docs truth + root CLAUDE.md + Node pinning | P2 | S | 017 | TODO |
+| 022 | Debt/UI/security bundle (15 small items) | P2 | M | 017; item 1 before 026 | TODO |
+| 023 | Fun 1: blob shadows, survival beats, danger music layer, title warmth | P2 | M | 017 (020 first preferred) | TODO |
+| 024 | Fun 2: enemy species (sprinter/juja), prey supply, reachable combos, speed-aware warns | P2 | M-L | 017, 019, 022.1, 023 | TODO |
+| 025 | Fun 3: daily worlds + ?seed=, named biomes, golden food, 1000u boss | P2 | M-L | 017, 023, 024 | TODO |
+| 026 | Two-player split-screen (owner headline) | P1 | L | 017, 018, 019, 020, 022.1 | TODO |
+| 027 | Test depth: debug.advance, scoring/pause/warn coverage, wall-clock retirement | P2 | M | 017; after 026 | TODO |
+| 028 | Perf pass 2: water recolor, chunk tint, instancing — measured & gated | P3 | M-L | 020, 026 | TODO |
+
+### Dependency notes (017–028)
+
+- **017 → everything**: the suite is red today; no other plan's gates mean
+  anything until it lands. It also owns the lint scoping and CI.
+- **018 → 026**: seat claims build on per-pad edge state and rescan-first
+  selection. 018 also needs a HUMAN hardware check (family, `?paddebug=1`) —
+  mark the row "DONE (hardware check pending)" if applicable.
+- **019 → 024/026**: species tuning and per-player collision assume the honest
+  explicit hitboxes; `clearTransientInput` is reused by seats.
+- **020 → 026/028**: two-view rendering needs the pass-1 headroom; 028 is
+  gated on 020's perfInfo numbers.
+- **022 item 1 (naming) → 026**: do not build 2P on the MOVEMENT_MODE
+  collision. 022's picker-CSS deletion defers to 026 (which reuses
+  `.mode-button`) — see the item's own guard.
+- **026 stages A–F each end full-green with solo unchanged** — treat any solo
+  spec edit in stages A–B as a STOP signal.
+- **027 after 026** so coop systems get covered; **028 last** (re-measures the
+  two-view world; skips its own steps when numbers don't justify them).
+- Final touch: after 028, re-run a mini docs-truth pass so readme/CLAUDE.md
+  describe what actually shipped (021's maintenance note).
+
+### Suggested batching for an autonomous run
+
+[017] → [018, 021] → [019, 020] → [022, 023] → [024, 027-step-1-only?] → no —
+keep it simple: [017] → [018, 021] → [019, 020] → [022] → [023] → [024] →
+[025] → [026] → [027] → [028 + final docs re-touch]. 022 lands before 023
+because item 12 moves the HUD nodes 023 writes beside. Never push to origin
+(read-only remote + owner rule); LOCAL-ONLY run on one feature branch.
+
+### Deliberately deferred (recorded so the run doesn't improvise them)
+
+- `?move=continuous` spike adopt-or-delete: owner playtest decision, not an
+  autonomous call (audit C-14/T-10). The spike stays flag-gated and untested.
+- `game.js`/`effects.js` module splits (D-7/D-8) + import-cycle lint (D-9):
+  after 026 to avoid double churn — candidate for a follow-up run.
+- Full classic-mode deletion (D-1): keep `worldmath.js` + torus specs (recorded
+  verdict); only the picker corpse and boot waste go (022).
+- Ghost runs, skins/pets/wins, share cards, challenge modes: next fun wave —
+  see the catalog in audit-2026-07-31.md §10.
 
 ## Dependency notes
 
@@ -57,5 +128,5 @@ file: `timing` (003), `gameover` (004), `world` (005), `camera` (006),
 - **three.js major-version upgrade**: rejected for now in favor of pinning `three@0.128.0` (identical rendering, zero retune risk). A future upgrade needs its own plan with color-management and light-intensity migration steps (r152+/r155+ change both).
 - **TypeScript conversion**: rejected — the co-maintainer is a kid learning on this codebase; ESLint + tests give most of the safety without the syntax wall.
 - **Framework rewrite (React/ECS/etc.)**: rejected — a 1,000-line vanilla three.js arcade game does not need one; modest ES modules (plan 002) capture the maintainability win.
-- **Off-screen indicator mirror-projection edge case** (enemies directly behind the camera can produce a flipped indicator): real but rare with this camera rig; revisit only if players report it after 006 lands.
+- **Off-screen indicator mirror-projection edge case** (enemies directly behind the camera can produce a flipped indicator): originally judged rare. **SUPERSEDED 2026-07-31**: the deep audit verified it is routine — any enemy ≳30u south of the player projects behind the camera plane and mirrors (despawn radius is 80). Now finding C-3 in plans/audit-2026-07-31.md.
 - **Object pooling / instancing for collectibles**: unnecessary at ≤ ~60 objects; shared geometry/material (007) is the right-sized fix.
