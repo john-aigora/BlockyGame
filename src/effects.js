@@ -517,7 +517,7 @@ export function updateEffects(dt) {
     }
     for (const enemy of state.enemies) {
         updateWalk(enemy, dt);
-        updateEnemyAura(enemy); // Sets the scared flag updateBlink reads
+        updateEnemyAura(enemy, dt); // Sets the scared flag updateBlink reads
         updateBlink(enemy, dt);
     }
 }
@@ -908,7 +908,7 @@ function updateBlink(group, dt) {
 // vulnerable") and a panicked side-to-side wobble as they flee. The pulse
 // is a smooth ~0.6Hz sine — nowhere near a strobe. Enemies own their body
 // material (per-instance, plan 007), so this repaints nothing else.
-function updateEnemyAura(enemyGroup) {
+function updateEnemyAura(enemyGroup, dt) {
     const body = enemyGroup.userData.bodyMesh;
     if (!body) return;
     // Role-reversal face: glowing-red hunter pupils become huge white scared
@@ -946,7 +946,10 @@ function updateEnemyAura(enemyGroup) {
             body.material.emissive.setHex(0x000000);
         }
         if (enemyGroup.rotation.z !== 0) {
-            enemyGroup.rotation.z *= 0.8;
+            // dt-correct settle (audit C-12): ×0.8 per FRAME made the wobble
+            // snap back at 120Hz and linger at 30Hz. exp(-11·dt) is the same
+            // eased decay at every frame rate (≈0.83/frame at 60fps).
+            enemyGroup.rotation.z *= Math.exp(-11 * dt);
             if (Math.abs(enemyGroup.rotation.z) < 0.005) enemyGroup.rotation.z = 0;
         }
     }
