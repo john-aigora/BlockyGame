@@ -273,6 +273,15 @@ canvas {
     font-size: 0.7em;
     color: #ECEFF1;
     /* Off-White */
+    line-height: 1.6;
+    /* Press Start 2P glyphs fill the whole em box — at line-height normal
+       (~1.0 for this font) wrapped lines overdraw each other (audit UI-2) */
+}
+
+/* The controls line is its own block (audit UI-2): the old inline span +
+   manual <br> let a wrapped hint collide with the line below it. */
+#controls-hint {
+    display: block;
 }
 
 /* Start overlay (plan 008): covers the whole game container, above the
