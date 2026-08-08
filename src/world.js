@@ -193,10 +193,16 @@ function isSplitScreen() {
 }
 
 // The aspect each player camera should carry under the current layout.
+// The start overlay is SINGLE-VIEW by design even with two players selected
+// (renderFrame's splitLive gate falls through to the full-rect attract
+// render there), so its cameras must carry the FULL aspect — a half aspect
+// projected into the full rect stretched the title world 2x horizontally
+// (B8 review BLOCK-3). startRun/setupNewGame re-apply aspects on both
+// overlay transitions via onWindowResize.
 function viewAspect() {
     const w = state.gameContainer.clientWidth;
     const h = state.gameContainer.clientHeight;
-    return isSplitScreen() ? (w / 2) / h : w / h;
+    return isSplitScreen() && !state.onStartScreen ? (w / 2) / h : w / h;
 }
 
 // Builds (or rebuilds the aspect of) the camera for one player slot; keeps

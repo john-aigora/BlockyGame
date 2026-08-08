@@ -284,6 +284,10 @@ function setupNewGame() {
     // Every new session — fresh boot or post-death restart — returns to the
     // start overlay; startRun() is the single "a run begins" entry point.
     showStartOverlay();
+    // Overlay = single full-rect view even in 2P (B8 review BLOCK-3): drop
+    // any split-half aspect the run was using so the attract render is
+    // unstretched. Mirrors the onWindowResize in startRun.
+    onWindowResize();
 
     // Initialize the collect countdown; it only ticks while the game is
     // unpaused (driven by dt in update()).
@@ -303,6 +307,10 @@ export function startRun() {
     music.setVolume(1); // The run gets full volume (title bed played at half — plan 023)
     music.start(); // No-op if the overlay bed is already looping — the ramp above carries it up
     hideStartOverlay();
+    // The overlay is single-view; the run may be split (B8 review BLOCK-3):
+    // onStartScreen just flipped, so re-derive every camera's aspect for the
+    // layout the next renderFrame will actually draw (halves in 2P).
+    onWindowResize();
     showGoFlourish(); // Big lime "GO!" — one 0.6s flash as the run begins
     if (state.isPaused) togglePause(); // Starts the clock and sets button text
 }
