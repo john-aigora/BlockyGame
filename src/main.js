@@ -1,7 +1,7 @@
 import { applySpeedMultiplier, speedUp, speedDown, forceWorldMode } from './game.js';
 import { state } from './state.js';
 import { spawnNearPlayer, spawnAtPosition } from './collectibles.js';
-import { spawnNewEnemies, updateEnemyStreaming, resetEnemyStreaming } from './enemies.js';
+import { spawnNewEnemies, updateEnemyStreaming, resetEnemyStreaming, updateSpawnWarnings } from './enemies.js';
 import { onTouchStart, onTouchMove, onTouchEndOrCancel, gamepadVector, pollGamepad, isGamepadConnected, gamepadDebugInfo } from './input.js';
 import { sfx, isMuted, audioState, music } from './audio.js';
 import { spawnBurst, spawnScorePopup, effectsInfo } from './effects.js';
@@ -21,6 +21,7 @@ window.__game = {
         spawnAtPosition,
         spawnNewEnemies,
         updateEnemyStreaming, // Bubble spawn path (endless spawn-band spec)
+        updateSpawnWarnings, // Warn-pipeline tick — materializes pending spawns (plan 017)
         resetEnemyStreaming,
         applySpeedMultiplier, // Speed recompute path (balance spec — size speed bonus)
         speedUp,
