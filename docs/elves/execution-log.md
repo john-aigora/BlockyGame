@@ -211,3 +211,57 @@
   again; worker-count policy left to the driver). toys:70 jump also flaked
   once during item-3 verify (solo + full rerun green 2/2). lint 0 and build
   exit 0 at final HEAD.
+
+## 2026-08-08 — B5 worker: plan 023 complete (fun: survival & readability)
+
+All five steps landed; suite grew 95 → 102 (+4 tension, +3 audio).
+
+- Step 1 (UI-3, blob shadows): ONE shared PlaneGeometry + ONE 64px radial
+  CanvasTexture; enemies share one static material, the player rides the
+  single cached bendClone (per-instance opacity for the jump fade — clone()
+  drops onBeforeCompile, so the bend is re-armed). Quad is a GROUP child;
+  effects.js re-grounds it each frame at (ground+0.02−group.y)/scaleY and
+  scales/fades the player's by jump height. Perf on a PINNED 4-enemy scene
+  (spawn angles are random and an enemy is ~27 meshes, so the naive probe
+  swung ±30 calls on frustum-edge enemies): calls 207→212 = exactly +1 per
+  visible quad, geometries 79→80, textures 3→4, tris +10. Shots:
+  .elves/runtime/b5-step1-shadow-{standing,midjump}.png (offset 1.05 at the
+  mid-jump frame — shadow visibly detached + shrunk).
+- Step 2 (DT-10, survival beats): PHEW! on real-scare drain (dangerPeak >
+  0.15 → opacity ≤ 0.01), CLOSE ONE! on near-miss exit (arm inside 1.5× the
+  true collider-width sum; materializing spawns never arm). The near-miss
+  check rides updateDangerPulse's existing non-killable distance loop —
+  enemies.js untouched. ONE shared 6s game-clock rate limit
+  (state.lastSurvivalBeat); new sfx.phew (two-sine house blips). Spec proves
+  the beat AND the silence (sentinel popup inside the 6s window).
+- Step 3 (TIME HUD): "Time: m:ss" ui-element beside DISTANCE off
+  state.runTime, whole-second change detection; minute crossings reuse the
+  distance-milestone pattern (sfx.milestone + "N MINUTE(S)!" popup). Spec
+  asserts HUD-vs-clock agreement atomically and the 59.5→60 minute beat.
+- Step 4 (CAP-5, danger layer): intensity 0|1|2, bar-line commit untouched;
+  level 2 adds a half-bar low sine pad (bass root −1 octave, ≈0.05 abs gain)
+  + doubled bar-start bass. Single driver moved to updateDangerPulse:
+  anyKillable ? 1 : (dangerOpacity > 0.12 ? 2 : 0) — hunt priority, dread
+  only with no prey (the heartbeat's rule). audioState() is now an object
+  {state, intensity(requested — deterministic under a suspended headless
+  ctx), activeIntensity, musicVolume}; the two existing 'none' asserts moved
+  to .state (same strength). Spec walks 0→2→1 with a pre-start giant-warn
+  roster fill — streaming's OPENING spawn is always a killable prey ~1s in
+  (SPAWN_SIZE_PATTERN), which would poison every no-prey state.
+- Step 5 (title warmth): music.setVolume(f) scales the one master gain;
+  overlay bed at 0.5 only when ctx.state==='running', silent skip otherwise;
+  startRun restores 1. Gesture = REAL gate submit only (index.html checks
+  isUnlocked() before riding unlockAudio on the prompt), so bypassed-gate
+  boots keep audioState 'none' and the no-gesture spec. Probe confirmed
+  headless Chromium genuinely hits the running branch (bed active at 0.5).
+  FAMILY BEST tagline from loadHiscores('endless')[0], lime, hidden when
+  empty; distance-ranked assert (richer-but-shorter row must not win).
+- New GAME BALANCE knobs: SURVIVAL_BEAT_COOLDOWN 6, PHEW_PEAK_MIN 0.15,
+  NEAR_MISS_FACTOR 1.5, DANGER_MUSIC_THRESHOLD 0.12.
+- Gate at final HEAD: full runs 102/102, 101/102, 102/102 — the singleton
+  was toys.spec:71 jump-over-rock (OFF-surface; the SAME spec B4 logged as
+  a one-off), solo re-run 6/6 green + full re-run green per the flake
+  policy → recorded as the known H4/H11 3-worker load-flake class. lint 0
+  at every slice (one first-run false alarm: 25 no-undef from untracked
+  probe .mjs helpers parked in .elves/runtime — relocated to the session
+  scratchpad; committed source was always clean). build exit 0.

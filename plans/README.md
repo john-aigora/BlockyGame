@@ -56,7 +56,7 @@ which hardened BlockyGame's own pad code for dual-port DB9 adapters).
 | 020 | Perf pass 1: perfInfo hook, shadow diet, culling, hot-loop hygiene, mobile tier | P1 | M | 017 | DONE |
 | 021 | Docs truth + root CLAUDE.md + Node pinning | P2 | S | 017 | DONE |
 | 022 | Debt/UI/security bundle (16 items incl. driver-granted arrow-edge fix) | P2 | M | 017; item 1 before 026 | DONE — all 15 items + driver-granted H7 arrow fix; no items skipped; `.mode-button` CSS kept per the item-2 guard (026 reuses it) |
-| 023 | Fun 1: blob shadows, survival beats, danger music layer, title warmth | P2 | M | 017 (020 first preferred) | TODO |
+| 023 | Fun 1: blob shadows, survival beats, danger music layer, title warmth | P2 | M | 017 (020 first preferred) | DONE |
 | 024 | Fun 2: enemy species (sprinter/juja), prey supply, reachable combos, speed-aware warns | P2 | M-L | 017, 019, 022.1, 023 | TODO |
 | 025 | Fun 3: daily worlds + ?seed=, named biomes, golden food, 1000u boss | P2 | M-L | 017, 023, 024 | TODO |
 | 026 | Two-player split-screen (owner headline) | P1 | L | 017, 018, 019, 020, 022.1 | TODO |

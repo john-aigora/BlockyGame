@@ -344,8 +344,39 @@
         "023"
       ],
       "title": "Fun: survival & readability",
-      "status": "pending",
-      "acceptance": []
+      "status": "complete",
+      "acceptance": [
+        {
+          "id": "023-1",
+          "criterion": "npm test 0 failed · lint 0",
+          "met": true,
+          "evidence": "Full suite 102/102 (95+7 new) runs 1 and 3; run 2's singleton toys:71 jump-over-rock is OFF-surface, solo 6/6 + full re-run green per flake policy (same spec B4 logged once — H4/H11 class); lint 0 at every slice; build exit 0"
+        },
+        {
+          "id": "023-2",
+          "criterion": "Screenshot pair: jump with detaching shadow (in run log)",
+          "met": true,
+          "evidence": ".elves/runtime/b5-step1-shadow-{standing,midjump}.png — mid-jump at offset 1.05 shows the shadow detached on the ground, shrunk + faded; standing shows grounded contact blobs under player AND enemy"
+        },
+        {
+          "id": "023-3",
+          "criterion": "debug.audioState().intensity reflects 0/1/2 states",
+          "met": true,
+          "evidence": "audioState() object {state, intensity(requested), activeIntensity, musicVolume}; tension.spec walks 0 (calm) -> 2 (dread, no prey) -> 1 (prey exists, hunt priority) deterministically via pre-start giant-warn roster fill"
+        },
+        {
+          "id": "023-4",
+          "criterion": "PHEW/CLOSE-ONE rate-limited beats verified by spec",
+          "met": true,
+          "evidence": "tension.spec: PHEW! after real-scare drain (peak>0.15); CLOSE ONE! on near-miss exit; second pass inside 6s proven SILENT by a sentinel popup overwriting lastPopupText"
+        },
+        {
+          "id": "023-5",
+          "criterion": "plans/README.md updated",
+          "met": true,
+          "evidence": "row 023 TODO -> DONE (Close commit)"
+        }
+      ]
     },
     {
       "id": "B6",
