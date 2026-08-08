@@ -39,11 +39,18 @@
 
 ## Next action
 
-- **NOW**: Launch B2 worker (plan 018 THEN plan 021, sequentially, one worker —
-  both touch readme.md). After completion: driver verify (lint + log + scope),
-  fresh-subagent review of the batch diff, reconcile, guide update, proceed B3.
-- Loop for every batch: worker → driver verify → fresh review → reconcile
-  (Review-phase commit) → guide/log update → next batch. B1 pattern worked.
+- **NOW**: B3 worker (plan 019 THEN 020) with ADDED AUTHORITY: stabilize
+  tests/balance.spec.js:42 (latent pre-existing race; B2's probe data in
+  execution log 2026-08-08 + .elves/runtime/worker-progress-b2.md). Inherited
+  gate is RED (82/83, that spec only) — expected at start; must be green ×2
+  after 019 before 020 begins.
+- Then B2b: plan 021 alone (docs; deferred from B2 — preserve 018's readme
+  Pad/DB9 line). Then B4 022 onward per original order.
+- Loop per batch: worker → driver verify → fresh review → reconcile
+  (Review-phase commit) → guide/log update → next batch.
+- B2 REVIEW DEBT: batch-2's diff (018) has NOT had its fresh-subagent review
+  yet — run it TOGETHER with B3's review (combined window 4c07c00..B3-close)
+  so the reviewer sees the pad work and the fairness work that builds on it.
 
 ## Deferred hygiene
 

@@ -69,3 +69,15 @@
 - Per packet STOP rule: stopped before 021 (gate "suite green" unmet). No
   test weakened; no lottery reruns claimed as green. Driver decides: patch
   the combo choreography under 027/019 authority, then 021 can run.
+
+## 2026-08-08 — Driver reconcile: B2 split, B3 pulled forward with race authority
+
+- Driver verified 018: gamepad spec 10/10 (--workers=1, 35.9s), lint 0, clean
+  commit history 5c86b53..42967b1. The worker's stop was CORRECT per contract.
+- Decision: B3 (019 fairness + 020 perf) launches NOW with added authority to
+  stabilize balance.spec.js:42 — plan 019 Steps 1-2 (dead-run guard, explicit
+  hitboxes) are the suspect surfaces per B2's probe data; if a game-code fix
+  alone doesn't stabilize, the spec choreography may be adjusted with intent
+  preserved (two rapid kills pay > 2x single bounty). 021 becomes B2b after B3.
+- B2's fresh review is deferred and COMBINED with B3's (window 4c07c00..B3
+  close) so one reviewer sees the pad work plus what builds on it.
