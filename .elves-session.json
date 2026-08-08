@@ -452,8 +452,81 @@
         "026"
       ],
       "title": "Two-player split-screen (stages A-F)",
-      "status": "pending",
-      "acceptance": []
+      "status": "complete",
+      "acceptance": [
+        {
+          "id": "026-1",
+          "criterion": "npm test 0 failed x2 (incl. coop.spec)",
+          "met": true,
+          "evidence": "126/126 twice consecutively at final HEAD (6.3m/6.3m, workers:3, zero flakes either run); coop.spec 10 cases in both"
+        },
+        {
+          "id": "026-2",
+          "criterion": "Solo path: no spec edits needed in Stages A-B; DOM ids stable in solo",
+          "met": true,
+          "evidence": "ZERO assertion/behavior edits in A-B (two non-assertion edits, both documented: worldfun titan-kill comment refreshed per the H6 grant pairing; effects pool spec's own death-proofing completed after a load-race root-cause — clearPendingSpawns added beside its existing enemy despawn). Solo DOM is dual-mode: every classic id survives verbatim (smoke/gameover/hiscores pin them green)"
+        },
+        {
+          "id": "026-3",
+          "criterion": "2P screenshot pair (both halves, divergent positions) in the run log",
+          "met": true,
+          "evidence": ".elves/runtime/b8-2p-divergent-{a,b}.png (keyboard-driven: P1 east on WASD, P2 west on arrows; visible seam, each hero centered in own half) + b8-2p-full-hud.png (per-seat columns) + b8-stageB-{solo,2p}.png + b8-solo-final.png/b8-overlay-final.png comparisons"
+        },
+        {
+          "id": "026-4",
+          "criterion": "Coop board written; solo boards untouched in 2P",
+          "met": true,
+          "evidence": "coop.spec per-player-death case: blocky.hiscores.coop.v1 gets {p1Score:3,p2Score:9,teamScore:12,maxDistance>=40,date}; seeded endless row byte-identical after the 2P run; daily+classic keys stay null"
+        },
+        {
+          "id": "026-5",
+          "criterion": "perfInfo() 2P numbers recorded; npm run build exit 0",
+          "met": true,
+          "evidence": "matched 3-giant rig (H10): solo 263 calls/50.1k tris/0.78ms -> 2P 410/83.9k/1.19ms = 1.56x/1.68x/1.53x frameMsAvg (STOP threshold 2.4x); build exit 0 at final HEAD"
+        },
+        {
+          "id": "026-6",
+          "criterion": "plans/README.md updated",
+          "met": true,
+          "evidence": "row 026 TODO -> DONE in the Close commit"
+        },
+        {
+          "id": "026-A",
+          "criterion": "Stage A players[] refactor, solo unchanged",
+          "met": true,
+          "evidence": "ce9a709 — makePlayerState + per-player loops everywhere; classic singleton names delegate to players[0] as the permanent test surface; H6 pickup unification (render-scale body-block builder). 116/116 x2"
+        },
+        {
+          "id": "026-B",
+          "criterion": "Stage B split rendering",
+          "met": true,
+          "evidence": "48e570f — per-player cameras, renderFrame viewport+scissor halves, solo keeps the exact full-rect path; frame-scoped renderer.info; perf 1.68x calls. 116/116 (after root-causing the effects-spec warn-pipeline death race)"
+        },
+        {
+          "id": "026-C",
+          "criterion": "Stage C seats and input",
+          "met": true,
+          "evidence": "8df1eb3 — battle-paddle seat claims by gamepad.index, kb split WASD/Arrows + Space vs Slash, per-seat one-clamp moveVector, per-seat rumble; coop.spec 5 cases. 121/121"
+        },
+        {
+          "id": "026-D",
+          "criterion": "Stage D world services for two anchors",
+          "met": true,
+          "evidence": "d9e3031 — union chunk windows, midpoint water/rebase, nearest-hero clouds, per-seat bubbles under ENDLESS_ENEMY_CAP_COOP 16; rebase spec proves same-delta shift. 123/123"
+        },
+        {
+          "id": "026-E",
+          "criterion": "Stage E rules/HUD/death/board",
+          "met": true,
+          "evidence": "a8e9b5b — dual-mode HUD, per-half KILL!/combo/vignette, per-viewer edibility paint per render pass, either-panic tick, WAITING chip + partner cam, coop board + team death screen. 125/125"
+        },
+        {
+          "id": "026-F",
+          "criterion": "Stage F entry UI + polish + docs",
+          "met": true,
+          "evidence": "1P/2P overlay buttons + sessionStorage persistence + boot restore; readme Two Players section; learnings x2; grep 'get player()' src/state.js -> none. coop.spec 10/10; final gates green"
+        }
+      ]
     },
     {
       "id": "B9",

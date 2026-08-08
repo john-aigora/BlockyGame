@@ -494,3 +494,79 @@ All five steps landed; suite grew 95 → 102 (+4 tension, +3 audio).
   daily world gets no confetti; owner call whether both should fire. (13) A
   past-midnight daily death briefly shows a one-row TODAY'S BEST that
   self-retires on the next view — by design, may read as a glitch once a year.
+
+## 2026-08-08 — B8: plan 026 two-player split-screen (stages A-F, complete)
+
+- The run's HEADLINE batch. All six stages landed in order, each at full-suite
+  green; no plan STOP condition fired. Commits: A ce9a709 (players[] refactor,
+  116/116 x2), B 48e570f (split rendering + perf plumbing), C 8df1eb3 (seat
+  claims + keyboard split, 121/121), D d9e3031 (two-anchor world services,
+  123/123), E a8e9b5b (per-half rules/HUD/death/coop board, 125/125),
+  F (entry buttons + docs; final gates in the Close).
+- ARCHITECTURE: state.players[] + makePlayerState(seat) own every hero field;
+  the classic singleton names (playerScale, score, collectTimeLeft, jump*,
+  camY/Z, danger fields, ...) remain as accessor delegates to players[0] —
+  the PERMANENT window.__game.state test surface, not temporary shims —
+  while state.player/state.camera stay plain synced fields (the plan's
+  "grep 'get player()' → none" criterion holds). Solo is byte-stable by
+  construction: one player renders the exact pre-plan full-rect path (no
+  scissor call), dual-mode HUD keeps every classic id, and Stages A-B landed
+  with ZERO spec-assertion edits.
+- H6 GRANT applied with a finding: setPlayerCollisionBox(box, player, scale,
+  flatten) + new setCollectibleBox replace the pickup pass's render-tree
+  setFromObject. The pickup site passes the RENDER scale (mesh.scale.y),
+  keeping the render/gameplay-scale split the worldfun titan-kill spec
+  depends on. The spec's self-described remedy ("post-kill shrink") for a
+  GAMEPLAY-scale unification is provably unworkable: the kill and the
+  collect sweep share one update() frame (no test-side interleave exists),
+  and contact reach (5.76u) < the 6.67u the feast ring would need to clear a
+  3.12u-half pickup box — geometrically unavoidable hoovering. Render-scale
+  unification delivers H6's actual goals (body-block honesty — the scarf
+  race the spec documents is now structurally impossible — plus the
+  setFromObject cost gone); the spec comment was refreshed (assertions
+  untouched).
+- EN-ROUTE FIX (root-caused, not waved off as flake): the effects pool spec
+  failed two consecutive full runs (solo-green both) — not a pool failure:
+  "The enemy caught you." at game-time 0:03 froze every game-clock wait. Its
+  own death-proofing (despawn live enemies each hop) let PENDING WARN DISCS
+  materialize giants onto teleport landings. debug.clearPendingSpawns now
+  exists and the spec clears the pipeline beside the bodies. Lesson recorded
+  in learnings.md, alongside the three r128 renderer.info-resets-per-render
+  trap (2P perfInfo needs autoReset=false + one reset per frame).
+- PERF (matched 3-giant statue rig, H10 discipline): solo 263 calls / 50.1k
+  tris / 0.78ms frameMsAvg → 2P 410 / 83.9k / 1.19ms = 1.56x / 1.68x /
+  1.53x. The 2.4x frame-time STOP never approached; ratios sit under 2x
+  because each half frustum-culls its own view. Plan 028 re-measures.
+- Plan-expectation note for reviewers: the plan's Stage D "bump chunk/cloud
+  pool caps (constants)" assumed fixed caps; the landed pools are lazy
+  high-water pools with no cap constants — 2P self-sizes (~90 active chunks
+  at 600u separation vs ~81 solo). The union window + per-seat bubbles and
+  the new ENDLESS_ENEMY_CAP_COOP=16 are the real knobs (GAME BALANCE, with
+  rationale).
+- SCREENSHOTS (.elves/runtime/): b8-2p-divergent-a/b.png (keyboard-driven
+  divergence, visible seam, hero centered per half), b8-2p-full-hud.png
+  (per-seat columns + shared TIME), b8-solo-final.png vs b8-stageB-solo.png
+  (solo view unchanged through C-F), b8-overlay-final.png (1P/2P buttons).
+- Suite 116 → 126 (tests/coop.spec.js, 10 cases: pad seats + divergence,
+  keyboard split, kb-active claim tiebreak + ghost immunity, per-seat jumps,
+  union terrain/food, midpoint same-delta rebase, per-seat HUD, spectator →
+  team death screen + coop board isolation, entry-button persistence, solo
+  input regression).
+
+### FAMILY PLAYTEST BRIEF (B8 additions)
+
+- (14) TWO PLAYERS is live on the start screen. Cheat-sheet for the couch:
+  P1 = WASD + Space (orange, left half); P2 = Arrows + / (slash) to jump
+  (teal, right half). Pads: wiggle a stick and that pad OWNS that hero —
+  first mover gets P1 unless someone's already walking on WASD, then the pad
+  politely takes P2; the pad's A button jumps its own hero. P pauses both.
+  One shared world: you can split up (the world streams around both of you)
+  or hunt as a pack. An enemy shows YELLOW on YOUR half only if YOU can eat
+  it — check your own screen before you charge.
+- (15) When one of you falls, the other plays on — the fallen half watches
+  the survivor under a WAITING chip (no rejoin until the next run; tell us
+  if mid-run rejoin feels missed). Both down = one screen with both scores
+  and a TEAM total; that total ranks on its own TEAM RUNS board — 2P runs
+  deliberately never touch the solo or daily boards. Worth testing on the
+  real couch: does 16 max monsters for two of you feel scary enough? And is
+  the shared zoom level fine, or does someone want their own?
