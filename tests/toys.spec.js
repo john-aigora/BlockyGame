@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { openGame, startGame, waitForGameOver, waitGameSeconds } from './helpers.js';
+import { PLAYER_COLLIDER_HALF_WIDTH } from '../src/constants.js';
 
 // Toys + polish (owner queue items 4-5 + QA board flag): voxel clouds in
 // both skies, the endless Space-jump (rocks hoppable, water never, classic
@@ -73,9 +74,10 @@ test('Space jumps the player over a rock that blocks the grounded path (endless)
   await page.waitForFunction(() => window.__game.debug.terrainInfo().queued === 0, null, { timeout: 30000 });
 
   // Find a seeded boulder near spawn with a clean dry run-line: rock-free
-  // approach and landing lanes for the scale-1 collider (0.54), and no
-  // water anywhere on the line — the ONLY blocker is the rock itself.
-  const rock = await page.evaluate(([WL_]) => {
+  // approach and landing lanes for the scale-1 collider
+  // (PLAYER_COLLIDER_HALF_WIDTH), and no water anywhere on the line — the
+  // ONLY blocker is the rock itself.
+  const rock = await page.evaluate(([WL_, R_]) => {
     const d = window.__game.debug;
     for (let z = -60; z <= 60; z += 0.5) {
       for (let x = 12; x <= 90; x += 0.5) {
@@ -88,7 +90,7 @@ test('Space jumps the player over a rock that blocks the grounded path (endless)
         if (w < 0.9 || w > 1.7) continue; // A substantial chord, small enough to clear
         let clear = true;
         for (let t = 0.7; t <= 3.2 && clear; t += 0.25) {
-          if (!d.isWalkable(x1 - t, z, 0.54) || !d.isWalkable(x2 + t, z, 0.54)) clear = false;
+          if (!d.isWalkable(x1 - t, z, R_) || !d.isWalkable(x2 + t, z, R_)) clear = false;
         }
         if (!clear) continue;
         let dry = true;
@@ -100,7 +102,7 @@ test('Space jumps the player over a rock that blocks the grounded path (endless)
       }
     }
     return null;
-  }, [WL]);
+  }, [WL, PLAYER_COLLIDER_HALF_WIDTH]);
   expect(rock).not.toBeNull();
 
   // Sterilize and take position 2.2u west of the rock's chord.
@@ -176,16 +178,16 @@ test('a jump can never cross water: the arc lands at the shore edge (endless)', 
   await page.waitForFunction(() => window.__game.debug.terrainInfo().queued === 0, null, { timeout: 30000 });
   // A boulder on the beach must not fake the result — start where the walk
   // to the shore is clean (same settle pattern as the water-impassability spec).
-  const start = await page.evaluate(({ x, z }) => {
+  const start = await page.evaluate(([{ x, z }, R_]) => {
     const g = window.__game;
     for (let sx = x - 3.5; sx >= x - 10; sx -= 0.25) {
-      if (g.debug.isWalkable(sx, z, 0.54) && g.debug.isWalkable(sx + 1, z, 0.54)) {
+      if (g.debug.isWalkable(sx, z, R_) && g.debug.isWalkable(sx + 1, z, R_)) {
         g.state.player.position.x = sx;
         return { x: sx };
       }
     }
     return null;
-  }, shore);
+  }, [shore, PLAYER_COLLIDER_HALF_WIDTH]);
   expect(start).not.toBeNull();
 
   // Walk to the waterline, then JUMP straight at the lake, still holding east.
@@ -224,9 +226,8 @@ test('the landing-grace ring cannot be walked through a boulder (C-6)', async ({
   // body is honestly outside — the new probe-parity rule keeps rocks
   // solid). On the old code this exact band walked straight through
   // boulders.
-  const spot = await page.evaluate(([WL_]) => {
-    const d = window.__game.debug;
-    const R = 0.54; // Scale-1 player collider half-width
+  const spot = await page.evaluate(([WL_, R]) => {
+    const d = window.__game.debug; // R = scale-1 player collider half-width (imported constant)
     for (let z = -60; z <= 60; z += 0.5) {
       for (let x = 12; x <= 90; x += 0.5) {
         if (d.isRockFree(x, z, 0)) continue; // (x,z) is inside some rock circle
@@ -261,7 +262,7 @@ test('the landing-grace ring cannot be walked through a boulder (C-6)', async ({
       }
     }
     return null;
-  }, [WL]);
+  }, [WL, PLAYER_COLLIDER_HALF_WIDTH]);
   expect(spot).not.toBeNull();
 
   await page.evaluate(({ px, pz }) => {

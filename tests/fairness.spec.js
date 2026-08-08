@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { openGame, startGame, waitGameSeconds } from './helpers.js';
+import { PLAYER_COLLIDER_HALF_WIDTH, ENEMY_COLLIDER_HALF_WIDTH } from '../src/constants.js';
 
 // Fairness pass (owner playtest, escalated): honest collision — "respect
 // the size of the gap and the size of the player's block" — plus the F
@@ -83,6 +84,21 @@ test('honest gaps: width is respected to ±epsilon and a visually-dry crossing i
   });
   expect(crossing.x).toBeGreaterThanOrEqual(227.5); // THROUGH the dip, onto solid land
   expect(crossing.ground).toBeGreaterThanOrEqual(WL); // Standing dry, as it looks
+});
+
+test('collider half-widths are bound to the real body geometry (D-11)', async ({ page }) => {
+  await openGame(page);
+  const widths = await page.evaluate(() => ({
+    hero: window.__game.debug.heroBodyWidth(),
+    enemy: window.__game.debug.enemyBodyWidth()
+  }));
+  // HONEST COLLISION contract: the collider constants promise the TRUE
+  // visual half-width of the body block. If anyone reshapes the hero or
+  // enemy body geometry (characters.js) without re-deriving the constants,
+  // this tripwire fires — the constants lived in a different file with no
+  // binding before (audit D-11).
+  expect(widths.hero).toBeCloseTo(PLAYER_COLLIDER_HALF_WIDTH * 2, 12);
+  expect(widths.enemy).toBeCloseTo(ENEMY_COLLIDER_HALF_WIDTH * 2, 12);
 });
 
 test('corner slide: a diagonal into the shoreline creeps along it and never freezes or wades', async ({ page }) => {

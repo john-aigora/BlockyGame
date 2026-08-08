@@ -50,6 +50,11 @@ window.__game = {
         canMove, // Honest directional movement probe — gap-width fairness checks
         isRockFree, // Rock-circle-only query — the jump spec finds seeded rocks with it
         cloudInfo, // { classicCount, activeEndless, pooled, allocs, minY, maxY } — sky pool checks
-        movementDebug // Plan 014 spike introspection: { energy, boostHeld, heading, hasMouse }
+        movementDebug, // Plan 014 spike introspection: { energy, boostHeld, heading, hasMouse }
+        // Collider↔geometry binding probes (audit D-11): the true rendered
+        // body-block widths, so the fairness spec can pin the collider
+        // constants to the geometry they claim to describe.
+        heroBodyWidth: () => state.player.userData.bodyMesh.geometry.parameters.width,
+        enemyBodyWidth: () => state.enemies[0] && state.enemies[0].userData.bodyMesh.geometry.parameters.width
     }
 };
