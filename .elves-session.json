@@ -525,6 +525,30 @@
           "criterion": "Stage F entry UI + polish + docs",
           "met": true,
           "evidence": "1P/2P overlay buttons + sessionStorage persistence + boot restore; readme Two Players section; learnings x2; grep 'get player()' src/state.js -> none. coop.spec 10/10; final gates green"
+        },
+        {
+          "id": "026-R1",
+          "criterion": "Review BLOCK-1/ADV-3: coop vignette/score/combo CSS matches the class-based elements",
+          "met": true,
+          "evidence": "style.css base rules extended to #danger-vignette/.danger-vignette, #score.score-pop/.hud-score.score-pop, #combo-chip.combo-pop/.combo-chip.combo-pop (+reduced-motion twins); new per-half vignette spec asserts computed radial-gradient background + absolute position on P2's glowing clone while P1 stays <0.02 (commit daed48e)"
+        },
+        {
+          "id": "026-R2",
+          "criterion": "Review BLOCK-2: 2P kill replacements use ENDLESS_ENEMY_CAP_COOP",
+          "met": true,
+          "evidence": "enemies.js spawnNewEnemies cap = players.length>=2 ? CAP_COOP(16) : CAP(12), the same rule as the bubble cap at enemies.js:884 (commit 8abc335)"
+        },
+        {
+          "id": "026-R3",
+          "criterion": "Review BLOCK-3: 2P start overlay renders unstretched; aspects re-applied on both transitions",
+          "met": true,
+          "evidence": "viewAspect returns FULL aspect while onStartScreen; onWindowResize called in startRun and setupNewGame (the only two flip sites); screenshot .elves/runtime/b8r-2p-overlay-unstretched.png at 1280x800 shows square food cubes/grid behind 2 PLAYERS selected (commit 7ede18c)"
+        },
+        {
+          "id": "026-R4",
+          "criterion": "Review BLOCK-4: per-half offscreen arrows (own camera, own bounds, own edibility); solo pass identical",
+          "met": true,
+          "evidence": "updateIndicatorsForView(camera, viewer, rectLeft, rectWidth, poolStart, poolEnd); 2P = one pass per living seat, pool 5/5, seam-clamped, canKillSpecificEnemy(e, viewer); solo call keeps full-rect/whole-pool arithmetic. New arrows spec: same grunt yellow in P1's half, blue in P2's, every visible arrow inside its own half; screenshot b8r-2p-arrows-in-half.png (commit 57f04e8; ADV-7 combo zero rides it, ADV-9 anchor slots + specs in f8afc3d)"
         }
       ]
     },

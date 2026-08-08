@@ -570,3 +570,27 @@ All five steps landed; suite grew 95 → 102 (+4 tension, +3 audio).
   deliberately never touch the solo or daily boards. Worth testing on the
   real couch: does 16 max monsters for two of you feel scary enough? And is
   the shared zoom level fine, or does someone want their own?
+
+## 2026-08-08 — B8 REVISION: review blockers 1-4 fixed (plan 026)
+
+- All four review BLOCKs closed, no fallback paths needed. BLOCK-1/ADV-3
+  (daed48e): the coop vignette/score-pop/combo-pop CSS was id-only — base
+  rules now carry the class selectors (+ reduced-motion twins), so the 2P
+  clones actually paint. BLOCK-2 (8abc335): spawnNewEnemies reads the coop
+  16 cap by the same players.length>=2 rule as the bubble — kill
+  replacements flow again past population 12 in 2P. BLOCK-3 (7ede18c):
+  viewAspect returns FULL aspect while onStartScreen (the overlay is
+  single-view); startRun/setupNewGame re-aspect on both transitions — the
+  2P title stretch is gone (b8r-2p-overlay-unstretched.png). BLOCK-4
+  (57f04e8): per-half arrow passes landed as prescribed — one pass per
+  living seat through its own camera, pool split 5/5, seam-clamped, colored
+  by canKillSpecificEnemy(enemy, viewer); solo keeps the identical
+  full-rect whole-pool pass (b8r-2p-arrows-in-half.png shows the same grunt
+  yellow on P1's half, blue on P2's). ADV-7 (combo dies with the hero) and
+  ADV-9 (pre-allocated anchor slots) rode along (57f04e8/f8afc3d).
+- Suite 126 → 129: the three reviewer-demanded coop specs — per-half
+  vignette (asserts the CSS rule MATCHED: radial background + absolute
+  position, not just driven opacity), coop board ranking (teamScore desc,
+  maxDistance tiebreak above the new run, trim to 5, is-new at rank 3), and
+  per-half arrows (bounds + per-viewer colors). Session acceptance rows
+  026-R1..R4 added with evidence.
