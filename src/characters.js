@@ -34,6 +34,49 @@ applyWorldBend(OUTLINE_MATERIAL);
 export const FOOT_SHADE = 0.6; // Feet: body color multiplied down — grounded look
 export const CAP_LIGHTEN = 1.3; // Cap: top-face highlight shade
 
+// --- Blob ground shadow (plan 023 UI-3) ---
+// A soft dark gradient quad under every character: the missing ground-contact
+// cue that made jump height illegible (audit screenshots — the block just
+// floated). ONE shared radial-gradient CanvasTexture + ONE shared
+// PlaneGeometry for everyone; enemies share ONE static material. The PLAYER's
+// quad animates opacity with jump height, which a shared material cannot do
+// per-instance — it gets the single cached bendClone below (still one
+// geometry + one texture total; renderer memory counters see +1/+1 at boot,
+// absorbed by the pool specs' warm-up baselines). Look constants live here
+// with FOOT_SHADE/CAP_LIGHTEN — a look, not game balance.
+export const SHADOW_SIZE_FACTOR = 1.3; // Quad XZ size × baseSize (slightly wider than the body reads grounded)
+export const SHADOW_BASE_OPACITY = 0.45; // Grounded opacity; effects.js fades the player's with jump height
+let shadowGeometry = null; // Shared unit plane, scaled per character
+let shadowTexture = null; // Shared 64px radial gradient (dark center → transparent)
+let shadowMaterialShared = null; // Enemies: static opacity
+let shadowMaterialPlayer = null; // Player: opacity driven per-frame by effects.js
+
+function getShadowResources() {
+    if (!shadowGeometry) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 64;
+        canvas.height = 64;
+        const c2d = canvas.getContext('2d');
+        const grad = c2d.createRadialGradient(32, 32, 4, 32, 32, 32);
+        grad.addColorStop(0, 'rgba(0, 0, 0, 0.9)');
+        grad.addColorStop(0.55, 'rgba(0, 0, 0, 0.55)');
+        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        c2d.fillStyle = grad;
+        c2d.fillRect(0, 0, 64, 64);
+        shadowTexture = new THREE.CanvasTexture(canvas);
+        shadowGeometry = new THREE.PlaneGeometry(1, 1);
+        shadowMaterialShared = new THREE.MeshBasicMaterial({
+            map: shadowTexture,
+            transparent: true,
+            opacity: SHADOW_BASE_OPACITY,
+            depthWrite: false // Never occludes; depthTest stays on so hills still hide it
+        });
+        applyWorldBend(shadowMaterialShared); // Far shadows ride the curved horizon like their owners
+        shadowMaterialPlayer = bendClone(shadowMaterialShared); // clone() drops onBeforeCompile — re-arm it
+    }
+    return { shadowGeometry, shadowMaterialShared, shadowMaterialPlayer };
+}
+
 // Multiplies a hex color's channels by `factor` (clamped to valid range).
 // Cheap enough to run at build time; the RESULT is what gets cached
 // (materialCache keys on the shaded hex), so each (color, shade) pair costs
@@ -352,6 +395,25 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
         }
         group.userData.scarfSegs = scarfSegs;
     }
+
+    // --- Blob ground shadow (plan 023 UI-3) ---
+    // Child of the GROUP (not the body mesh) so the walk-cycle body bounce
+    // never bobs it; effects.js re-grounds it on the terrain every frame and
+    // (player only) shrinks/fades it with jump height. Kept under reduced
+    // motion on purpose: a shadow is static grounding, not motion.
+    const shadow = getShadowResources();
+    const shadowQuad = new THREE.Mesh(
+        shadow.shadowGeometry,
+        menacing ? shadow.shadowMaterialShared : shadow.shadowMaterialPlayer
+    );
+    shadowQuad.rotation.x = -Math.PI / 2; // Flat on XZ
+    const shadowSize = SHADOW_SIZE_FACTOR * baseSize;
+    shadowQuad.scale.set(shadowSize, shadowSize, 1);
+    shadowQuad.position.y = 0.02; // effects.js overwrites per frame; sane at build for the title scene
+    shadowQuad.renderOrder = 1; // Above terrain; below the spawn warn discs (2)
+    group.add(shadowQuad);
+    group.userData.shadowQuad = shadowQuad;
+    group.userData.shadowBaseSize = shadowSize; // effects.js scales the player's from this
 
     return group;
 }

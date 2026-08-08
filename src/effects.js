@@ -8,7 +8,7 @@ import { state } from './state.js';
 import { torusDelta, torusDeltaComponent, torusDistance } from './worldmath.js';
 import { groundHeightAt } from './terrain.js';
 import { COLLECTIBLE_MATERIAL } from './collectibles.js';
-import { HERO_GLOW_MATERIAL, ENEMY_PUPIL_HUNT_MATERIAL, ENEMY_PUPIL_SCARED_MATERIAL } from './characters.js';
+import { HERO_GLOW_MATERIAL, ENEMY_PUPIL_HUNT_MATERIAL, ENEMY_PUPIL_SCARED_MATERIAL, SHADOW_BASE_OPACITY } from './characters.js';
 
 // --- Visual "juice" (plan 015) ---
 // All effects here are procedural and pooled: ONE THREE.Points + ONE
@@ -513,11 +513,42 @@ export function updateEffects(dt) {
     if (state.player) {
         updateWalk(state.player, dt);
         updateBlink(state.player, dt);
+        updateShadow(state.player);
     }
     for (const enemy of state.enemies) {
         updateWalk(enemy, dt);
         updateEnemyAura(enemy, dt); // Sets the scared flag updateBlink reads
         updateBlink(enemy, dt);
+        updateShadow(enemy);
+    }
+}
+
+// --- Blob ground shadow (plan 023 UI-3) ---
+// The quad is a child of its character group, so its LOCAL y must cancel the
+// group's world y to sit on the terrain: local = (ground + lift − group.y) / scaleY
+// (group scale multiplies child offsets). Grounded characters reduce to
+// lift/scaleY; the airborne player's group rises with jumpOffset while the
+// shadow stays on the ground — and shrinks/fades with height, which is the
+// whole jump-legibility trick. Enemies never jump: their shared material
+// keeps the static grounded opacity. Deliberately NOT gated on reduced
+// motion: a ground shadow is static grounding, not motion.
+const SHADOW_LIFT = 0.02; // World units above the sampled terrain (z-fight clearance)
+
+function updateShadow(group) {
+    const quad = group.userData.shadowQuad;
+    if (!quad) return;
+    const sy = group.scale.y || 1;
+    const ground = state.worldMode === 'endless'
+        ? groundHeightAt(group.position.x, group.position.z)
+        : 0;
+    quad.position.y = (ground + SHADOW_LIFT - group.position.y) / sy;
+    if (group === state.player) {
+        const jump = state.jumpOffset;
+        const shrink = 1 / (1 + jump * 0.35); // Higher hop → smaller pool of shade
+        const size = group.userData.shadowBaseSize * shrink;
+        quad.scale.set(size, size, 1);
+        // Player-only material instance (characters.js) — enemies stay put.
+        quad.material.opacity = SHADOW_BASE_OPACITY / (1 + jump * 0.6);
     }
 }
 
