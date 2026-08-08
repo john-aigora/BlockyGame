@@ -358,18 +358,17 @@ export function pollGamepad() {
         toggleMuteFromUI(); // Same path as the mute button (aria, unlock, music)
     }
 
-    // Classic: A mirrors Space (pause). Endless: A is jump. Continuous: A is
-    // boost (held — see gamepadBoostHeld), not an edge action.
-    if (CONTINUOUS_MOVEMENT) {
-        // boost is level-held, not edge; nothing here
-    } else if (state.worldMode === 'endless') {
+    // A = jump, B = pause — one bind set in every world mode (audit D-6:
+    // the classic-only "A mirrors Space as pause" fork is gone; classic is
+    // a test/debug path and shares the endless binds, and tryJump itself
+    // no-ops outside endless). Continuous: A is boost (held — see
+    // gamepadBoostHeld), not an edge action.
+    if (!CONTINUOUS_MOVEMENT) {
         if (buttonEdge(gp, b.a)) tryJump();
         if (buttonEdge(gp, b.b)) {
             sfx.click();
             togglePause();
         }
-    } else if (buttonEdge(gp, b.a)) {
-        togglePause();
     }
 
     // Y = faster, X = slower (dedicated slow-down). F key still cycles.
@@ -555,22 +554,19 @@ export function onKeyDown(event) {
 
     const key = event.key.toLowerCase();
 
-    // Handle space bar for pause.
-    // Plan 014 spike: in continuous mode Space is BOOST (held — handled by
-    // movement-continuous.js's own listeners), so pause moves to P.
-    // ENDLESS (owner queue item 5): Space is JUMP — pause moves to P, the
-    // exact same pattern as the spike. Classic keeps Space = pause.
+    // Space = JUMP, P = pause — one bind set in every world mode (audit
+    // D-6: the classic-only Space-as-pause fork is gone; classic is a
+    // test/debug path and shares the endless binds, and tryJump itself
+    // no-ops outside endless). Plan 014 spike: in continuous mode Space is
+    // BOOST (held — handled by movement-continuous.js's own listeners);
+    // P still pauses there.
     if (key === ' ' || key === 'space') {
         event.preventDefault(); // Prevent page scroll
         if (CONTINUOUS_MOVEMENT) return; // Boost, not pause
-        if (state.worldMode === 'endless') {
-            if (!isRepeat) tryJump(); // Fresh presses only — no held-key hop strobe
-            return;
-        }
-        if (!isRepeat) togglePause();
+        if (!isRepeat) tryJump(); // Fresh presses only — no held-key hop strobe
         return;
     }
-    if ((CONTINUOUS_MOVEMENT || state.worldMode === 'endless') && key === 'p') {
+    if (key === 'p') {
         if (!isRepeat) togglePause();
         return;
     }
