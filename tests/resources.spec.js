@@ -13,6 +13,19 @@ test.beforeEach(async ({ page }) => {
 test('food spawn/remove cycle does not grow the geometry count', async ({ page }) => {
   // Let the first frames render so all boot-time geometries are registered.
   await page.waitForTimeout(300);
+
+  // Endless streams chunk geometry on movement; measure after warm-up so the
+  // pool is settled (plan 017): run one full spawn/remove cycle, then wait
+  // for the terrain build queue to drain before sampling `before` (boot-time
+  // chunk builds otherwise register mid-measurement).
+  await page.evaluate(() => {
+    for (let i = 0; i < 30; i++) window.__game.debug.spawnNearPlayer();
+    const s = window.__game.state;
+    s.collectibles.forEach((c) => s.scene.remove(c));
+    s.collectibles = [];
+  });
+  await page.waitForFunction(() => window.__game.debug.terrainInfo().queued === 0, null, { timeout: 30000 });
+  await page.waitForTimeout(200); // A settled frame registers late geometries
   const before = await page.evaluate(() => window.__game.state.renderer.info.memory.geometries);
 
   await page.evaluate(() => {

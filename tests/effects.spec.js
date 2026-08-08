@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openGame, startGame } from './helpers.js';
+import { openGame, startGame, waitGameSeconds } from './helpers.js';
 
 // Visual juice (plan 015): the particle engine must be a true pool (no GPU
 // allocation per burst/collect), and the reduced-motion code paths must
@@ -19,7 +19,28 @@ test('50 bursts + 10 collects do not grow the geometry count (pool discipline)',
     s.playerScale = 6;
     s.player.scale.set(6, 6, 6);
   });
-  const before = await page.evaluate(() => window.__game.state.renderer.info.memory.geometries);
+
+  // Endless streams chunk geometry on movement; measure after warm-up so the
+  // pool is settled (plan 017): run the whole teleport-collect loop once
+  // first — the collect chase drags the player across chunks, and the chunk
+  // mesh pool only reaches steady state after that same movement pattern —
+  // then settle (game clock + empty terrain build queue) before sampling.
+  await startGame(page);
+  for (let i = 0; i < 10; i++) {
+    await page.evaluate(() => {
+      const s = window.__game.state;
+      const food = s.collectibles[0];
+      if (food) s.player.position.set(food.position.x, 0, food.position.z);
+    });
+    await page.waitForTimeout(100);
+  }
+  await waitGameSeconds(page, 1);
+  await page.waitForFunction(() => window.__game.debug.terrainInfo().queued === 0, null, { timeout: 30000 });
+  await page.waitForTimeout(200); // A settled frame registers late geometries
+  const { before, scoreBefore } = await page.evaluate(() => ({
+    before: window.__game.state.renderer.info.memory.geometries,
+    scoreBefore: window.__game.state.score
+  }));
 
   // Hammer the pool directly: 50 bursts, far more than the pool size/turnover
   await page.evaluate(() => {
@@ -30,7 +51,6 @@ test('50 bursts + 10 collects do not grow the geometry count (pool discipline)',
   await page.waitForTimeout(200); // Render with particles live
 
   // And the real path: 10 collects via teleporting onto food
-  await startGame(page);
   for (let i = 0; i < 10; i++) {
     await page.evaluate(() => {
       const s = window.__game.state;
@@ -40,7 +60,7 @@ test('50 bursts + 10 collects do not grow the geometry count (pool discipline)',
     await page.waitForTimeout(100);
   }
   const score = await page.evaluate(() => window.__game.state.score);
-  expect(score).toBeGreaterThan(0); // The collect path (burst + squash) really ran
+  expect(score).toBeGreaterThan(scoreBefore); // The MEASURED collect path (burst + squash) really ran
 
   const after = await page.evaluate(() => window.__game.state.renderer.info.memory.geometries);
   expect(after - before).toBeLessThanOrEqual(1); // Pooled, not allocated
@@ -58,6 +78,10 @@ test('score popups are pooled: repeated spawns never grow GPU resources', async 
     }
   });
   await page.waitForTimeout(250); // All 8 render at least one frame
+  // Boot-time chunk builds may still be completing; sample `before` only
+  // once the terrain build queue is empty (plan 017; terrainInfo().queued
+  // is the build-queue-length signal).
+  await page.waitForFunction(() => window.__game.debug.terrainInfo().queued === 0, null, { timeout: 30000 });
   const before = await page.evaluate(() => ({
     geometries: window.__game.state.renderer.info.memory.geometries,
     textures: window.__game.state.renderer.info.memory.textures
