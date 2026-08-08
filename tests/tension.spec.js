@@ -79,6 +79,47 @@ test('survival TIME HUD ticks m:ss on the game clock and celebrates the minute',
   await expect(page.locator('#time')).toHaveText(/^1:0\d$/);
 });
 
+test('music intensity: 0 calm, 2 when dread owns the channel, 1 while prey exists (hunt priority)', async ({ page }) => {
+  page.on('pageerror', (err) => { throw new Error(`Page error: ${err.message}`); });
+  await openGame(page);
+  // Fill the bubble roster with 4 GIANT warns (the kill-spawn path sizes
+  // them 1.5x the player) BEFORE the run starts: streaming's very first
+  // rotation spawn is otherwise a killable PREY ~1s in (SPAWN_SIZE_PATTERN
+  // opens on 'prey'), which would poison every "no prey anywhere" state
+  // below. With enemies+pending >= target, streaming stays silent.
+  await page.evaluate(() => {
+    window.__game.debug.spawnNewEnemies();
+    window.__game.debug.spawnNewEnemies();
+  });
+  await startGame(page);
+  await freezeEnemies(page);
+  const intensity = () => page.evaluate(() => window.__game.debug.audioState().intensity);
+
+  // Calm: only non-killable giants, all outside DANGER_RADIUS.
+  await expect.poll(intensity, { timeout: 15000 }).toBe(0);
+
+  // Dread: park the frozen boot giant at 5u — vignette rises past the 0.12
+  // threshold with no prey alive -> the danger layer (2).
+  await page.evaluate(() => {
+    const s = window.__game.state;
+    const e = s.enemies[0];
+    e.position.x = s.player.position.x + 5;
+    e.position.z = s.player.position.z;
+  });
+  await expect.poll(intensity, { timeout: 15000 }).toBe(2);
+
+  // Hunt priority: shrink a FAR giant into prey while the near dread
+  // persists — killable-anywhere must win the channel at 1.
+  await page.waitForFunction(() => window.__game.state.enemies.length >= 2 &&
+    window.__game.state.enemies.every((e) => e.userData.materializing === undefined));
+  await page.evaluate(() => {
+    const s = window.__game.state;
+    s.enemies[1].scale.setScalar(0.5); // 1.2x0.5=0.6 < player height 1 -> killable
+    for (const e of s.enemies) e.randomVelocity.set(0, 0, 0); // Newly materialized statues too
+  });
+  await expect.poll(intensity, { timeout: 15000 }).toBe(1);
+});
+
 test('PHEW! fires once when a real scare fully drains away', async ({ page }) => {
   page.on('pageerror', (err) => { throw new Error(`Page error: ${err.message}`); });
   await openGame(page);

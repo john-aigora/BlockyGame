@@ -30,6 +30,7 @@ export const PHEW_PEAK_MIN = 0.15; // dangerOpacity peak (max 0.22) that must be
 export const NEAR_MISS_FACTOR = 1.5; // CLOSE ONE! arms inside this × (player+enemy collider half-width sum): just outside actual contact, so every fire was a real scare
 
 // Tension systems (awesome pass): make danger and urgency legible.
+export const DANGER_MUSIC_THRESHOLD = 0.12; // dangerOpacity above this (with NO prey alive) lifts the music to the danger layer (2) — just past the vignette's first visible breath, so the pad arrives with the dread, not before
 export const PANIC_TIME = 5; // Collect-countdown seconds at/below which panic engages (red pulse, tick sfx, food arrow)
 export const DANGER_RADIUS = 9; // A non-killable enemy within this distance = danger (vignette + heartbeat)
 export const DANGER_VIGNETTE_MAX = 0.22; // Peak opacity of the red danger vignette — subtle, must never obscure play

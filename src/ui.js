@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {
     MAX_ENEMY_INDICATORS, DANGER_RADIUS, DANGER_VIGNETTE_MAX, HEARTBEAT_BPM, DEATH_SCREEN_DELAY,
     SURVIVAL_BEAT_COOLDOWN, PHEW_PEAK_MIN, NEAR_MISS_FACTOR,
-    PLAYER_COLLIDER_HALF_WIDTH, ENEMY_COLLIDER_HALF_WIDTH
+    PLAYER_COLLIDER_HALF_WIDTH, ENEMY_COLLIDER_HALF_WIDTH, DANGER_MUSIC_THRESHOLD
 } from './constants.js';
 import { state } from './state.js';
 import { canKillSpecificEnemy } from './enemies.js';
@@ -440,6 +440,13 @@ export function updateDangerPulse(dt) {
         el.dangerVignette.style.opacity = css;
     }
 
+    // Music layer (plan 023 CAP-5) — the ONE setIntensity driver. Hunt
+    // (prey exists anywhere) keeps priority at 1; the danger layer (2)
+    // speaks only when dread owns the channel — the same "no prey" rule as
+    // the heartbeat below. Bar-line commits in audio.js keep every switch
+    // musical, so this per-frame write is safe.
+    music.setIntensity(anyKillable ? 1 : (state.dangerOpacity > DANGER_MUSIC_THRESHOLD ? 2 : 0));
+
     if (inDanger && !anyKillable) {
         state.heartbeatClock -= dt;
         if (state.heartbeatClock <= 0) {
@@ -531,9 +538,8 @@ export function createEnemyIndicators() {
 // opacity transition removed, an actually visible discrete flash.
 export function updateKillIndicator(dt) {
     const anyEnemyKillable = state.enemies.some(enemy => canKillSpecificEnemy(enemy));
-    // Hunt-mode music layer keys off the same already-computed signal;
-    // the actual switch lands on the next bar boundary (audio.js).
-    music.setIntensity(anyEnemyKillable ? 1 : 0);
+    // (Music intensity moved to updateDangerPulse — plan 023: it needs the
+    // danger scalar too, and one writer beats two fighting ones.)
     if (!el.killIndicator) return;
     if (anyEnemyKillable) {
         el.killIndicator.style.display = 'block';

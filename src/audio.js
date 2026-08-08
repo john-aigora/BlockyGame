@@ -38,8 +38,16 @@ export function unlockAudio() {
 }
 
 // Test/debug introspection (exposed on window.__game.debug in main.js).
+// An OBJECT since plan 023: `state` is the old string; `intensity` is the
+// REQUESTED music layer (what setIntensity last stored — deterministic for
+// specs even when a suspended headless context never advances a bar line);
+// `activeIntensity` is the bar-committed layer actually sounding.
 export function audioState() {
-    return ctx?.state ?? 'none';
+    return {
+        state: ctx?.state ?? 'none',
+        intensity: pendingIntensity,
+        activeIntensity: intensity
+    };
 }
 
 // --- One-shot SFX -----------------------------------------------------
@@ -125,9 +133,14 @@ export const sfx = {
 // ~112 BPM, A-minor pentatonic, 2-bar loop in 16th-note steps:
 //   triangle bass (one note per beat) + square arpeggio (16ths, quiet)
 //   + a soft bandpassed-noise hat. Master music gain sits low so the SFX
-// always ride on top. Hunt mode (any enemy killable) raises the lead an
-// octave and adds the off-beat hat — the switch lands on bar boundaries
-// only, so the layer change never jars mid-bar.
+// always ride on top. THREE layers since plan 023 (CAP-5):
+//   0 calm — the base loop;
+//   1 hunt (any enemy killable) — lead up an octave + off-beat hats;
+//   2 danger (dread owns the channel: no prey, vignette risen) — everything
+//     level 1 does PLUS a low held sine pad each half-bar (the bass root an
+//     octave down) and a doubled bass note on the bar start.
+// Every switch lands on bar boundaries only, so layer changes never jar
+// mid-bar. ui.js updateDangerPulse is the single setIntensity driver.
 
 const BPM = 112;
 const STEP_DUR = 60 / BPM / 4;   // one 16th note, in seconds
@@ -146,8 +159,8 @@ let musicTimer = null;    // setInterval id — doubles as the "active" flag
 let musicGain = null;     // per-run master gain (rides the stop() fadeout)
 let nextStepTime = 0;
 let stepIndex = 0;
-let intensity = 0;        // applied layer (0 calm, 1 hunt)
-let pendingIntensity = 0; // requested layer; adopted at the next bar line
+let intensity = 0;        // applied layer (0 calm, 1 hunt, 2 danger); commits on bar lines
+let pendingIntensity = 0; // requested layer (clamped 0..2); adopted at the next bar line
 let noiseBuf = null;      // shared 1s white-noise buffer for the hat
 
 function getNoiseBuffer() {
@@ -192,13 +205,25 @@ function scheduleStep(s, t) {
     if (s % STEPS_PER_BAR === 0) intensity = pendingIntensity;
     // Triangle bass, one note per beat, held almost to the next beat.
     if (s % 4 === 0) {
-        note({ freq: BASS_HZ[(s / 4) % BASS_HZ.length], type: 'triangle', dur: STEP_DUR * 3.5, vol: 1.0, t });
+        const bass = BASS_HZ[(s / 4) % BASS_HZ.length];
+        note({ freq: bass, type: 'triangle', dur: STEP_DUR * 3.5, vol: 1.0, t });
+        // Danger layer: the bar-start bass note is DOUBLED (a second unison
+        // triangle voice — constructive attack, a heavier downbeat thump).
+        if (intensity === 2 && s % STEPS_PER_BAR === 0) {
+            note({ freq: bass, type: 'triangle', dur: STEP_DUR * 3.5, vol: 0.8, t });
+        }
     }
-    // Square arpeggio on every 16th; hunt mode lifts it an octave.
-    const lead = ARP_HZ[s % ARP_HZ.length] * (intensity ? 2 : 1);
+    // Danger layer: a low held pad each half-bar — the current bass root an
+    // octave DOWN, sine, held nearly the whole half-bar. vol is relative to
+    // musicGain: 0.42 × MUSIC_VOL ≈ 0.05 absolute, the plan's target gain.
+    if (intensity === 2 && s % 8 === 0) {
+        note({ freq: BASS_HZ[(s / 4) % BASS_HZ.length] / 2, type: 'sine', dur: STEP_DUR * 7.5, vol: 0.42, t });
+    }
+    // Square arpeggio on every 16th; levels >=1 lift it an octave.
+    const lead = ARP_HZ[s % ARP_HZ.length] * (intensity >= 1 ? 2 : 1);
     note({ freq: lead, type: 'square', dur: STEP_DUR * 0.9, vol: 0.4, t });
-    // Hat on the beats; hunt mode adds the off-beat 8ths.
-    if (s % 4 === 0 || (intensity && s % 4 === 2)) hat(t);
+    // Hat on the beats; levels >=1 add the off-beat 8ths.
+    if (s % 4 === 0 || (intensity >= 1 && s % 4 === 2)) hat(t);
 }
 
 function schedulerTick() {
@@ -239,7 +264,9 @@ export const music = {
         musicGain = null;
     },
     setIntensity(level) {
-        pendingIntensity = level ? 1 : 0;
+        // Stores the clamped integer 0|1|2; scheduleStep adopts it at the
+        // next bar line (never mid-bar — the musical-transition law).
+        pendingIntensity = Math.max(0, Math.min(2, Math.round(Number(level) || 0)));
     },
     isActive() {
         return musicTimer !== null;

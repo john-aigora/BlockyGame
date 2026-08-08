@@ -29,7 +29,8 @@ test('sfx before any gesture are safe no-ops (no context, no crash)', async ({ p
     window.__game.debug.sfx.click();
   });
   // No gesture ran unlockAudio, so no AudioContext may exist yet.
-  expect(await page.evaluate(() => window.__game.debug.audioState())).toBe('none');
+  // (audioState() returns an object since plan 023 — .state is the old string.)
+  expect(await page.evaluate(() => window.__game.debug.audioState().state)).toBe('none');
 });
 
 test('starting a run unlocks the AudioContext', async ({ page }) => {
@@ -37,7 +38,7 @@ test('starting a run unlocks the AudioContext', async ({ page }) => {
   await startGame(page);
   // Chromium normally reports 'running' after a real click gesture; CI can
   // lag at 'suspended' — the plan-sanctioned assertion is "context exists".
-  expect(await page.evaluate(() => window.__game.debug.audioState())).not.toBe('none');
+  expect(await page.evaluate(() => window.__game.debug.audioState().state)).not.toBe('none');
 });
 
 test('full playthrough with mute ON stays silent-safe to the death screen', async ({ page }) => {
