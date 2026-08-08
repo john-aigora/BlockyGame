@@ -708,8 +708,14 @@ export function spawnNewEnemies(player = state.players[0]) {
     // Population cap (plan 011): only spawn into free slots under the cap
     // (endless runs a higher one — its bubble target ramps up). Pending
     // red-warn discs count as reserved slots so we never over-queue.
+    // 2P runs the COOP cap (B8 review BLOCK-2), the same roster-size rule as
+    // the bubble cap below: the coop bubble drives population toward 16, and
+    // judging kill replacements against the solo 12 left ZERO slots once the
+    // bubble passed it — no replacements meant no chainable prey in 2P.
     const endless = state.worldMode === 'endless';
-    const cap = endless ? ENDLESS_ENEMY_CAP : MAX_ENEMIES;
+    const cap = endless
+        ? (state.players.length >= 2 ? ENDLESS_ENEMY_CAP_COOP : ENDLESS_ENEMY_CAP)
+        : MAX_ENEMIES;
     const reserved = state.enemies.length + pendingSpawns.length;
     const slots = Math.max(0, cap - reserved);
     const count = Math.min(ENEMIES_PER_KILL, slots);
