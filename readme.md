@@ -17,6 +17,20 @@ classic arena survives as a test-only path
 (`__game.debug.forceWorldMode('classic')`); the untouched May 2025 original is
 at `/original.html` (outside the password gate).
 
+The world itself is a **seed**: the start overlay shows the number
+(`SEED 20260726`), `?seed=<int>` in the URL summons any world on demand, and
+the **TODAY'S WORLD** toggle switches everyone onto the same date-seeded map —
+the family races one shared world all day, and those runs also rank on their
+own **TODAY'S BEST** board (stale days prune themselves). Out in the wild:
+biome regions now have **names** — hold a new region for a moment and a
+`DISCOVERED: THE TEAL SHALLOWS` banner fires (the death screen counts your
+REGIONS) — rare glowing **gold blocks** pay 5 points (worth a detour, not a
+strategy), and the first time a run pushes past **1000 units** the ground
+flashes red for twice as long as usual: a gold-crowned **TITAN** half again
+the size of the local giants marches in. It never gives up and never wanders
+off — outgrow it, eat it, and it pays triple bounty and bursts into a
+10-block feast ring. One titan per run; bragging mandatory.
+
 ## Access
 
 In-app password gate (not Vercel protection). Password: see `src/gate.js`
@@ -108,7 +122,8 @@ src/
 tests/              Playwright specs (smoke, timing, gameover, world, camera,
                     resources, hiscores, audio, balance, touch, effects,
                     endless + endless-stream + endless-polish, gate, gamepad,
-                    fairness, hitbox, tension, toys) + shared helpers
+                    fairness, hitbox, tension, toys, species, worldfun)
+                    + shared helpers
 plans/              the audit + implementation plans this overhaul followed
 ```
 
