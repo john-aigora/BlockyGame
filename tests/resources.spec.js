@@ -62,17 +62,23 @@ test('renderer pixel ratio matches the desktop tier: min(devicePixelRatio, 2)', 
 // 1.5, no MSAA, and no shadow map — phone GPUs were paying desktop-tier
 // fill cost. Emulated phone context: hasTouch flips `pointer: coarse`.
 test.describe('mobile render tier', () => {
-  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  // deviceScaleFactor 3 (H5, B2/B3 review): a phone-real DPR — without it
+  // the emulated context reports devicePixelRatio 1 and min(1, 1.5) never
+  // exercises the cap, so the assertion was vacuously green.
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 3 });
 
   test('coarse-pointer devices get the mobile tier: DPR cap 1.5, no MSAA, no shadows', async ({ page }) => {
     const t = await page.evaluate(() => ({
       isMobile: window.__game.state.isMobile,
+      dpr: window.devicePixelRatio,
       actual: window.__game.state.renderer.getPixelRatio(),
       expected: Math.min(window.devicePixelRatio, 1.5),
       shadows: window.__game.state.renderer.shadowMap.enabled,
       antialias: window.__game.state.renderer.getContext().getContextAttributes().antialias
     }));
     expect(t.isMobile).toBe(true); // The emulated context reads as coarse-pointer
+    expect(t.dpr).toBe(3); // The emulation really carries a phone DPR
+    expect(t.actual).toBe(1.5); // ...so the 1.5 CAP is what the renderer got
     expect(t.actual).toBe(t.expected);
     expect(t.shadows).toBe(false);
     expect(t.antialias).toBe(false);

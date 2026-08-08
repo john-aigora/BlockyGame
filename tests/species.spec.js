@@ -13,6 +13,45 @@ test.beforeEach(async ({ page }) => {
   await openGame(page);
 });
 
+test('PENDING giant warns count as threats: scheduled dread suppresses the next top-up (DT-4, pending half)', async ({ page }) => {
+  // H12: the DT-4 gate has two halves — live bodies (specced below) and the
+  // PENDING queue. Deterministic on the paused start overlay: schedule 4
+  // discs sized against a scale-2.5 player, then shrink to scale 1 — every
+  // disc now materializes TALLER than the player (even the prey band's low
+  // roll is 0.55*2.5 = 1.375x the shrunken height), so the pending queue
+  // alone carries 4 threats = the full per-player target at ramp 0. The
+  // next top-up tick must schedule NOTHING; clearing the queue must reopen
+  // the gate. Delete the pendingSpawns loop from the gate's tally and the
+  // suppression assert fails.
+  const r = await page.evaluate(() => {
+    const g = window.__game;
+    const s = g.state;
+    s.enemies.forEach((e) => s.scene.remove(e));
+    s.enemies = [];
+    g.debug.clearPendingSpawns();
+    g.debug.resetEnemyStreaming();
+    s.playerScale = 2.5; // Small enough for easy dry placement, big enough to shrink under
+    s.player.scale.set(2.5, 2.5, 2.5);
+    g.debug.spawnNewEnemies(); // 2 discs (classic giant + chainable prey band)
+    g.debug.spawnNewEnemies(); // 2 more — 4 total, all judged against scale 2.5
+    s.playerScale = 1;
+    s.player.scale.set(1, 1, 1);
+    const pendingBefore = g.debug.pendingSpawnInfo().length;
+    const allFutureGiants = g.debug.pendingSpawnInfo()
+      .every((w) => 1.2 * w.scaleFactor > s.playerScale); // The gate's own height rule
+    g.debug.updateEnemyStreaming(5); // Cooldown cleared; the gate must still refuse
+    const afterSuppressed = g.debug.pendingSpawnInfo().length;
+    g.debug.clearPendingSpawns(); // Queue emptied — threats 0 again
+    g.debug.updateEnemyStreaming(5);
+    const afterReopened = g.debug.pendingSpawnInfo().length;
+    return { pendingBefore, allFutureGiants, afterSuppressed, afterReopened };
+  });
+  expect(r.pendingBefore).toBe(4);
+  expect(r.allFutureGiants).toBe(true); // Every disc is a future threat for the shrunken hero
+  expect(r.afterSuppressed).toBe(4); // Suppressed: pending threats alone held the gate shut
+  expect(r.afterReopened).toBe(1); // Discriminator: the identical tick schedules once the queue clears
+});
+
 test('a sprinter closes distance faster than a grunt (speedFactor threading)', async ({ page }) => {
   // Symmetric choreography on the CLASSIC flat arena: the endless terrain's
   // seeded boulders can wedge one contender's chase line (measured: the

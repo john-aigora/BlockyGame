@@ -359,15 +359,19 @@ test('coop board: teamScore-desc ranking, maxDistance tiebreak, trimmed to top 5
   test.setTimeout(150000);
   await startTwoPlayerGame(page);
   await clearThreats(page);
-  // Five seeded team runs. The 12/999u row ties the upcoming run's
-  // teamScore with a FAR higher distance — the tiebreak must keep it
-  // ahead; the 5-pt row must fall off the trimmed board.
+  // Five seeded team runs. THREE runs will tie at teamScore 12 (two seeds +
+  // the upcoming run) with divergent distances — only the maxDistance
+  // tiebreak can order them. H14 (B8 review): the high-distance 12 is
+  // stored AFTER the low-distance 12, so a stable sort WITHOUT the
+  // tiebreak term keeps 15u above 999u and parks the new 40u run at the
+  // bottom — deleting the tiebreak now fails three asserts below instead
+  // of being masked by insertion order. The 5-pt row must fall off.
   await page.evaluate(() => {
     localStorage.setItem('blocky.hiscores.coop.v1', JSON.stringify([
       { p1Score: 25, p2Score: 25, teamScore: 50, maxDistance: 10, date: '2026-01-01' },
       { p1Score: 20, p2Score: 20, teamScore: 40, maxDistance: 10, date: '2026-01-02' },
-      { p1Score: 6, p2Score: 6, teamScore: 12, maxDistance: 999, date: '2026-01-03' },
-      { p1Score: 4, p2Score: 4, teamScore: 8, maxDistance: 10, date: '2026-01-04' },
+      { p1Score: 6, p2Score: 6, teamScore: 12, maxDistance: 15, date: '2026-01-03' },
+      { p1Score: 5, p2Score: 7, teamScore: 12, maxDistance: 999, date: '2026-01-04' },
       { p1Score: 3, p2Score: 2, teamScore: 5, maxDistance: 10, date: '2026-01-05' }
     ]));
   });
@@ -386,11 +390,13 @@ test('coop board: teamScore-desc ranking, maxDistance tiebreak, trimmed to top 5
   const board = await page.evaluate(() => JSON.parse(localStorage.getItem('blocky.hiscores.coop.v1')));
   expect(board).toHaveLength(5); // Trimmed: one of the six is gone...
   expect(board.some((e) => e.teamScore === 5)).toBe(false); // ...and it is the bottom row
-  expect(board.map((e) => e.teamScore)).toEqual([50, 40, 12, 12, 8]); // teamScore desc
-  expect(board[2].maxDistance).toBe(999); // Equal teams rank by distance...
-  expect(board[3].p1Score).toBe(3); // ...so the new 12-pt/40u run sits BELOW the 12-pt/999u row
+  expect(board.map((e) => e.teamScore)).toEqual([50, 40, 12, 12, 12]); // teamScore desc
+  expect(board[2].maxDistance).toBe(999); // The tiebreak PROMOTED the later-stored 999u row...
+  expect(board[3].p1Score).toBe(3); // ...the new 12-pt/40u run sits in the middle...
   expect(board[3].p2Score).toBe(9);
   expect(board[3].maxDistance).toBeGreaterThanOrEqual(40);
+  expect(board[3].maxDistance).toBeLessThan(999);
+  expect(board[4].maxDistance).toBe(15); // ...and the earlier-stored 15u row ranks LAST (H14)
   // The death screen renders that ranking with the new run highlighted mid-list.
   await expect(page.locator('#hiscore-slot')).toContainText('TEAM RUNS');
   await expect(page.locator('#hiscore-slot .hiscore-list li').nth(3)).toHaveClass(/is-new/);
