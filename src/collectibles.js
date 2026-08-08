@@ -14,14 +14,49 @@ export const COLLECTIBLE_MATERIAL = new THREE.MeshStandardMaterial({ color: 0x76
 // Same horizon bend as terrain — without this, far food reads as floating sky cubes.
 applyWorldBend(COLLECTIBLE_MATERIAL);
 
-// Builds a collectible mesh (small lime-green cube) on the shared resources.
-function buildCollectible() {
-    const collectible = new THREE.Mesh(COLLECTIBLE_GEOMETRY, COLLECTIBLE_MATERIAL);
-    collectible.castShadow = true;
+// Gold food (plan 025): ONE shared material for every gold block — steady
+// self-emissive amber (deliberately NOT riding the lime glow pulse: gold
+// must read as the different thing at a glance, even across a lake).
+const GOLD_FOOD_MATERIAL = new THREE.MeshStandardMaterial({
+    color: 0xFFD54F,
+    emissive: 0xFFB300,
+    emissiveIntensity: 0.45
+});
+applyWorldBend(GOLD_FOOD_MATERIAL);
+const GOLD_FOOD_SCALE = 1.25; // Slightly larger than normal food — a prize, not a snack
+
+// --- Pickup AABB builder (plan 026 / H6) ---
+// The body-block box of a collectible: cube edge 0.7 × the mesh scale (gold
+// rides its 1.25), centered on the mesh position (BoxGeometry is centered,
+// and the bob writes position.y directly). Replaces the per-frame
+// setFromObject in the pickup pass — same center, same size, minus the
+// rotated-AABB breathing (the idle spin used to swell the box up to ~1.4x
+// on the diagonal) and minus the traversal cost.
+const pickupCenter = new THREE.Vector3();
+const pickupSize = new THREE.Vector3();
+
+export function setCollectibleBox(box, collectible) {
+    const edge = 0.7 * collectible.scale.x; // Uniform scale: x == y == z
+    pickupCenter.copy(collectible.position);
+    pickupSize.set(edge, edge, edge);
+    box.setFromCenterAndSize(pickupCenter, pickupSize);
+    return box;
+}
+
+// Builds a collectible mesh (small lime-green cube — or the gold prize) on
+// the shared resources.
+function buildCollectible(gold = false) {
+    const collectible = new THREE.Mesh(COLLECTIBLE_GEOMETRY, gold ? GOLD_FOOD_MATERIAL : COLLECTIBLE_MATERIAL);
+    // No castShadow (plan 020 / audit P-1): a 0.7u glowing cube's shadow is
+    // invisible at gameplay zoom, but every food block was a shadow-pass draw.
     collectible.receiveShadow = true; // Though small, good practice
     // Per-item phase so the rotate/bob idle animation (effects.js) doesn't
     // move every cube in visible lockstep.
     collectible.userData.phase = Math.random() * Math.PI * 2;
+    if (gold) {
+        collectible.userData.gold = true; // The collect block pays GOLD_FOOD_POINTS on this flag
+        collectible.scale.setScalar(GOLD_FOOD_SCALE);
+    }
     return collectible;
 }
 
@@ -49,8 +84,14 @@ export function spawnCollectible(pickPosition) {
     wrapPosition(collectible.position); // Never place food outside the world — it would be uncollectable
     if (state.worldMode === 'endless') {
         // Grounded at spawn so food sits on the hills even on the paused
-        // title screen (the per-frame bob in effects.js re-grounds it live).
-        collectible.position.y = groundHeightAt(collectible.position.x, collectible.position.z) + 0.45;
+        // title screen. The terrain height is CACHED (plan 020 / audit P-4):
+        // food never moves in XZ and heights are rebase-invariant (they are
+        // heights, not coordinates — a rebase shifts local x/z, never the
+        // true-coordinate sample made here), so the per-frame bob in
+        // effects.js reuses baseY instead of re-sampling the noise field.
+        const groundY = groundHeightAt(collectible.position.x, collectible.position.z);
+        collectible.position.y = groundY + 0.45;
+        collectible.userData.baseY = groundY;
         // Streaming ownership: every endless collectible belongs to the
         // chunk under it and despawns when that chunk releases (terrain.js).
         collectible.userData.chunkKey = chunkKeyForTrue(
@@ -64,10 +105,13 @@ export function spawnCollectible(pickPosition) {
 
 // --- Per-chunk seeded food (endless streaming; called by terrain.js) ---
 // The chunk scatter already validated the spot (land, rock clearance), so
-// this places directly — no picker, no retry, deterministic layout.
-export function spawnChunkFood(localX, localZ, chunkKey) {
-    const collectible = buildCollectible();
-    collectible.position.set(localX, groundHeightAt(localX, localZ) + 0.45, localZ);
+// this places directly — no picker, no retry, deterministic layout. `gold`
+// rides the chunk's own seeded roll (terrain.js scatterFood).
+export function spawnChunkFood(localX, localZ, chunkKey, gold = false) {
+    const collectible = buildCollectible(gold);
+    const groundY = groundHeightAt(localX, localZ);
+    collectible.position.set(localX, groundY + 0.45, localZ);
+    collectible.userData.baseY = groundY; // Rebase-invariant height cache (plan 020 P-4)
     collectible.userData.chunkKey = chunkKey;
     state.collectibles.push(collectible);
     state.scene.add(collectible);
@@ -85,9 +129,12 @@ export function releaseFoodForChunk(chunkKey) {
     }
 }
 
-// Spawn a collectible in a random box around the player.
-export function spawnNearPlayer() {
-    if (!state.player) return; // Can't spawn relative to non-existent player
+// Spawn a collectible in a random box around the given player (plan 026:
+// the collect reward lands near the hero who earned it; default seat 0
+// keeps the debug handle's no-arg call working).
+export function spawnNearPlayer(player = state.players[0]) {
+    if (!player || !player.mesh) return; // Can't spawn relative to non-existent player
+    const pos = player.mesh.position;
 
     spawnCollectible(() => {
         let spawnX, spawnZ;
@@ -95,9 +142,9 @@ export function spawnNearPlayer() {
         // Keep trying to find a spawn position until it's not too close to the player
         do {
             // Random position within a square area around the player
-            spawnX = state.player.position.x + (Math.random() * collectibleSpawnRadius * 2) - collectibleSpawnRadius;
-            spawnZ = state.player.position.z + (Math.random() * collectibleSpawnRadius * 2) - collectibleSpawnRadius;
-            distanceToPlayer = Math.sqrt(Math.pow(spawnX - state.player.position.x, 2) + Math.pow(spawnZ - state.player.position.z, 2));
+            spawnX = pos.x + (Math.random() * collectibleSpawnRadius * 2) - collectibleSpawnRadius;
+            spawnZ = pos.z + (Math.random() * collectibleSpawnRadius * 2) - collectibleSpawnRadius;
+            distanceToPlayer = Math.sqrt(Math.pow(spawnX - pos.x, 2) + Math.pow(spawnZ - pos.z, 2));
         } while (distanceToPlayer < minSpawnDistanceFromPlayer);
         return { x: spawnX, z: spawnZ };
     });

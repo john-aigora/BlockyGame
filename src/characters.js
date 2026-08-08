@@ -34,6 +34,47 @@ applyWorldBend(OUTLINE_MATERIAL);
 export const FOOT_SHADE = 0.6; // Feet: body color multiplied down — grounded look
 export const CAP_LIGHTEN = 1.3; // Cap: top-face highlight shade
 
+// --- Blob ground shadow (plan 023 UI-3) ---
+// A soft dark gradient quad under every character: the missing ground-contact
+// cue that made jump height illegible (audit screenshots — the block just
+// floated). ONE shared radial-gradient CanvasTexture + ONE shared
+// PlaneGeometry for everyone; enemies share ONE static material. Each HERO's
+// quad animates opacity with that hero's jump height, which a shared
+// material cannot do per-instance — heroes get a bendClone each (plan 026;
+// still one geometry + one texture total; renderer memory counters see
+// +1/+1 at boot, absorbed by the pool specs' warm-up baselines). Look
+// constants live here with FOOT_SHADE/CAP_LIGHTEN — a look, not game balance.
+export const SHADOW_SIZE_FACTOR = 1.3; // Quad XZ size × baseSize (slightly wider than the body reads grounded)
+export const SHADOW_BASE_OPACITY = 0.45; // Grounded opacity; effects.js fades the player's with jump height
+let shadowGeometry = null; // Shared unit plane, scaled per character
+let shadowTexture = null; // Shared 64px radial gradient (dark center → transparent)
+let shadowMaterialShared = null; // Enemies: static opacity
+
+function getShadowResources() {
+    if (!shadowGeometry) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 64;
+        canvas.height = 64;
+        const c2d = canvas.getContext('2d');
+        const grad = c2d.createRadialGradient(32, 32, 4, 32, 32, 32);
+        grad.addColorStop(0, 'rgba(0, 0, 0, 0.9)');
+        grad.addColorStop(0.55, 'rgba(0, 0, 0, 0.55)');
+        grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        c2d.fillStyle = grad;
+        c2d.fillRect(0, 0, 64, 64);
+        shadowTexture = new THREE.CanvasTexture(canvas);
+        shadowGeometry = new THREE.PlaneGeometry(1, 1);
+        shadowMaterialShared = new THREE.MeshBasicMaterial({
+            map: shadowTexture,
+            transparent: true,
+            opacity: SHADOW_BASE_OPACITY,
+            depthWrite: false // Never occludes; depthTest stays on so hills still hide it
+        });
+        applyWorldBend(shadowMaterialShared); // Far shadows ride the curved horizon like their owners
+    }
+    return { shadowGeometry, shadowMaterialShared };
+}
+
 // Multiplies a hex color's channels by `factor` (clamped to valid range).
 // Cheap enough to run at build time; the RESULT is what gets cached
 // (materialCache keys on the shaded hex), so each (color, shade) pair costs
@@ -150,6 +191,11 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
     // Face, cap, ears, tail, and antenna are CHILDREN of the body mesh, so
     // the walk-cycle body bounce (effects.js) carries the whole head along.
     // The player gets the chunkier hero body; enemies keep the pure cube.
+    // SHADOW DIET (plan 020 / audit P-1): only the silhouette casters — the
+    // body, cap, and legs/feet — write into the shadow map. Face parts,
+    // ears, tail, spikes, jaw, teeth, antenna, and scarf are sub-pixel (or
+    // fully inside the body's own shadow) at gameplay zoom, yet each one was
+    // a shadow-pass draw call across ~700 shadow-eligible meshes.
     const bodyMesh = new THREE.Mesh(menacing ? geoms.body : geoms.heroBody, bodyMaterial);
     bodyMesh.name = 'body'; // Assign a name to easily access it later for color changes
     bodyMesh.castShadow = true;
@@ -220,7 +266,6 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
     for (const side of [-1, 1]) {
         const eyeWhite = new THREE.Mesh(geoms.eye, whiteMaterial);
         eyeWhite.position.set(side * eyeXSpacing, eyeLocalY, eyeZOffset);
-        eyeWhite.castShadow = true;
         bodyMesh.add(eyeWhite);
         group.userData.eyeWhites.push(eyeWhite);
 
@@ -229,7 +274,6 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
         // to the scared (white, wide) material by reference when killable.
         const pupil = new THREE.Mesh(geoms.pupil, menacing ? ENEMY_PUPIL_HUNT_MATERIAL : faceMaterial);
         pupil.position.set(side * (eyeXSpacing - pupilInset), eyeLocalY, pupilZOffset);
-        pupil.castShadow = true;
         bodyMesh.add(pupil);
         group.userData.pupils.push(pupil);
 
@@ -245,7 +289,6 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
             baseSize / 2 + baseSize * 0.03 - facePartDepthOffset
         );
         brow.rotation.z = side * browTilt;
-        brow.castShadow = true;
         // Scared flip targets (worried = inner ends UP, raised off the eyes);
         // effects.js snaps between these on the killable transition.
         brow.userData.baseRotZ = brow.rotation.z;
@@ -262,7 +305,6 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
     const mouthZOffset = baseSize / 2 + mouthDepth / 2 - facePartDepthOffset; // Front face
     mouthMesh.position.set(menacing ? 0 : baseSize * 0.03, mouthLocalY, mouthZOffset);
     if (!menacing) mouthMesh.rotation.z = 0.12; // Cocky smirk — heroes grin
-    mouthMesh.castShadow = true;
     bodyMesh.add(mouthMesh);
 
     if (menacing) {
@@ -273,7 +315,6 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
             const ear = new THREE.Mesh(geoms.ear, bodyMaterial);
             ear.position.set(side * baseSize * 0.3, baseSize * 0.58, 0);
             ear.rotation.z = Math.PI / 4;
-            ear.castShadow = true;
             ear.userData.baseY = ear.position.y; // Walk cycle bounces around this
             bodyMesh.add(ear);
             return ear;
@@ -285,7 +326,6 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
         // otherwise swallow its front half and leave a sad little nub).
         const tail = new THREE.Mesh(geoms.tail, bodyMaterial);
         tail.position.set(0, -baseSize * 0.28, -(baseSize / 2 + baseSize * 0.22));
-        tail.castShadow = true;
         bodyMesh.add(tail);
         group.userData.tailMesh = tail;
 
@@ -298,7 +338,6 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
             spike.position.set(0, baseSize * 0.58, spec.z * baseSize);
             spike.rotation.set(Math.PI / 4, 0, Math.PI / 4);
             spike.scale.setScalar(spec.s);
-            spike.castShadow = true;
             bodyMesh.add(spike);
         }
 
@@ -309,11 +348,9 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
         // which vanished at gameplay zoom.
         const jaw = new THREE.Mesh(geoms.jaw, footMaterial);
         jaw.position.set(0, -baseSize * 0.32, baseSize / 2 + baseSize * 0.04);
-        jaw.castShadow = true;
         for (const tx of [-0.15, 0, 0.15]) {
             const tooth = new THREE.Mesh(geoms.tooth, whiteMaterial);
             tooth.position.set(tx * baseSize, baseSize * 0.1, baseSize * 0.03);
-            tooth.castShadow = true;
             jaw.add(tooth);
         }
         bodyMesh.add(jaw);
@@ -324,10 +361,8 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
         // off-center back-right: cuter than symmetric.
         const antenna = new THREE.Mesh(geoms.antenna, bodyMaterial);
         antenna.position.set(baseSize * 0.18, baseSize / 2 + baseSize * 0.12, -baseSize * 0.12);
-        antenna.castShadow = true;
         const tip = new THREE.Mesh(geoms.antennaTip, HERO_GLOW_MATERIAL);
         tip.position.set(0, baseSize * 0.14 + baseSize * 0.04, 0);
-        tip.castShadow = true;
         antenna.add(tip);
         bodyMesh.add(antenna);
 
@@ -352,7 +387,6 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
             }
             seg.rotation.x = -0.5; // Rest droop; effects.js animates from here
             seg.userData.restRotX = -0.5;
-            seg.castShadow = true;
             scarfParent.add(seg);
             scarfSegs.push(seg);
             scarfParent = seg;
@@ -360,7 +394,31 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
         group.userData.scarfSegs = scarfSegs;
     }
 
-    group.castShadow = true; // Though individual parts cast, good to set for group if needed
+    // --- Blob ground shadow (plan 023 UI-3) ---
+    // Child of the GROUP (not the body mesh) so the walk-cycle body bounce
+    // never bobs it; effects.js re-grounds it on the terrain every frame and
+    // (player only) shrinks/fades it with jump height. Kept under reduced
+    // motion on purpose: a shadow is static grounding, not motion.
+    const shadow = getShadowResources();
+    // Heroes each get their OWN cloned shadow material (plan 026): effects.js
+    // fades a hero's shadow with THAT hero's jump height, which a shared
+    // material cannot express per instance. Materials are not in the
+    // renderer's memory counters (geometry + texture stay shared, still
+    // +1/+1 at boot), so the pool-plateau specs are untouched. Enemies keep
+    // the one static shared material.
+    const shadowQuad = new THREE.Mesh(
+        shadow.shadowGeometry,
+        menacing ? shadow.shadowMaterialShared : bendClone(shadow.shadowMaterialShared)
+    );
+    shadowQuad.rotation.x = -Math.PI / 2; // Flat on XZ
+    const shadowSize = SHADOW_SIZE_FACTOR * baseSize;
+    shadowQuad.scale.set(shadowSize, shadowSize, 1);
+    shadowQuad.position.y = 0.02; // effects.js overwrites per frame; sane at build for the title scene
+    shadowQuad.renderOrder = 1; // Above terrain; below the spawn warn discs (2)
+    group.add(shadowQuad);
+    group.userData.shadowQuad = shadowQuad;
+    group.userData.shadowBaseSize = shadowSize; // effects.js scales the player's from this
+
     return group;
 }
 
@@ -374,15 +432,26 @@ export function disposeCharacter(group) {
     }
 }
 
-export function createPlayer() {
-    if (state.player) {
-        state.scene.remove(state.player); // Remove old player group if it exists
-    }
-    const playerGroup = createCharacter({ baseSize: 1.0, bodyColor: 0xFF4500, faceColor: 0x000000 }); // Bright Orange-Red body, black face
+// P2's palette (plan 026): teal body — instantly tellable from P1's
+// orange-red at a glance across the whole screen. A look, not balance.
+export const P2_BODY_COLOR = 0x26C6DA;
 
-    // Assign to shared player state
-    state.player = playerGroup;
+// Builds the hero for one player slot (plan 026: seat-indexed; P2 gets its
+// own palette via bodyColor). Tags the mesh with a back-reference to its
+// player state so effects.js walk/shadow/blink can stay player-generic.
+export function createPlayer(playerState = state.players[0], { bodyColor = 0xFF4500 } = {}) {
+    if (playerState.mesh) {
+        state.scene.remove(playerState.mesh); // Remove old player group if it exists
+    }
+    const playerGroup = createCharacter({ baseSize: 1.0, bodyColor, faceColor: 0x000000 }); // Bright Orange-Red body, black face (P1)
+
+    // Assign to the player slot; keep the classic state.player alias pointed
+    // at seat 0's mesh (the suites and solo paths read it).
+    playerState.mesh = playerGroup;
+    playerGroup.userData.playerState = playerState;
+    if (playerState === state.players[0]) state.player = playerGroup;
     playerGroup.position.y = 0; // Group's origin at feet level on the ground
-    playerGroup.scale.set(state.playerScale, state.playerScale, state.playerScale); // Apply initial/current scale
+    playerGroup.scale.set(playerState.scale, playerState.scale, playerState.scale); // Apply initial/current scale
     state.scene.add(playerGroup);
+    return playerGroup;
 }

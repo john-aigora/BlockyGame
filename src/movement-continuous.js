@@ -1,9 +1,10 @@
 // --- Plan 014 DESIGN SPIKE: Little Big Snake-style continuous movement ---
 // THROWAWAY PROTOTYPE, active only behind `?move=continuous` (see
-// MOVEMENT_MODE in constants.js). Deliberately spike-quality: inline-styled
-// DOM, no tests, tuning numbers straight from the family's saved notes
-// (grok_tips.md §1-2). If the scheme is adopted, a real plan replaces this
-// module; if rejected, delete it plus the MOVEMENT_MODE branches.
+// CONTINUOUS_MOVEMENT in constants.js). Deliberately spike-quality: inline-
+// styled DOM, no tests, tuning numbers straight from the family's saved notes
+// (docs/history/grok_tips.md §1-2). If the scheme is adopted, a real plan
+// replaces this module; if rejected, delete it plus the CONTINUOUS_MOVEMENT
+// branches.
 //
 // Behavior:
 // - Desktop: the player moves continuously at actualPlayerSpeed toward the
@@ -63,7 +64,7 @@ function onBoostKeyUp(e) {
 }
 
 // One-time setup: input listeners + the (deliberately ugly) energy bar and
-// touch boost button. Only ever called when MOVEMENT_MODE === 'continuous'.
+// touch boost button. Only ever called when CONTINUOUS_MOVEMENT is true.
 export function initContinuousMovement() {
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('keydown', onBoostKeyDown);

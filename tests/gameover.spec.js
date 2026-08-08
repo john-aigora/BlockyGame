@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openGame, startGame, waitForGameOver } from './helpers.js';
+import { openGame, startGame, waitForGameOver, settleFrames } from './helpers.js';
 
 test.beforeEach(async ({ page }) => {
   page.on('pageerror', (err) => { throw new Error(`Page error: ${err.message}`); });
@@ -18,7 +18,10 @@ test('the world freezes on death: no movement, no post-mortem spawning', async (
     page.evaluate(() => window.__game.state.enemies.map((e) => [e.position.x, e.position.z]));
   const positionsBefore = await snapshot();
   const countBefore = positionsBefore.length;
-  await page.waitForTimeout(2000);
+  // The game clock is DEAD here — rendered frames are the honest axis: the
+  // loop keeps drawing the frozen scene, and across 60 real frames nothing
+  // may move or spawn.
+  await settleFrames(page, 60);
   const positionsAfter = await snapshot();
   expect(positionsAfter.length).toBe(countBefore);
   expect(positionsAfter).toEqual(positionsBefore);
@@ -34,8 +37,9 @@ test('the death screen renders once, structured, and stays stable', async ({ pag
   // #hiscore-slot hosts the plan-009 leaderboard now.
   await expect(page.locator('#hiscore-slot')).toBeAttached();
   await expect(page.locator('#hiscore-slot .hiscore-title')).toHaveText('BEST RUNS');
-  // Stability: a second death trigger or stray frame must not rewrite it.
-  await page.waitForTimeout(2000);
+  // Stability: a second death trigger or stray frame must not rewrite it —
+  // 60 more RENDERED frames (the game clock is dead; frames are the axis).
+  await settleFrames(page, 60);
   await expect(page.locator('#death-title')).toHaveText('GAME OVER');
   await expect(page.locator('#death-reason')).toHaveText(reason);
   await expect(page.locator('#final-score')).toHaveText(score);

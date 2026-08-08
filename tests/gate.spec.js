@@ -1,7 +1,10 @@
 import { test, expect } from '@playwright/test';
-import { GATE_PASSWORD, unlockGate } from './helpers.js';
+import { unlockGate } from './helpers.js';
 
-test('gate rejects a wrong password and accepts blocky', async ({ page }) => {
+// Asserts UNLOCK BEHAVIOR only (audit SEC-3): the password value lives in
+// src/gate.js and reaches unlockGate via the helpers import — no literal
+// here to leak or drift.
+test('gate rejects a wrong password and accepts the family password', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('#gate-overlay')).toBeVisible();
   // main.js has not loaded yet — start UI is not interactive behind the gate
@@ -15,5 +18,4 @@ test('gate rejects a wrong password and accepts blocky', async ({ page }) => {
   await unlockGate(page);
   await expect(page.locator('#start-overlay')).toBeVisible();
   await expect(page.locator('#start-button')).toBeVisible();
-  expect(GATE_PASSWORD).toBe('blocky');
 });

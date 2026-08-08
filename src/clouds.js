@@ -4,7 +4,7 @@ import {
     CLOUD_BOB_AMPLITUDE, CLOUD_BOB_SPEED, CLOUD_OPACITY,
     CLASSIC_CLOUD_COUNT, CLOUD_CHUNK_CHANCE, CLOUD_APPEAR_TIME,
     CLOUD_CLEAR_NEAR, CLOUD_CLEAR_FAR,
-    TERRAIN_SEED, CHUNK_SIZE, worldBoundary
+    WORLD_SEED, CHUNK_SIZE, worldBoundary
 } from './constants.js';
 import { state } from './state.js';
 import { wrapCoord, torusDeltaComponent } from './worldmath.js';
@@ -45,7 +45,7 @@ let cloudAllocCount = 0; // Debug: pool discipline is testable
 
 // Deterministic per-cloud RNG (same mulberry-ish step as the rock scatter).
 function seededRng(seedA, seedB) {
-    let s = (Math.imul(seedA, 2654435761) ^ Math.imul(seedB, 1597334677) ^ (TERRAIN_SEED + 733)) >>> 0;
+    let s = (Math.imul(seedA, 2654435761) ^ Math.imul(seedB, 1597334677) ^ (WORLD_SEED + 733)) >>> 0;
     return () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
 }
 
@@ -188,12 +188,13 @@ function animateCloud(cloud, px, pz, dt) {
     // Readability guard (screenshot-checked): the top-down-ish camera only
     // ever frames NEAR clouds (far ones sit above the frame top), so the
     // near field is graded instead of banned — a cloud parking right OVER
-    // the player's head (inside CLOUD_CLEAR_NEAR) shrinks away entirely,
+    // a hero's head (inside CLOUD_CLEAR_NEAR) shrinks away entirely,
     // one just past it rides at ~55% size, easing to full by ~40u out.
     // Smooth on every edge (and multiplied with the appear grow-in), so
     // nothing ever pops; food and foes stay readable through the 0.85
-    // opacity even when a cloud drifts by.
-    const d = Math.hypot(cloud.position.x - px, cloud.position.z - pz);
+    // opacity even when a cloud drifts by. Distance is to the NEAREST
+    // living hero (plan 026) — either half deserves a clear head.
+    const d = nearestHeroDistance(cloud.position.x, cloud.position.z, px, pz);
     const smooth01 = (t) => {
         const k = Math.min(1, Math.max(0, t));
         return k * k * (3 - 2 * k);
@@ -201,6 +202,19 @@ function animateCloud(cloud, px, pz, dt) {
     const overhead = smooth01((d - CLOUD_CLEAR_NEAR) / (CLOUD_CLEAR_FAR - CLOUD_CLEAR_NEAR));
     const presence = 0.55 + 0.45 * smooth01((d - CLOUD_CLEAR_FAR) / 24);
     cloud.scale.setScalar(Math.max(0.001, smooth01(ud.appear) * overhead * presence));
+}
+
+// XZ distance from a point to the nearest LIVING hero; falls back to the
+// caller-supplied (px, pz) — seat 0's position — when nobody lives (the
+// frozen death screen), which is the exact pre-2P behavior.
+function nearestHeroDistance(x, z, px, pz) {
+    let best = Infinity;
+    for (const player of state.players) {
+        if (!player.alive || !player.mesh) continue;
+        const d = Math.hypot(x - player.mesh.position.x, z - player.mesh.position.z);
+        if (d < best) best = d;
+    }
+    return best === Infinity ? Math.hypot(x - px, z - pz) : best;
 }
 
 export function updateClouds(dt) {

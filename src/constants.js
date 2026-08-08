@@ -1,4 +1,8 @@
 // --- Tuning Constants ---
+// NODE-IMPORTABLE CONTRACT: specs import this module in plain Node
+// (tests/fairness.spec.js, tests/toys.spec.js) — no unguarded browser
+// globals (window/document/navigator/location) at module scope, ever.
+// See the guarded `location` read near the bottom for the pattern.
 export const growthFactor = 0.1; // How much to grow by each block
 export const enemyBaseHeight = 1.2; // Base height of enemy
 
@@ -19,7 +23,49 @@ export const COMBO_WINDOW = 4; // seconds after a kill in which the next kill es
 export const COMBO_MAX = 5; // combo multiplier cap (x1..x5)
 export const MILESTONE_STEP = 1.0; // playerScale interval that fires a growth-milestone celebration
 
+// --- Enemy species (plan 024, capability CAP-2) ---
+// speedFactor multiplies actualEnemySpeed for THIS enemy only. The owner rule
+// (see BASE_ENEMY_SPEED below: doubling the player must NOT speed enemies up)
+// binds the GLOBAL enemy pace; species are per-body character, and the fast
+// ones are small and ALWAYS edible — the sanctioned pressure valve. bodyColor
+// null = the classic electric blue (0x03A9F4). harmless: contact while NOT
+// killable never ends the run (a snack species, not a threat). foodDrop: food
+// particles a kill scatters (grunts keep today's 4).
+export const ENEMY_SPECIES = {
+    grunt: { speedFactor: 1.0, bodyColor: null, harmless: false, foodDrop: 4 },
+    sprinter: { speedFactor: 2.2, bodyColor: 0xFF7043, harmless: false, foodDrop: 4 }, // Orange; always edible, so it takes the FLEE branch — a fast RUNNER whose challenge is the chase (flee 3.3 u/s vs player 6; the catch is skill, not a gift)
+    juja: { speedFactor: 2.6, bodyColor: 0x66BB6A, harmless: true, foodDrop: 2 } // Small green critter — skittish bonus snack, never a wall
+};
+
+// Survival feedback beats (plan 023 DT-10): the game finally celebrates the
+// SURVIVAL axis — escapes and near-misses — not just acquisition.
+export const SURVIVAL_BEAT_COOLDOWN = 6; // Game-seconds between survival popups (PHEW!/CLOSE ONE! share one clock) — beats stay special, never spam
+export const PHEW_PEAK_MIN = 0.15; // dangerOpacity peak (max 0.22) that must be reached before its release earns a PHEW! — filters mere brushes with the danger radius
+export const NEAR_MISS_FACTOR = 1.5; // CLOSE ONE! arms inside this × (player+enemy collider half-width sum): just outside actual contact, so every fire was a real scare
+
+// --- World identity & late game (plan 025) ---
+export const REGION_DISCOVER_DEBOUNCE = 1.5; // Game-seconds a NEW biome region must hold before DISCOVERED fires — shoreline wiggles flicker the bin, and a banner that stutters is no banner
+export const REGION_BINS = 5; // Biome octave quantized into this many identity bands — more bins = more (smaller) discoverable regions and a faster-climbing REGIONS stat (moved from terrain.js: every balance knob lives HERE, terminal review A-2)
+// Gold food: a visible routing prize — worth a detour, not a strategy.
+// 5x points, same full clock reset as normal food; the VALUE is the detour
+// decision, so rarity does the balancing, not the clock.
+export const GOLD_FOOD_POINTS = 5; // One gold block = five normal blocks
+export const GOLD_CHUNK_CHANCE = 0.08; // Chunks growing ONE gold block (~1 per 12 chunks ≈ every screen or two of travel): rare enough to point at, common enough to chase
+// The 1000u titan: ONE scripted boss beat per run at the first BOSS_DISTANCE
+// crossing — a late-game landmark where the flat escalation used to just
+// keep escalating (audit DT-8). It obeys every normal rule (edibility by
+// height, the single kill path); only its size, warn, bounty, and its
+// refusal to stream out are special.
+export const BOSS_DISTANCE = 1000; // Furthest-distance mark whose FIRST crossing spawns the titan (once per run)
+export const BOSS_LEAD_DISTANCE = 40; // The titan lands this far ahead along the player's heading — seen coming, never dropped on your head
+export const BOSS_SCALE_MULT = 1.6; // x the current giant formula: unmistakably the biggest thing yet, still huntable after growth
+export const BOSS_WARN_MULT = 2; // Titan warn disc lasts 2x the (speed-scaled) warn — a long, dreadful telegraph
+export const BOSS_BOUNTY_MULT = 3; // Titan kill payout multiplier — the late-game jackpot, worth growing for
+export const BOSS_FOOD_DROP = 10; // Titan death feast: food pieces on the ring below (replaces the species drop)
+export const BOSS_FOOD_RING_RADIUS = 2.65; // Mean feast ring radius (~6u circle across, jittered) — a banquet, not a pile
+
 // Tension systems (awesome pass): make danger and urgency legible.
+export const DANGER_MUSIC_THRESHOLD = 0.12; // dangerOpacity above this (with NO prey alive) lifts the music to the danger layer (2) — just past the vignette's first visible breath, so the pad arrives with the dread, not before
 export const PANIC_TIME = 5; // Collect-countdown seconds at/below which panic engages (red pulse, tick sfx, food arrow)
 export const DANGER_RADIUS = 9; // A non-killable enemy within this distance = danger (vignette + heartbeat)
 export const DANGER_VIGNETTE_MAX = 0.22; // Peak opacity of the red danger vignette — subtle, must never obscure play
@@ -27,8 +73,15 @@ export const HEARTBEAT_BPM = 72; // Danger heartbeat tempo (one low lub-dub per 
 export const SPAWN_MATERIALIZE_TIME = 0.5; // Seconds a newly spawned enemy takes to scale in (no move/collide while forming)
 export const SPAWN_MATERIALIZE_START_SCALE = 0.05; // Fraction of full size a materializing enemy starts at
 // Red ground warn BEFORE the monster appears — notice time for the player.
-export const SPAWN_WARN_TIME = 0.95; // Seconds the red pulse sits on the ground before materialize
+export const SPAWN_WARN_TIME = 0.95; // Seconds the red pulse sits on the ground before materialize (the 1x baseline)
 export const SPAWN_WARN_RADIUS = 1.35; // Base ring radius (scaled up a bit with the enemy)
+// Speed-aware warn scaling (plan 024, audit DT-9): notice is measured in
+// player-travel, not seconds — at 5x speed a fixed 0.95s covered a fifth of
+// the ground it promised at 1x, exactly when reaction time mattered most.
+// Warn duration = SPAWN_WARN_TIME x clamp(actualPlayerSpeed / this ref,
+// 1.0, 2.2): never shorter than the classic feel, capped at the same 2.2
+// ceiling as the size speed bonus so warns stay snappy.
+export const SPAWN_WARN_SPEED_REF = 6.0; // The 1x desktop player speed the 0.95s warn was tuned against
 
 // Spectacle systems (awesome pass): title, death, and finish.
 export const DEATH_SQUASH_TIME = 0.32; // Seconds the player takes to squash flat before bursting (skipped under reduced motion)
@@ -38,6 +91,11 @@ export const ATTRACT_EASE_TIME = 0.6; // Seconds the camera takes to swing betwe
 
 // Speed Multiplier Variables
 export const speedMultipliers = [1.0, 1.5, 2.0, 3.0, 5.0, 0.5]; // ADDED 5.0x, re-ordered
+// ONE ladder (audit D-12): the sorted view used by the dedicated
+// faster/slower controls (pad Y/X, keyboard R) is DERIVED from the cycle
+// array above — never hand-write a second copy (game.js carried one and
+// the two orders drifted apart).
+export const SPEED_LADDER = [...speedMultipliers].sort((a, b) => a - b);
 
 // Camera zoom model (bounded two-way zoom; see plan 006)
 export const ZOOM_STEP = 1.25; // Multiplier applied per zoom button click
@@ -103,7 +161,51 @@ export const CHUNK_RELEASE_RADIUS = 4; // Chunks released to the pool beyond thi
 export const CHUNK_BUILDS_PER_FRAME = 2; // Build-queue budget — nearest chunks first
 export const TERRAIN_AMPLITUDE = 3.75; // Height scale: typical rolling hills ~±2.5, rare tail extremes ~±3.4
 export const TERRAIN_WAVELENGTH = 24; // Feature wavelength of the hill octave (continents run 4x longer)
-export const TERRAIN_SEED = 20260726; // World seed — deterministic terrain, rocks, and food scatter
+export const TERRAIN_SEED = 20260726; // DEFAULT world seed — deterministic terrain, rocks, and food scatter
+// --- World-seed resolution (plan 025): ONE source of truth ---
+// Every seed consumer (terrain noise, rock/food scatter streams, clouds)
+// reads WORLD_SEED — never TERRAIN_SEED directly (that is only the default
+// input here). Resolved ONCE at module load: a world's seed cannot change
+// mid-session, so the toggle below navigates to re-resolve. Priority:
+//   1. `?seed=<int>` URL param — a shareable, explicit world;
+//   2. the DAILY WORLD flag (`?daily=1`, or the start-overlay TODAY'S WORLD
+//      toggle persisted in sessionStorage 'blocky.daily') — seed = local
+//      YYYYMMDD, so the whole family races the same map all day;
+//   3. the default TERRAIN_SEED above.
+// The typeof guards keep this module Node-importable (specs import it in
+// plain Node — same pattern as CONTINUOUS_MOVEMENT at the bottom).
+export function dailySeed(date = new Date()) {
+    return date.getFullYear() * 10000 + (date.getMonth() + 1) * 100 + date.getDate();
+}
+
+function readDailyFlag() {
+    if (typeof location !== 'undefined') {
+        const p = new URLSearchParams(location.search).get('daily');
+        if (p === '1') return true;
+        if (p === '0') return false; // Explicit off-switch beats the sticky flag (B7 rev ADV-9)
+    }
+    try {
+        return typeof sessionStorage !== 'undefined' &&
+            sessionStorage.getItem('blocky.daily') === '1';
+    } catch { return false; /* blocked storage — the daily toggle just reads off */ }
+}
+
+function resolveWorldSeed() {
+    if (typeof location !== 'undefined') {
+        const param = new URLSearchParams(location.search).get('seed');
+        // Integer param only; `| 0` wraps huge values into int32 — the same
+        // domain the seeded hashes mix in, so any input is a valid world.
+        if (param !== null && /^-?\d{1,10}$/.test(param)) {
+            return { seed: param | 0, daily: false };
+        }
+    }
+    if (readDailyFlag()) return { seed: dailySeed(), daily: true };
+    return { seed: TERRAIN_SEED, daily: false };
+}
+
+const resolvedSeed = resolveWorldSeed();
+export const WORLD_SEED = resolvedSeed.seed;
+export const DAILY_WORLD = resolvedSeed.daily; // True only when the daily flag DROVE the seed (daily runs also record to the daily board)
 export const WATER_LEVEL = -0.9; // Terrain below this is lake (~25% of the world at this amplitude)
 export const CURVE_STRENGTH = 0.0012; // Curved-horizon bend: y -= dist^2 * this (≈4.3u drop at 60u)
 export const REBASE_DISTANCE = 2048; // |player x/z| beyond this triggers a floating-origin rebase
@@ -147,11 +249,23 @@ export const ENDLESS_ENEMY_TARGET = 4; // Enemies maintained in the bubble at ra
 // Bubble-spawn size bands (owner: "enemies bigger than me keep appearing, I
 // never get to eat anybody"). The classic 1.5x-your-height rule regenerated
 // the whole population pre-grown; this rotating pattern guarantees prey keeps
-// appearing: 1 in 4 spawns is edible now, 1 in 4 soon, half stay giants.
-export const SPAWN_SIZE_PATTERN = ['prey', 'giant', 'peer', 'giant']; // deterministic rotation per bubble spawn
+// appearing. Plan 024 widens it with the species bands: 3 in 8 spawns are
+// edible NOW (prey/sprinter/juja), 2 in 8 soon (peer), 3 in 8 stay giants.
+export const SPAWN_SIZE_PATTERN = ['prey', 'giant', 'peer', 'giant', 'sprinter', 'giant', 'juja', 'peer']; // deterministic rotation per bubble spawn
 export const PREY_HEIGHT_RANGE = [0.55, 0.85]; // prey band: x player height (edible immediately)
 export const PEER_HEIGHT_RANGE = [0.95, 1.25]; // peer band: x player height (edible after a snack or two)
+export const SPRINTER_HEIGHT_RANGE = [0.5, 0.7]; // sprinter band: x player height — ALWAYS edible (fast but killable: the danger is it reaches you, the answer is you eat it — plan 024)
+export const JUJA_HEIGHT_FACTOR = 0.35; // juja band: x player height, fixed — unmistakably a critter, never a wall
 export const ENDLESS_ENEMY_CAP = 12; // Hard endless population cap (ramp target never exceeds it)
+export const ENDLESS_ENEMY_CAP_COOP = 16; // 2P hard cap (plan 026): two per-player bubbles need headroom over the solo 12, but 2x12 would double the frame's enemy cost AND mob whichever hero the pathing funnels toward — 16 keeps coop pressure per player slightly UNDER solo (shared attention is the real difficulty)
+// Chainable kill replacements (plan 024, audit DT-2): combo reach at 1x is
+// ~18-20u (a 6 u/s sprint through the 1.45s warn+materialize latency, then
+// running down 4.5 u/s of closing speed inside the 4s window) — the old
+// 35-50u targets made x2 arithmetically unreachable without speed buttons.
+// The SECOND kill replacement lands in this band: the chain must be
+// sprintable. The first replacement stays a giant at the classic distance.
+export const KILL_SPAWN_PREY_MIN = 18; // Chainable prey-band replacement lands at least this far...
+export const KILL_SPAWN_PREY_MAX = 25; // ...and at most this far from the player
 export const ENEMY_DESPAWN_RADIUS = 80; // Enemies beyond this distance are removed AND disposed
 export const ENDLESS_SPAWN_MIN = 35; // Bubble spawns land between MIN and MAX units from the player...
 export const ENDLESS_SPAWN_MAX = 50; // ...far enough to materialize unseen, near enough to matter
@@ -206,13 +320,16 @@ export const JUMP_APEX_HEIGHT = 1.55; // Apex at playerScale 1
 export const JUMP_APEX_GROWTH = 0.75; // Extra apex per unit of scale above 1
 export const JUMP_AIRTIME = 0.52; // Airtime at playerScale 1
 export const JUMP_AIRTIME_GROWTH = 0.07; // Extra airtime per unit scale above 1 (more horizontal range)
-// Legacy derived constants (scale-1) — still used by any reader that imports them.
-export const JUMP_GRAVITY = (8 * JUMP_APEX_HEIGHT) / (JUMP_AIRTIME * JUMP_AIRTIME);
-export const JUMP_VELOCITY = (JUMP_GRAVITY * JUMP_AIRTIME) / 2;
 
-// --- Movement mode flag (plan 014 design spike) ---
+// --- Continuous-movement flag (plan 014 design spike) ---
 // `?move=continuous` opts into the Little Big Snake-style prototype
 // (src/movement-continuous.js). Any other value — including no param at all —
-// selects 'classic', whose behavior is untouched by the spike.
-export const MOVEMENT_MODE =
-    new URLSearchParams(location.search).get('move') === 'continuous' ? 'continuous' : 'classic';
+// keeps the standard direct-control scheme, untouched by the spike.
+// Named CONTINUOUS_MOVEMENT (audit D-3): the old movement-mode string enum's
+// 'classic' value collided with the retired classic WORLD mode
+// (state.worldMode) — a completely different axis — exactly where future
+// work reads both.
+// The typeof guard keeps this module importable from Node-side Playwright
+// specs (no `location` there; the flag simply reads false).
+export const CONTINUOUS_MOVEMENT = typeof location !== 'undefined' &&
+    new URLSearchParams(location.search).get('move') === 'continuous';

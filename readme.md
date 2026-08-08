@@ -6,56 +6,118 @@ yellow and flee — then hunt them down. Every kill pays points, spawns food, an
 summons two bigger foes. Survive the 15-second collect clock and set a new
 family best.
 
-## Game modes
+The game is an **endless world**: infinite, procedurally generated terrain that
+streams in around you forever — rolling hills, impassable lakes and voxel
+boulders, a horizon that visibly curves away, and regions with their own tint
+so far places feel discovered. A **DISTANCE** counter tracks how far from the
+start you've pushed — and the further you push, the taller, faster, and more
+numerous the monsters get (every 250 units earns a milestone chime). The world
+regenerates behind you, so there's no going back for leftovers. The retired
+classic arena survives as a test-only path
+(`__game.debug.forceWorldMode('classic')`); the untouched May 2025 original is
+at `/original.html` (outside the password gate).
 
-Pick a mode on the start screen (your choice is remembered):
-
-- **CLASSIC ARENA** — the original 200x200 wrap-around arena. Pure survival
-  scoring on the classic BEST RUNS board.
-- **ENDLESS WORLD** — an infinite, procedurally generated world that streams
-  in around you forever: rolling hills, impassable lakes and voxel boulders,
-  a horizon that visibly curves away, and regions with their own tint so far
-  places feel discovered. A **DISTANCE** counter tracks how far from the
-  start you've pushed — and the further you push, the taller, faster, and
-  more numerous the monsters get (every 250 units earns a milestone chime).
-  The world regenerates behind you, so there's no going back for leftovers.
-  Endless runs have their own BEST RUNS board (score-ranked, distance shown).
-
-Controls are identical in both modes.
+The world itself is a **seed**: the start overlay shows the number
+(`SEED 20260726`), `?seed=<int>` in the URL summons any world on demand, and
+the **TODAY'S WORLD** toggle switches everyone onto the same date-seeded map —
+the family races one shared world all day, and those runs also rank on their
+own **TODAY'S BEST** board (stale days prune themselves). Out in the wild:
+biome regions now have **names** — hold a new region for a moment and a
+`DISCOVERED: THE TEAL SHALLOWS` banner fires (the death screen counts your
+REGIONS) — rare glowing **gold blocks** pay 5 points (worth a detour, not a
+strategy), and the first time a run pushes past **1000 units** the ground
+flashes red for twice as long as usual: a gold-crowned **TITAN** half again
+the size of the local giants marches in. It never gives up and never wanders
+off — outgrow it, eat it, and it pays triple bounty and bursts into a
+10-block feast ring. One titan per run; bragging mandatory.
 
 ## Access
 
-In-app password gate (not Vercel protection). Password: `blocky`. Unlock is session-scoped.
+In-app password gate (not Vercel protection). Password: see `src/gate.js`
+(shared family password). Unlock is session-scoped. The gate wraps only the
+game itself (it defers loading the game module); `/original.html` is served
+outside it.
 
 ## How to play
-
-Endless world only (classic arena is retired; original May 2025 build remains at `/original.html`).
 
 - **Start**: click START (or press any key / pad button / tap the screen).
 - **Move**: Arrow keys / WASD / gamepad stick (or D-pad); touch-and-drag on mobile.
 - **Jump**: Space or pad **A** (hop rocks, not lakes).
 - **Speed**: F cycles; **R** or pad **X** slows one step; pad **Y** speeds up. Ladder: 0.5× → 1× → 1.5× → 2× → 3× → 5×.
 - **Pad (F310 on Mac: back switch D)**: A jump, Start pause, Select mute, LB/RB zoom, Start+Select restart.
+  Classic DB9 joysticks via dual-port USB adapters work — each port is a
+  separate pad; wiggle the stick once to claim. The FIRST button press (or
+  stick wiggle) on a not-yet-active pad only claims that pad and is
+  deliberately not acted on — press or wiggle once, then play.
 - **Grow**: grab a LIME block at least every 15 seconds — food is worth 1 point
   and makes you taller.
 - **Hunt**: when you're taller than an enemy it turns YELLOW and runs. Touch it
   to defeat it: **+25 points or more** (bigger enemies pay a size bounty), a
-  burst of food… and two larger enemies appear (up to a cap of 8 on the
-  field). Chain kills within 4 seconds for a COMBO multiplier.
+  burst of food… and two enemies appear — one bigger giant far off, one
+  bite-sized runner nearby, close enough to chase down for the combo (cap of
+  12 on the field). Chain kills within 4 seconds for a COMBO multiplier.
+- **Species**: **orange sprinters** are fast — much faster than the blue
+  grunts — and always small enough to eat, which means they RUN: chasing one
+  down before it slips away is its own little hunt. Little **green jujas**
+  are harmless skittish critters that never hurt you; snack on them for
+  bonus food (they're quick too — earn it).
 - **Die**: get caught by a blue enemy or let the collect clock hit zero. Your
-  score joins the local **BEST RUNS** top-5 (saved in your browser).
-- **Extras**: pause (Spacebar or button), game-speed cycle, two-way zoom,
-  mute (sound effects and the chiptune soundtrack are fully synthesized —
-  no audio files).
+  run joins the local **BEST RUNS** top-5 (saved in your browser) — ranked by
+  distance, score breaking ties.
+- **Pause**: **P** or **Enter** (or pad Start, or the on-screen button). Space
+  is jump, not pause.
+- **Extras**: game-speed cycle, two-way zoom, mute (sound effects and the
+  chiptune soundtrack are fully synthesized — no audio files).
+
+## Two Players (split-screen)
+
+Pick **2 PLAYERS** on the start overlay (the choice is remembered for the
+session). One shared world, split vertically — **P1 (orange-red) on the
+left, P2 (teal) on the right** — with a hero, score, collect clock, and
+distance each. Enemies hunt whoever is nearest, and whether one is edible
+(yellow) is judged per player on each half of the screen: your half shows
+YOUR truth.
+
+| Control  | P1 (left)         | P2 (right)         |
+|----------|-------------------|--------------------|
+| Move     | **WASD**          | **Arrow keys**     |
+| Jump     | **Space**         | **/** (slash)      |
+| Gamepad  | first pad to move | second pad to move |
+| Pad jump | its **A** button  | its **A** button   |
+
+- **Pads claim seats by moving**: wiggle a stick and that pad owns a seat
+  (first pad takes P1 — unless P1 is already playing on WASD this run, then
+  it politely takes P2). Ghost adapter ports never claim. Unplugging frees
+  the seat.
+- **Pause pauses both** (P / Enter / Start on any pad); speed and zoom are
+  shared too. The field cap rises to **16** monsters with two heroes (solo
+  stays 12).
+- **Stay in the same neighborhood-ish**: past roughly 560 units of
+  separation the water surface falls out of view range — lakes still block
+  you (the world's rules don't bend), they just read as invisible walls
+  until you regroup.
+- **Death is personal**: whoever runs out of clock (or gets caught) squashes
+  and spectates — their half follows the survivor under a WAITING chip. When
+  both are down, one death screen shows both runs side by side, and the
+  **team total** (P1 + P2) joins its own local **TEAM RUNS** top-5 — 2P runs
+  never touch the solo boards.
+- Touch drag (mobile) drives P1.
 
 ## Running it locally
 
-Requires Node 20+.
+Requires Node **20.19+ or 22.12+** (what Vite 8 supports; `package.json`
+`engines` and `.nvmrc` encode this). On this machine Node is not
+system-installed — the toolchain lives at `~/.local/elves-tools/node/bin`, so
+every shell needs:
+
+```bash
+export PATH="$HOME/.local/elves-tools/node/bin:$PATH"
+```
 
 ```bash
 npm install
 npm run dev        # dev server at http://localhost:5173
-npm test           # Playwright test suite (61 tests)
+npm test           # Playwright test suite (see `npx playwright test --list`)
 npm run lint       # ESLint
 npm run build      # production build into dist/
 npm run preview    # serve the production build locally
@@ -64,30 +126,38 @@ npm run preview    # serve the production build locally
 ## Project structure
 
 ```
-index.html          page shell, UI elements, start/death screens
+index.html          page shell, UI elements, gate, start/death screens
 style.css           "Deep Dive Arcade" theme + responsive/mobile rules
 src/
   main.js           entry point (+ window.__game test handle)
   game.js           orchestrator: init, game loop, setup, pause
   constants.js      all tuning values — GAME BALANCE block lives here
   state.js          the single shared mutable game state
-  world.js          scene, camera+zoom, fog, lights, procedural ground
-  worldmath.js      mode-aware world math — toroidal in classic, Euclidean
-                    in endless; all world-space distances go through here
+  world.js          scene, camera+zoom, fog, lights, ground plane
+  worldmath.js      mode-aware world math — Euclidean in endless (shipping),
+                    toroidal in the retired classic; all world-space
+                    distances go through here
   terrain.js        the endless world: seeded noise terrain, chunk
                     streaming/pooling, water, boulders, curved horizon
+  clouds.js         drifting sky clouds (chunk-seeded in endless)
   characters.js     the shared player/enemy blocky-character factory
   enemies.js        enemy AI (chase/orbit/flee), spawning, kills
   collectibles.js   food spawning and resources
   effects.js        pooled particles, walk animation, glow, screen juice
   audio.js          synthesized sound effects + procedural chiptune music
-  hiscores.js       local top-5 storage
+  rumble.js         gamepad vibration (isolated to avoid import cycles)
+  hiscores.js       local top-5 storage (per-mode boards)
   input.js          keyboard + gamepad + multitouch-safe drag controls
+  movement-continuous.js  plan-014 design spike (LBS-style movement + boost),
+                    active only behind ?move=continuous
+  gate.js           in-app password gate (session-scoped unlock)
   ui.js             HUD, indicators, start/death screens, endGame
   timers.js         the collect clock (game-time driven)
-tests/              Playwright specs (smoke, timing, game-over, world,
-                    camera, resources, hiscores, audio, balance, touch,
-                    effects, endless x3) + shared helpers
+tests/              Playwright specs (smoke, timing, gameover, world, camera,
+                    resources, hiscores, audio, balance, touch, effects,
+                    endless + endless-stream + endless-polish, gate, gamepad,
+                    fairness, hitbox, tension, toys, species, worldfun, coop,
+                    spawnwarn) + shared helpers
 plans/              the audit + implementation plans this overhaul followed
 ```
 
@@ -96,8 +166,9 @@ Key technical facts:
 - **three.js is pinned at 0.128.0 on purpose** (exact npm pin). Newer majors
   change color management and lighting defaults; upgrading is a deliberate
   future project, not a drive-by bump.
-- The world is a **torus** (wraps at ±100 on X/Z). Any entity-to-entity
-  direction or distance must use `src/worldmath.js`.
+- The shipping world (endless) is a **flat infinite plane with a floating
+  origin**; the retired classic arena was a ±100 torus. ALL entity-to-entity
+  distance still routes through `src/worldmath.js` (mode dispatch).
 - The simulation is **frame-rate independent** (delta-time in units/second);
   the collect clock runs on game time, so pausing or hiding the tab never
   cheats or kills you.
@@ -113,7 +184,9 @@ The repo is a standard Vite app — Vercel detects it automatically.
    repository.
 3. Framework preset shows **Vite** (build `vite build`, output `dist/`) —
    accept and **Deploy**.
-4. Every push to `main` now auto-deploys. That's it — no config file needed.
+4. Every push to `main` now auto-deploys. The repo's `vercel.json` only adds
+   security headers (nosniff site-wide + a CSP scoped to the `/original`
+   archive) — the build itself needs no configuration.
 
 Alternatively, from a machine with the Vercel CLI logged in: `npx vercel` then
 `npx vercel --prod`.

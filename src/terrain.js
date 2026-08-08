@@ -1,14 +1,14 @@
 import * as THREE from 'three';
 import {
     CHUNK_SIZE, CHUNK_SEGMENTS, CHUNK_WINDOW_RADIUS, CHUNK_RELEASE_RADIUS,
-    CHUNK_BUILDS_PER_FRAME, TERRAIN_AMPLITUDE, TERRAIN_WAVELENGTH, TERRAIN_SEED,
+    CHUNK_BUILDS_PER_FRAME, TERRAIN_AMPLITUDE, TERRAIN_WAVELENGTH, WORLD_SEED,
     WATER_LEVEL, CURVE_STRENGTH, SPAWN_MESA_RADIUS,
     ROCKS_PER_CHUNK_MAX, ROCK_SPAWN_CLEARANCE,
     WATER_WALK_MARGIN, ROCK_COLLIDER_FACTOR,
-    FOOD_PER_CHUNK_MIN, FOOD_PER_CHUNK_MAX, FOOD_WATER_CLEARANCE,
+    FOOD_PER_CHUNK_MIN, FOOD_PER_CHUNK_MAX, FOOD_WATER_CLEARANCE, GOLD_CHUNK_CHANCE,
     minSpawnDistanceFromPlayer,
     BIOME_WAVELENGTH, BIOME_TINT_STRENGTH, SHORE_BAND_HEIGHT, SHORE_BAND_BOOST,
-    WATER_DEPTH_RANGE, WATER_DEEP_TINT, WATER_SNAP
+    WATER_DEPTH_RANGE, WATER_DEEP_TINT, WATER_SNAP, REGION_BINS
 } from './constants.js';
 import { state } from './state.js';
 import { makeGroundTexture, GROUND_TILE } from './world.js';
@@ -26,12 +26,17 @@ import { spawnChunkCloud, releaseChunkCloud } from './clouds.js';
 // chunks (and rocks) return to pools and are re-displaced in place. The
 // renderer's geometry count must plateau at pool size.
 
+// Water plane base footprint (world units) and extra radius beyond the
+// furthest living player so fog does not swallow the surface first.
+const WATER_BASE_SIZE = 560; // Solo default: half-extent 280 around the player
+const WATER_COVER_MARGIN = 220; // Past the furthest living player (fog far ~camDist*4.5)
+
 // --- Seeded value noise (deterministic, dependency-free) ---
 // Integer-lattice hash → bilinear interpolation with smoothstep fade.
 // Same (x, z) in TRUE world coordinates always yields the same height,
 // across chunks, rebuilds, and floating-origin rebases.
 function hash2(ix, iz) {
-    let h = (ix * 374761393 + iz * 668265263 + TERRAIN_SEED * 144665) | 0;
+    let h = (ix * 374761393 + iz * 668265263 + WORLD_SEED * 144665) | 0;
     h = Math.imul(h ^ (h >>> 13), 1274126177);
     h ^= h >>> 16;
     return (h >>> 0) / 4294967296; // [0, 1)
@@ -121,13 +126,52 @@ let terrainMaterial = null;
 let rockMaterial = null;
 let waterMesh = null;
 let active = new Map(); // key "cx,cz" → { key, cx, cz, mesh, rocks }
+// Collision fast path (plan 020 P-8): the same chunks keyed by a packed int
+// — blockedByRock probes a 3x3 neighborhood per movement sample, and the
+// string keys were 9 concatenations per probe. The string `chunk.key` field
+// stays THE identity everywhere else (food/cloud ownership, terrainInfo).
+const activeByInt = new Map();
+
+function chunkIntKey(cx, cz) {
+    return ((cx & 0xFFFF) << 16) | (cz & 0xFFFF);
+}
 const meshPool = []; // Released chunk meshes, buffers reused by re-displacing
 const rockPool = []; // Released boulder groups (4 box children each)
 let queue = []; // Pending chunk builds: { key, cx, cz }
 const pending = new Set(); // Keys in the queue (dupe guard)
-let lastScanCx = null, lastScanCz = null;
+let lastScanSignature = null; // The anchor chunk set of the last window scan
 let waterClock = 0;
 let streaming = false; // True while endless mode is the live environment
+
+// Streaming anchors (plan 026): every LIVING player is an anchor — the
+// active set is the UNION of each anchor's window. With all players dead
+// (the frozen death-screen world) the fallback anchor is seat 0's corpse,
+// which is exactly the old single-player behavior. Scratch array over
+// PRE-ALLOCATED slot objects (B8 review ADV-9) — this runs per frame, and
+// the old literal pushes allocated 1-2 objects each call.
+const anchorScratch = [];
+const anchorSlots = [{ cx: 0, cz: 0 }, { cx: 0, cz: 0 }]; // One per possible seat; the corpse fallback reuses slot 0
+
+function pushAnchor(x, z) {
+    const slot = anchorSlots[anchorScratch.length] ??
+        (anchorSlots[anchorScratch.length] = { cx: 0, cz: 0 }); // Roster growth beyond 2 stays safe
+    slot.cx = Math.floor((x + state.worldOrigin.x) / CHUNK_SIZE);
+    slot.cz = Math.floor((z + state.worldOrigin.z) / CHUNK_SIZE);
+    anchorScratch.push(slot);
+}
+
+function currentAnchors() {
+    anchorScratch.length = 0;
+    for (const player of state.players) {
+        if (!player.alive || !player.mesh) continue;
+        pushAnchor(player.mesh.position.x, player.mesh.position.z);
+    }
+    if (anchorScratch.length === 0 && state.players[0].mesh) {
+        const p = state.players[0].mesh.position;
+        pushAnchor(p.x, p.z);
+    }
+    return anchorScratch;
+}
 
 // Debug counters (terrainInfo) — pool discipline is testable.
 let buildCount = 0;
@@ -171,11 +215,74 @@ function computeTint(tx, tz, h, out) {
         const band = 1 - (h - WATER_LEVEL) / SHORE_BAND_HEIGHT;
         tint += SHORE_BAND_BOOST * band * band; // Feather: bright edge, soft fade
     }
-    const biome = octave(tx, tz, BIOME_WAVELENGTH, 51.3, 27.9); // [-1, 1]
+    const biome = biomeAt(tx, tz); // [-1, 1]
     out.r = tint;
     out.g = tint * (1 + BIOME_TINT_STRENGTH * biome);
     out.b = tint * (1 - BIOME_TINT_STRENGTH * biome);
     return out;
+}
+
+// --- Named biome regions (plan 025 Step 3) ---
+// The tint's ultra-low-frequency octave IS the biome field — biomeAt exposes
+// it raw. Deterministic in TRUE coordinates: world-fixed, rebase-immune,
+// same everywhere the same seed is played.
+export function biomeAt(tx, tz) {
+    return octave(tx, tz, BIOME_WAVELENGTH, 51.3, 27.9);
+}
+
+// REGION_BINS lives in the GAME BALANCE block (constants.js) — it tunes how
+// often DISCOVERED fires and what the REGIONS death stat can reach
+// (terminal review A-2: every balance knob in the block, no exceptions).
+// Kid-friendly two-word region names. Which name a region wears is a seeded
+// hash pick — the TABLE is fixed, the MAP of it is per-world.
+const REGION_NAMES = [
+    'THE TEAL SHALLOWS', 'COPPER FLATS', 'MINT MEADOWS', 'THE LOST LAKES',
+    'PEBBLE PLAINS', 'WHISPER HILLS', 'THE JELLY FIELDS', 'BUMPY BADLANDS',
+    'THE SLEEPY SHORES', 'CLOVER COUNTRY', 'THE WOBBLY WILDS', 'SUGAR STEPPES'
+];
+
+// The biome octave quantized into its identity band (shared by the key and
+// display paths below — one binning rule, never a fork).
+function biomeBin(biome) {
+    return Math.min(REGION_BINS - 1, Math.max(0, Math.floor(((biome + 1) / 2) * REGION_BINS)));
+}
+
+// Identity-only region key at TRUE (tx, tz) — THE hot path (H13, plan 028
+// batch). updateRegionDiscovery calls this every frame for every living
+// player, and on almost every frame the answer is "same key as before":
+// building the full biomeRegion object there threw away a fresh object,
+// a name hash, and a formatted CSS color string per player per frame.
+// This returns just the key (one short string — the comparison target
+// game.js stores in player.regionKey), leaving name/color to biomeRegion,
+// which the discovery branch calls only when a region actually commits.
+export function biomeRegionKey(tx, tz) {
+    return biomeBin(biomeAt(tx, tz)) + ':' +
+        Math.floor(tx / BIOME_WAVELENGTH) + ':' + Math.floor(tz / BIOME_WAVELENGTH);
+}
+
+// Region identity + display data at TRUE (tx, tz): the biome bin crossed
+// with a BIOME_WAVELENGTH-sized cell grid, so one huge biome band still
+// breaks into discoverable places. `key` is the identity game.js debounces
+// on (byte-identical to biomeRegionKey at the same point — same binning,
+// same cell math); `name` is a seeded pick from the table (WORLD_SEED in
+// the mix — a new seed deals a fresh map of names); `color` is the biome's
+// own tint direction as a CSS color for the DISCOVERED popup (greener bins
+// mint, bluer bins sky-cyan — the teal family both ways, readable on any
+// sky). Display path: called on discovery commits, resets, and the debug
+// handle — never per frame (that is biomeRegionKey's job).
+export function biomeRegion(tx, tz) {
+    const biome = biomeAt(tx, tz);
+    const bin = biomeBin(biome);
+    const cellX = Math.floor(tx / BIOME_WAVELENGTH);
+    const cellZ = Math.floor(tz / BIOME_WAVELENGTH);
+    let h = (Math.imul(bin + 1, 2246822519) ^ Math.imul(cellX, 374761393) ^
+        Math.imul(cellZ, 668265263) ^ Math.imul(WORLD_SEED, 144665)) | 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    h ^= h >>> 16;
+    const name = REGION_NAMES[(h >>> 0) % REGION_NAMES.length];
+    const t = (biome + 1) / 2;
+    const color = `rgb(${Math.round(96 + 30 * (1 - t))}, ${Math.round(200 + 45 * t)}, ${Math.round(255 - 70 * t)})`;
+    return { key: bin + ':' + cellX + ':' + cellZ, bin, cellX, cellZ, name, color };
 }
 
 const tintScratch = { r: 0, g: 0, b: 0 }; // Reused by every vertex loop
@@ -216,7 +323,10 @@ export function initTerrain() {
     // only bend at its corners) AND so the depth tint below has resolution:
     // 80x80 segments = 7-unit sampling. Gentle emissive shimmer, ~0.18Hz —
     // subtle and far from any photosensitivity limit.
-    const waterGeometry = new THREE.PlaneGeometry(560, 560, 80, 80);
+    // Base size is 560 (half-extent 280). In 2P the mesh scale grows with
+    // living-player separation so lakes under both heroes stay visible
+    // (union of camera footprints + fog margin; Fugu P1).
+    const waterGeometry = new THREE.PlaneGeometry(WATER_BASE_SIZE, WATER_BASE_SIZE, 80, 80);
     waterGeometry.rotateX(-Math.PI / 2);
     const waterVerts = waterGeometry.attributes.position.count;
     waterGeometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(waterVerts * 3).fill(1), 3));
@@ -254,9 +364,15 @@ function recolorWater() {
     const posArr = waterMesh.geometry.attributes.position.array;
     const colArr = waterMesh.geometry.attributes.color.array;
     const count = waterMesh.geometry.attributes.position.count;
+    // Geometry is unit-base; mesh.scale stretches the visible plane. Sample
+    // lakebed depth in the SCALED footprint so a 2P union plane tints fully.
+    const sx = waterMesh.scale.x;
+    const sz = waterMesh.scale.z;
     for (let i = 0; i < count; i++) {
         const i3 = i * 3;
-        const h = terrainHeight(waterSnapTrueX + posArr[i3], waterSnapTrueZ + posArr[i3 + 2]);
+        const h = terrainHeight(
+            waterSnapTrueX + posArr[i3] * sx,
+            waterSnapTrueZ + posArr[i3 + 2] * sz);
         const depth = WATER_LEVEL - h;
         let tint = 1;
         if (depth > 0) {
@@ -278,17 +394,19 @@ export function setTerrainActive(on) {
 // New endless run: release everything (a previous run may have wandered
 // thousands of units away), then synchronously build the 3x3 under the
 // spawn so the title scene never shows a hole beneath the player.
+const SPAWN_ANCHOR = [{ cx: 0, cz: 0 }]; // Every run starts at true (0,0)
+
 export function resetTerrainForNewRun() {
     if (!terrainRoot) return;
     for (const chunk of active.values()) releaseChunk(chunk);
     active.clear();
+    activeByInt.clear();
     queue = [];
     pending.clear();
-    lastScanCx = null;
-    lastScanCz = null;
-    scanWindow(0, 0);
+    lastScanSignature = null; // First updateTerrain re-scans for the live roster
+    scanWindow(SPAWN_ANCHOR);
     // Build the innermost ring immediately; the rest streams in.
-    processQueue(0, 0, 9);
+    processQueue(SPAWN_ANCHOR, 9);
     if (waterMesh) {
         waterMesh.position.set(0, WATER_LEVEL, 0);
         // Depth tint for the spawn neighborhood (the last run may have left
@@ -303,24 +421,60 @@ export function resetTerrainForNewRun() {
 
 // --- Per-frame streaming (called from the animate loop, endless only) ---
 export function updateTerrain(dt) {
-    if (!streaming || !state.player) return;
-    const p = state.player.position;
-    const cx = Math.floor((p.x + state.worldOrigin.x) / CHUNK_SIZE);
-    const cz = Math.floor((p.z + state.worldOrigin.z) / CHUNK_SIZE);
-    if (cx !== lastScanCx || cz !== lastScanCz) scanWindow(cx, cz);
-    processQueue(cx, cz, CHUNK_BUILDS_PER_FRAME);
+    if (!streaming || !state.players[0].mesh) return;
+    const anchors = currentAnchors();
+    if (anchors.length === 0) return;
+    // Re-scan only when some anchor changed chunks (the solo single-anchor
+    // change check, generalized to the anchor SET).
+    let signature = '';
+    for (const a of anchors) signature += a.cx + ',' + a.cz + '|';
+    if (signature !== lastScanSignature) {
+        lastScanSignature = signature;
+        scanWindow(anchors);
+    }
+    processQueue(anchors, CHUNK_BUILDS_PER_FRAME);
 
-    // Water follows the player in WATER_SNAP steps (true-coordinate grid, so
-    // a rebase changes nothing); crossing a step re-tints the depth colors
-    // for the new footprint. The plane is 560 wide and fog-faded long before
-    // its edge, so the 12-unit position step is invisible — what IS visible
-    // is the depth pattern, which stays world-fixed this way.
+    // Water follows the LIVING players' midpoint in WATER_SNAP steps (the
+    // midpoint of one player is the player — the exact solo behavior). In 2P
+    // the plane SCALEs to the union of living positions + WATER_COVER_MARGIN
+    // so lakes under both heroes stay visible even at 600u separation
+    // (fixed 560 left a dry gap past ~280u from midpoint — Fugu P1).
+    // True-coordinate grid, so a rebase changes nothing; crossing a step or
+    // a scale change re-tints the depth colors for the new footprint.
     waterClock += dt;
-    const trueX = p.x + state.worldOrigin.x;
-    const trueZ = p.z + state.worldOrigin.z;
+    let mx = 0, mz = 0, living = 0;
+    for (const player of state.players) {
+        if (!player.alive || !player.mesh) continue;
+        mx += player.mesh.position.x;
+        mz += player.mesh.position.z;
+        living++;
+    }
+    if (living === 0) {
+        mx = state.players[0].mesh.position.x;
+        mz = state.players[0].mesh.position.z;
+    } else {
+        mx /= living;
+        mz /= living;
+    }
+    // Furthest living hero from the midpoint (Chebyshev) drives the scale.
+    let maxReach = 0;
+    for (const player of state.players) {
+        if (!player.alive || !player.mesh) continue;
+        const dx = Math.abs(player.mesh.position.x - mx);
+        const dz = Math.abs(player.mesh.position.z - mz);
+        maxReach = Math.max(maxReach, dx, dz);
+    }
+    const halfBase = WATER_BASE_SIZE / 2;
+    const needHalf = maxReach + WATER_COVER_MARGIN;
+    const waterScale = Math.max(1, needHalf / halfBase);
+    const scaleChanged = Math.abs(waterMesh.scale.x - waterScale) > 0.01;
+    if (scaleChanged) waterMesh.scale.set(waterScale, 1, waterScale);
+
+    const trueX = mx + state.worldOrigin.x;
+    const trueZ = mz + state.worldOrigin.z;
     const snapX = Math.round(trueX / WATER_SNAP) * WATER_SNAP;
     const snapZ = Math.round(trueZ / WATER_SNAP) * WATER_SNAP;
-    if (snapX !== waterSnapTrueX || snapZ !== waterSnapTrueZ) {
+    if (snapX !== waterSnapTrueX || snapZ !== waterSnapTrueZ || scaleChanged) {
         waterSnapTrueX = snapX;
         waterSnapTrueZ = snapZ;
         recolorWater();
@@ -329,50 +483,85 @@ export function updateTerrain(dt) {
     waterMesh.material.emissiveIntensity = 0.08 + 0.045 * Math.sin(waterClock * 1.1);
 }
 
-// Scan the window around chunk (cx, cz): release far chunks, queue missing.
-function scanWindow(cx, cz) {
-    lastScanCx = cx;
-    lastScanCz = cz;
+// Chebyshev distance from a chunk coordinate to the nearest anchor.
+function anchorDistance(anchors, cx, cz) {
+    let best = Infinity;
+    for (const a of anchors) {
+        const d = Math.max(Math.abs(cx - a.cx), Math.abs(cz - a.cz));
+        if (d < best) best = d;
+    }
+    return best;
+}
+
+// Scan the UNION window of all anchors: release chunks outside EVERY
+// anchor's release ring, queue every anchor's missing window chunks (the
+// pending set dedupes overlap between anchors).
+function scanWindow(anchors) {
     for (const chunk of active.values()) {
-        if (Math.max(Math.abs(chunk.cx - cx), Math.abs(chunk.cz - cz)) > CHUNK_RELEASE_RADIUS) {
+        if (anchorDistance(anchors, chunk.cx, chunk.cz) > CHUNK_RELEASE_RADIUS) {
             active.delete(chunk.key);
+            activeByInt.delete(chunkIntKey(chunk.cx, chunk.cz));
             releaseChunk(chunk);
         }
     }
-    for (let dz = -CHUNK_WINDOW_RADIUS; dz <= CHUNK_WINDOW_RADIUS; dz++) {
-        for (let dx = -CHUNK_WINDOW_RADIUS; dx <= CHUNK_WINDOW_RADIUS; dx++) {
-            const kx = cx + dx, kz = cz + dz;
-            const key = kx + ',' + kz;
-            if (!active.has(key) && !pending.has(key)) {
-                pending.add(key);
-                queue.push({ key, cx: kx, cz: kz });
+    for (const a of anchors) {
+        for (let dz = -CHUNK_WINDOW_RADIUS; dz <= CHUNK_WINDOW_RADIUS; dz++) {
+            for (let dx = -CHUNK_WINDOW_RADIUS; dx <= CHUNK_WINDOW_RADIUS; dx++) {
+                const kx = a.cx + dx, kz = a.cz + dz;
+                const key = kx + ',' + kz;
+                if (!active.has(key) && !pending.has(key)) {
+                    pending.add(key);
+                    queue.push({ key, cx: kx, cz: kz });
+                }
             }
         }
     }
 }
 
-// Build up to `budget` queued chunks, nearest to (cx, cz) first.
-function processQueue(cx, cz, budget) {
+// Build up to `budget` queued chunks, nearest to ANY anchor first.
+function processQueue(anchors, budget) {
     while (budget > 0 && queue.length > 0) {
         let best = 0;
         let bestD = Infinity;
         for (let i = 0; i < queue.length; i++) {
-            const d = Math.max(Math.abs(queue[i].cx - cx), Math.abs(queue[i].cz - cz));
+            const d = anchorDistance(anchors, queue[i].cx, queue[i].cz);
             if (d < bestD) { bestD = d; best = i; }
         }
         const entry = queue.splice(best, 1)[0];
         pending.delete(entry.key);
-        if (bestD > CHUNK_RELEASE_RADIUS) continue; // The player left it behind — drop, don't build
+        if (bestD > CHUNK_RELEASE_RADIUS) continue; // Every player left it behind — drop, don't build
         buildChunk(entry.key, entry.cx, entry.cz);
         budget--;
     }
 }
 
 // --- Chunk build / release ---
+// Frustum culling is ON (plan 020 / audit P-2): buildChunk computes a
+// bounding sphere inflated by +24u, covering the horizon bend's worst-case
+// vertex drop (~16.7u at the far chunk corner) with margin — behind-camera
+// chunks stop costing draws. A FRESH mesh draws unconditionally for exactly
+// one frame before the cull engages (onAfterRender flip): geometry
+// registration with the renderer happens on first draw, and the resource-
+// plateau specs pin registration to ALLOCATION time, not to whenever the
+// camera happens to look at the chunk.
 function acquireChunkMesh() {
     const pooled = meshPool.pop();
     if (pooled) {
         pooled.visible = true;
+        // Cull-flag hardening (H8, plan 028 batch): only cull from frame 1
+        // if this mesh's geometry has actually been through a render —
+        // userData.registered is set by the eager-register flip below, at
+        // the mesh's first real draw. A mesh released BEFORE that draw
+        // (built and released between two resets with no rendered frame in
+        // between) still carries its un-run flip handler; sending it back
+        // out with frustumCulled=true would let an off-frustum re-entry
+        // defer geometry registration until the camera happens to look at
+        // it — exactly the late-registration bump the resource-plateau
+        // specs pin against. Unreachable today (every reset path renders
+        // between builds), closed anyway: the un-registered re-acquire
+        // just re-enters the one-frame eager path its pending flip already
+        // implements.
+        pooled.frustumCulled = pooled.userData.registered === true;
         return pooled;
     }
     meshAllocCount++;
@@ -381,9 +570,12 @@ function acquireChunkMesh() {
     geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(VERTS * 3), 3));
     const mesh = new THREE.Mesh(geometry, terrainMaterial);
     mesh.receiveShadow = true;
-    // No frustum culling: the horizon bend moves vertices far below the
-    // unbent bounding sphere, and 49 chunks is a trivial draw count anyway.
-    mesh.frustumCulled = false;
+    mesh.frustumCulled = false; // One eager-registration draw, then...
+    mesh.onAfterRender = () => {
+        mesh.userData.registered = true; // Proof of first real draw (H8 gate above)
+        mesh.frustumCulled = true; // ...culled for life (pool reuse keeps it)
+        mesh.onAfterRender = () => {};
+    };
     terrainRoot.add(mesh);
     return mesh;
 }
@@ -415,6 +607,14 @@ function buildChunk(key, cx, cz) {
     mesh.geometry.attributes.color.needsUpdate = true;
     mesh.geometry.attributes.uv.needsUpdate = true;
     mesh.geometry.computeVertexNormals();
+    // Cullable chunks (plan 020 / audit P-2): a fresh sphere per (re)build —
+    // pooled meshes are re-displaced in place — inflated +24u to cover the
+    // horizon bend's ≤~16.7u worst-case downward vertex shift (dist² ×
+    // CURVE_STRENGTH at the far corner of the window) plus margin. The
+    // frustumCulled flag itself is owned by acquireChunkMesh (fresh meshes
+    // stay uncullable for one eager-registration draw).
+    mesh.geometry.computeBoundingSphere();
+    mesh.geometry.boundingSphere.radius += 24;
     mesh.position.set(centerTrueX - state.worldOrigin.x, 0, centerTrueZ - state.worldOrigin.z);
 
     const chunk = { key, cx, cz, mesh, rocks: [], colliders: [] };
@@ -422,6 +622,7 @@ function buildChunk(key, cx, cz) {
     scatterFood(chunk, centerTrueX, centerTrueZ);
     spawnChunkCloud(key, cx, cz); // Seeded sky: ~1 cloud per 2-3 chunks (clouds.js pool)
     active.set(key, chunk);
+    activeByInt.set(chunkIntKey(cx, cz), chunk); // Collision fast path (plan 020 P-8)
 }
 
 function releaseChunk(chunk) {
@@ -453,7 +654,9 @@ function acquireRock() {
     const boxGeometry = getRockGeometry();
     for (let i = 0; i < ROCK_BLOCKS; i++) {
         const box = new THREE.Mesh(boxGeometry, rockMaterial);
-        box.castShadow = true;
+        // receiveShadow only (plan 020 / audit P-1): characters shadow ONTO
+        // boulders, but a boulder's own cast is invisible against the
+        // terrain shading — and every rock block was a shadow-pass draw.
         box.receiveShadow = true;
         group.add(box);
     }
@@ -469,7 +672,7 @@ function getRockGeometry() {
 
 function scatterRocks(chunk, centerTrueX, centerTrueZ) {
     // Per-chunk seeded RNG: same chunk always grows the same boulders.
-    let s = (Math.imul(chunk.cx, 668265263) ^ Math.imul(chunk.cz, 374761393) ^ TERRAIN_SEED) >>> 0;
+    let s = (Math.imul(chunk.cx, 668265263) ^ Math.imul(chunk.cz, 374761393) ^ WORLD_SEED) >>> 0;
     const next = () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
     const count = 1 + Math.floor(next() * ROCKS_PER_CHUNK_MAX);
     for (let n = 0; n < count; n++) {
@@ -510,9 +713,19 @@ function scatterRocks(chunk, centerTrueX, centerTrueZ) {
 // boulders and the run-start point. Collected food regrows only after the
 // chunk is released AND rebuilt (the world regenerating behind you).
 function scatterFood(chunk, centerTrueX, centerTrueZ) {
-    let s = (Math.imul(chunk.cx, 2246822519) ^ Math.imul(chunk.cz, 3266489917) ^ (TERRAIN_SEED + 977)) >>> 0;
+    let s = (Math.imul(chunk.cx, 2246822519) ^ Math.imul(chunk.cz, 3266489917) ^ (WORLD_SEED + 977)) >>> 0;
     const next = () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
     const count = FOOD_PER_CHUNK_MIN + Math.floor(next() * (FOOD_PER_CHUNK_MAX - FOOD_PER_CHUNK_MIN + 1));
+    // Gold prize (plan 025): ONE extra seeded roll, BEFORE the spot loop —
+    // the roll-all law keeps the stream aligned so rebuilds reproduce the
+    // identical layout, gold included. The same roll both decides (8% of
+    // chunks) and PICKS the spot (goldRoll/chance re-spread over [0,1) →
+    // uniform index). A gold spot that loses to water/rock rejection simply
+    // isn't grown — rarity stays honest, alignment untouched.
+    const goldRoll = next();
+    const goldIndex = goldRoll < GOLD_CHUNK_CHANCE
+        ? Math.floor((goldRoll / GOLD_CHUNK_CHANCE) * count)
+        : -1;
     for (let n = 0; n < count; n++) {
         // Roll ALL randoms before any rejection — the stream stays aligned,
         // so every rebuild reproduces the identical layout.
@@ -520,7 +733,7 @@ function scatterFood(chunk, centerTrueX, centerTrueZ) {
         const tz = centerTrueZ - HALF + 1.5 + next() * (CHUNK_SIZE - 3);
         if (!isFoodSpotTrue(tx, tz, chunk)) continue;
         if (Math.hypot(tx, tz) < minSpawnDistanceFromPlayer) continue; // Run-start clearance (classic rule)
-        spawnChunkFood(tx - state.worldOrigin.x, tz - state.worldOrigin.z, chunk.key);
+        spawnChunkFood(tx - state.worldOrigin.x, tz - state.worldOrigin.z, chunk.key, n === goldIndex);
     }
 }
 
@@ -541,9 +754,10 @@ function blockedByRock(tx, tz, radius) {
     const cz = Math.floor(tz / CHUNK_SIZE);
     // 3x3 chunk neighborhood: max rock radius + max entity radius stays far
     // below CHUNK_SIZE, so a circle can never span past adjacent chunks.
+    // Packed-int lookups (plan 020 P-8): no string keys in the probe loop.
     for (let dz = -1; dz <= 1; dz++) {
         for (let dx = -1; dx <= 1; dx++) {
-            const chunk = active.get((cx + dx) + ',' + (cz + dz));
+            const chunk = activeByInt.get(chunkIntKey(cx + dx, cz + dz));
             if (!chunk) continue;
             for (const c of chunk.colliders) {
                 const ddx = tx - c.x;
@@ -576,11 +790,29 @@ function probeOk(tx, tz, ignoreRocks) {
 }
 
 // Is this LOCAL position clear of every rock collision circle for a body of
-// the given radius? The jump's landing grace (game.js) uses it: airborne
-// movement ignores rocks, so an arc may legally END inside a circle — rocks
-// stay ignored until the body walks clear, so a landing can never wedge.
+// the given radius? Static placement query (also on the debug handle — the
+// jump spec finds seeded rocks with it).
 export function isRockFree(localX, localZ, radius) {
     return !blockedByRock(localX + state.worldOrigin.x, localZ + state.worldOrigin.z, radius);
+}
+
+// Landing-grace wedge test (audit C-6): is one of the SAME radius-0 sample
+// points the movement probes use — center plus ±radius on each axis —
+// actually inside a rock circle? The jump's landing grace (game.js) keeps
+// rocks ignored while wedged, so an arc may legally END inside a circle and
+// walk clear. The OLD grace used the radius-INFLATED center circle
+// (!isRockFree(x, z, radius)), which stays true across a ~radius-wide ring
+// where every probe is already clear — rocks silently stopped existing
+// there and the player could walk straight through a boulder. Probe parity
+// closes that ring: wedged now means a probe point is genuinely inside.
+export function isRockWedged(localX, localZ, radius) {
+    const tx = localX + state.worldOrigin.x;
+    const tz = localZ + state.worldOrigin.z;
+    return blockedByRock(tx, tz, 0) ||
+        blockedByRock(tx + radius, tz, 0) ||
+        blockedByRock(tx - radius, tz, 0) ||
+        blockedByRock(tx, tz + radius, 0) ||
+        blockedByRock(tx, tz - radius, 0);
 }
 
 // --- Honest movement probe (owner escalation: "respect the size of the gap
@@ -710,6 +942,9 @@ export function terrainInfo() {
         meshAllocs: meshAllocCount,
         rockAllocs: rockAllocCount,
         hasWater: !!waterMesh,
+        // Half-extent of the visible water plane in world units (base/2 * scale).
+        waterHalf: waterMesh ? (WATER_BASE_SIZE / 2) * waterMesh.scale.x : 0,
+        waterScale: waterMesh ? waterMesh.scale.x : 0,
         waterRecolors: waterRecolorCount,
         streaming
     };

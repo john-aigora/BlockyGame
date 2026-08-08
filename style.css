@@ -217,7 +217,11 @@ canvas {
     }
 }
 
-#score.score-pop {
+/* The class selector serves the 2P per-seat .hud-score columns (B8 review
+   ADV-3): ui.js adds .score-pop to those class-based elements too, and the
+   id-only selector never matched them — the coop pop painted nothing. */
+#score.score-pop,
+.hud-score.score-pop {
     animation: score-pop 0.35s ease-out;
 }
 
@@ -252,8 +256,13 @@ canvas {
 /* Danger vignette (tension pass): a red radial glow hugging the frame when
    a non-killable enemy stalks close. ui.js drives opacity per frame (eased
    toward 0.22 max, slow breathing) — this rule only paints the gradient.
-   The transparent center keeps gameplay fully readable. */
-#danger-vignette {
+   The transparent center keeps gameplay fully readable.
+   The class selector is the base rule for the 2P per-seat clones (B8 review
+   BLOCK-1): they are class-only elements, and without it they were unstyled
+   static divs — the per-frame opacity writes painted nothing. The
+   .danger-vignette[data-seat] rules below override one inset side each. */
+#danger-vignette,
+.danger-vignette {
     position: absolute;
     inset: 0;
     z-index: 40;
@@ -273,6 +282,15 @@ canvas {
     font-size: 0.7em;
     color: #ECEFF1;
     /* Off-White */
+    line-height: 1.6;
+    /* Press Start 2P glyphs fill the whole em box — at line-height normal
+       (~1.0 for this font) wrapped lines overdraw each other (audit UI-2) */
+}
+
+/* The controls line is its own block (audit UI-2): the old inline span +
+   manual <br> let a wrapped hint collide with the line below it. */
+#controls-hint {
+    display: block;
 }
 
 /* Start overlay (plan 008): covers the whole game container, above the
@@ -307,6 +325,13 @@ canvas {
     margin: 0 0 25px;
 }
 
+/* FAMILY BEST line (plan 023): the household record wears the reward lime —
+   the one number on the menu worth beating. Specificity must outrank
+   #start-overlay .tagline, hence the compound selector. */
+#start-overlay #family-best {
+    color: #CCFF66;
+}
+
 /* The start button reuses .game-button visuals but sits in the flex flow
    (the class is position: absolute for the corner buttons). */
 #start-button {
@@ -316,9 +341,11 @@ canvas {
     padding: 12px 24px;
 }
 
-/* World-mode picker (endless mode): two toggle buttons above START. The
-   selected mode wears the lime edge — same accent language as the button
-   hover glow. Unselected sits dimmed so the choice reads at a glance. */
+/* World toggle row above START (originally the classic/endless mode picker;
+   plan 025 reuses the container + .mode-button rules for the TODAY'S WORLD
+   daily toggle). The selected state wears the lime edge — same accent
+   language as the button hover glow. Unselected sits dimmed so the choice
+   reads at a glance. */
 #mode-picker {
     display: flex;
     gap: 12px;
@@ -612,15 +639,20 @@ canvas {
     font-size: 16px;
 }
 
-/* Kill indicator styling */
+/* Kill indicator styling. Positioned against #game-container (audit UI-1 —
+   the markup lives inside the play frame now): top-center, below the
+   ORIGINAL '25 link (top 10px, ~36px tall) and clear of the corner buttons. */
 .kill-indicator {
     position: absolute;
-    top: 10px;
-    /* Keep small top offset */
+    top: 52px;
+    /* Inside the canvas top edge, with slack under #original-link (bottom
+       ~46px at desktop) so a fallback font's metrics can't collide (B4 rev) */
     left: 50%;
     /* Center horizontally */
     transform: translateX(-50%);
     /* Adjust for horizontal centering */
+    z-index: 50;
+    /* Above the vignettes (30/40), below #top-controls (100) and overlays */
     background-color: rgba(255, 69, 0, 0.8);
     /* Bright Orange-Red with transparency */
     color: #FFFFFF;
@@ -642,10 +674,12 @@ canvas {
    0.25s play retriggered from JS — no loop, no strobe). */
 .combo-chip {
     position: absolute;
-    top: 64px;
-    /* Just below the kill indicator (top: 10px + its height) */
+    top: 106px;
+    /* Just below the kill indicator (top: 52px + its ~48px height) */
     left: 50%;
     transform: translateX(-50%);
+    z-index: 50;
+    /* Same layer as the kill indicator it tucks under */
     background-color: rgba(0, 0, 0, 0.65);
     color: #FFEB3B;
     /* Bright Yellow — the kill/bounty color */
@@ -673,7 +707,10 @@ canvas {
     }
 }
 
-#combo-chip.combo-pop {
+/* The class selector serves the 2P per-seat chips (B8 review ADV-3): ui.js
+   pops .combo-chip[data-seat] elements the id-only selector never matched. */
+#combo-chip.combo-pop,
+.combo-chip.combo-pop {
     animation: combo-pop 0.25s ease-out;
 }
 
@@ -737,6 +774,114 @@ canvas {
     }
 }
 
+/* --- Two-player split-screen (plan 026) --- */
+/* Dual-mode markup: the per-seat clones idle hidden; ui.js shows the set
+   for the live mode (solo keeps the classic id elements untouched). */
+.coop-only {
+    display: none;
+}
+
+/* Per-half KILL!/combo: same look, anchored over each half's center. */
+.kill-indicator[data-seat="0"] {
+    left: 25%;
+}
+
+.kill-indicator[data-seat="1"] {
+    left: 75%;
+}
+
+.combo-chip[data-seat="0"] {
+    left: 25%;
+}
+
+.combo-chip[data-seat="1"] {
+    left: 75%;
+}
+
+/* Per-half danger vignettes: each hugs its own half's frame. */
+.danger-vignette[data-seat="0"] {
+    right: 50%;
+}
+
+.danger-vignette[data-seat="1"] {
+    left: 50%;
+}
+
+/* Spectator chip: quiet banner over a dead hero's half while the partner
+   plays on (their half is showing the partner cam underneath). */
+.waiting-chip {
+    position: absolute;
+    top: 42%;
+    transform: translateX(-50%);
+    z-index: 55;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: #B0BEC5;
+    border: 2px solid #546E7A;
+    border-radius: 5px;
+    padding: 10px 14px;
+    font-size: 0.7em;
+    text-shadow: 2px 2px 2px rgba(0, 0, 0, 0.6);
+}
+
+.waiting-chip[data-seat="0"] {
+    left: 25%;
+}
+
+.waiting-chip[data-seat="1"] {
+    left: 75%;
+}
+
+/* 2P HUD: one column of readouts under each half. */
+#coop-hud {
+    display: flex;
+    justify-content: space-around;
+    align-items: baseline;
+}
+
+.player-hud {
+    flex: 1;
+}
+
+.hud-name {
+    display: inline-block;
+    margin-right: 6px;
+    font-size: 0.9em;
+    color: #FF4500;
+    /* P1 wears the hero orange-red */
+}
+
+.hud-name-p2 {
+    color: #26C6DA;
+    /* P2 wears the partner teal (characters.js P2_BODY_COLOR) */
+}
+
+.hud-collect-display {
+    color: #FFEB3B;
+    /* Same urgency yellow as the solo collect timer */
+}
+
+.hud-collect-display.timer-panic {
+    animation: timer-panic-pulse 1s ease-in-out infinite;
+}
+
+/* 2P death screen: the two heroes' runs side by side. */
+.coop-final-columns {
+    display: flex;
+    justify-content: space-around;
+    gap: 12px;
+    margin: 0 0 8px;
+}
+
+.coop-final-name {
+    font-size: 0.8em;
+    color: #FF4500;
+    margin: 0 0 4px;
+}
+
+.coop-final-name-p2 {
+    color: #26C6DA;
+}
+
 /* Off-Screen Enemy Indicator Styling */
 #offscreen-indicator-container {
     position: fixed;
@@ -755,7 +900,11 @@ canvas {
 
 .enemy-indicator {
     position: absolute;
-    /* Positioned within the container */
+    /* Positioned within the container. left/top stay pinned at 0 — the
+       per-frame position rides the transform (translate3d), so moving an
+       arrow never triggers layout (plan 020 P-5). */
+    left: 0;
+    top: 0;
     width: 20px;
     /* Example size */
     height: 20px;
@@ -775,7 +924,9 @@ canvas {
 @media (prefers-reduced-motion: reduce) {
 
     #score.score-pop,
+    .hud-score.score-pop,
     #combo-chip.combo-pop,
+    .combo-chip.combo-pop,
     .message-box {
         animation: none;
     }
@@ -792,7 +943,8 @@ canvas {
 
     /* Panic still reads — as a static urgency color, not a pulse. The
        vignette's breathing is likewise disabled in ui.js (static opacity). */
-    #collect-timer-display.timer-panic {
+    #collect-timer-display.timer-panic,
+    .hud-collect-display.timer-panic {
         animation: none;
         color: #FF1744;
     }
@@ -814,6 +966,17 @@ canvas {
         font-size: 11px;
         min-width: 44px;
         min-height: 44px;
+    }
+
+    /* The mobile .game-button sizing grows #original-link to ~72px tall
+       (frame-y 10-82, z 120) — the KILL!/combo band must clear it or the
+       banner paints UNDER the opaque link (B4 review blocker B2). */
+    .kill-indicator {
+        top: 88px;
+    }
+
+    #combo-chip {
+        top: 142px;
     }
 
     #ui-container {

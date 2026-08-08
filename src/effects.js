@@ -1,15 +1,14 @@
 import * as THREE from 'three';
 import {
-    worldSize,
     DUST_PARTICLES_PER_STEP, DUST_LIFE, DUST_SPEED, DUST_COLOR_FROM, DUST_COLOR_TO,
     POPUP_RISE, POPUP_LIFE, GROWTH_FRAME_FACTOR, PANIC_TIME, DEATH_SQUASH_TIME,
     WATER_LEVEL
 } from './constants.js';
 import { state } from './state.js';
-import { torusDelta, torusDistance } from './worldmath.js';
+import { torusDelta, torusDeltaComponent, torusDistance } from './worldmath.js';
 import { groundHeightAt } from './terrain.js';
 import { COLLECTIBLE_MATERIAL } from './collectibles.js';
-import { HERO_GLOW_MATERIAL, ENEMY_PUPIL_HUNT_MATERIAL, ENEMY_PUPIL_SCARED_MATERIAL } from './characters.js';
+import { HERO_GLOW_MATERIAL, ENEMY_PUPIL_HUNT_MATERIAL, ENEMY_PUPIL_SCARED_MATERIAL, SHADOW_BASE_OPACITY } from './characters.js';
 
 // --- Visual "juice" (plan 015) ---
 // All effects here are procedural and pooled: ONE THREE.Points + ONE
@@ -53,15 +52,15 @@ const scratchColorB = new THREE.Color();
 // so pausing freezes every pulse along with the world.
 let clock = 0;
 
-// Player squash-and-stretch timer (seconds remaining; 0 = at rest).
+// Player squash-and-stretch / milestone-pulse durations. The TIMERS live on
+// each player state (squashTime/pulseTime/deathSquashTime — plan 026): one
+// hero's collect squash must never deform the other.
 const SQUASH_DURATION = 0.3;
-let squashTime = 0;
 
-// Growth-milestone scale pulse (seconds remaining; 0 = at rest). Combines
-// multiplicatively with the squash in updatePlayerScaleFx, so a milestone
-// landing on a collect (it always does) never fights the squash for scale.
+// Growth-milestone scale pulse duration. Combines multiplicatively with the
+// squash in updatePlayerScaleFx, so a milestone landing on a collect (it
+// always does) never fights the squash for scale.
 const PULSE_DURATION = 0.35;
-let pulseTime = 0;
 
 // --- Floating score popup pool (score-juice pass) ---
 // "+N" text sprites that rise and fade at the kill position. POOLED like
@@ -75,10 +74,12 @@ const popups = []; // { sprite, texture, ctx2d, life, baseY }
 let popupCursor = 0; // Ring allocator, same policy as the particle pool
 
 // --- Panic food arrow (tension pass) ---
-// ONE shared blocky pyramid floating above the player during the collect
-// countdown's last PANIC_TIME seconds, pointing (torus-aware) at the
-// nearest food. Hidden whenever inactive; zero per-frame allocation.
-let foodArrow = null;
+// A blocky pyramid floating above a panicking player, pointing (torus-aware)
+// at their nearest food. ONE PER SEAT since plan 026 (each hero races their
+// own collect clock) — both meshes share the single cone geometry and the
+// hero glow material, so the pool's GPU footprint is unchanged. Hidden
+// whenever inactive; zero per-frame allocation.
+const foodArrows = [null, null];
 const arrowDelta = new THREE.Vector3(); // Scratch for the torus direction
 
 export function initEffects() {
@@ -126,17 +127,30 @@ export function initEffects() {
         state.scene.add(sprite);
         popups.push({ sprite, texture, ctx2d, life: 0, baseY: 0 });
     }
+    // Pre-upload every popup canvas texture NOW (plan 025): a CanvasTexture
+    // otherwise reaches the GPU only on its sprite's first VISIBLE render —
+    // so each popup pool slot's first-ever use mid-run was a one-time
+    // texture allocation (a moving +1 in the resource-plateau specs, and a
+    // micro-hitch landing exactly on a celebratory beat). With the pool now
+    // serving more beat kinds (score, DISTANCE, DISCOVERED, gold, titan),
+    // several slots debut in any long walk. initTexture makes the claim
+    // above literally true: ALL popup GPU resources exist from boot.
+    for (const p of popups) state.renderer.initTexture(p.texture);
 
-    // Panic food arrow: a 4-sided cone reads as a blocky pyramid — on-theme.
-    // The tip is pre-rotated to +Z so a single rotation.y aims it. It wears
-    // the hero's breathing lime glow material: same visual language as the
-    // scarf/antenna, zero new materials. Created once here (boot), so the
-    // resource-pin tests never see it as growth.
+    // Panic food arrows: a 4-sided cone reads as a blocky pyramid — on-theme.
+    // The tip is pre-rotated to +Z so a single rotation.y aims it. Both
+    // seats' arrows wear the hero's breathing lime glow material and share
+    // ONE geometry: same visual language as the scarf/antenna, zero new GPU
+    // resources for the second mesh. Created once here (boot), so the
+    // resource-pin tests never see them as growth.
     const arrowGeometry = new THREE.ConeGeometry(0.34, 0.85, 4);
     arrowGeometry.rotateX(Math.PI / 2); // Tip points +Z; rotation.y steers it
-    foodArrow = new THREE.Mesh(arrowGeometry, HERO_GLOW_MATERIAL);
-    foodArrow.visible = false;
-    state.scene.add(foodArrow);
+    for (let seat = 0; seat < foodArrows.length; seat++) {
+        const arrow = new THREE.Mesh(arrowGeometry, HERO_GLOW_MATERIAL);
+        arrow.visible = false;
+        state.scene.add(arrow);
+        foodArrows[seat] = arrow;
+    }
 
     // Food reads as a glowing pickup: shared material, so ALL food pulses
     // in sync — one uniform update per frame, zero per-item cost.
@@ -236,17 +250,18 @@ export function spawnRing(origin, opts = {}) {
 
 // Spawns a floating "+N" score popup at `position` (world space) — the
 // kill-bounty yellow. Delegates to the shared text-popup pool.
-export function spawnScorePopup(position, points_) {
-    spawnTextPopup(position, `+${points_}`, '#FFEB3B'); // Bright Yellow — the kill/bounty color
+export function spawnScorePopup(position, points_, player = state.players[0]) {
+    spawnTextPopup(position, `+${points_}`, '#FFEB3B', player); // Bright Yellow — the kill/bounty color
 }
 
 // The general pooled text popup (stage 3: distance milestones reuse the
 // SAME pool/ring — no new system). The only work is a 2D redraw + upload;
 // fillText's maxWidth squeezes long labels (e.g. "DISTANCE 1250!") into the
-// canvas instead of clipping them.
+// canvas instead of clipping them. `player` (optional) scales the popup to
+// THAT hero's growth so a large P2 does not inherit P1's frame size.
 let lastPopupText = null; // Test introspection (effectsInfo)
 
-export function spawnTextPopup(position, text, fillStyle) {
+export function spawnTextPopup(position, text, fillStyle, player = state.players[0]) {
     if (popups.length === 0) return;
     lastPopupText = text;
     const p = popups[popupCursor];
@@ -264,8 +279,10 @@ export function spawnTextPopup(position, text, fillStyle) {
     ctx2d.fillText(text, 128, 64, 240);
     p.texture.needsUpdate = true;
     // Popups scale with the camera's growth pull-back so they stay the same
-    // size ON SCREEN as the player (and the framing) grows.
-    const frame = 1 + (state.playerScale - 1) * GROWTH_FRAME_FACTOR;
+    // size ON SCREEN as the player (and the framing) grows. Use the owning
+    // hero's scale (2P: each half frames its own seat).
+    const ownerScale = (player && Number.isFinite(player.scale)) ? player.scale : state.playerScale;
+    const frame = 1 + (ownerScale - 1) * GROWTH_FRAME_FACTOR;
     p.sprite.scale.set(3.0 * frame, 1.5 * frame, 1);
     p.sprite.position.set(position.x, position.y + 0.5, position.z);
     p.baseY = p.sprite.position.y;
@@ -291,8 +308,9 @@ function updatePopups(dt) {
 
 // --- Event hooks (called from game.js / enemies.js) ---
 
-// Food collected: lime sparks from the food's spot + player squash-stretch.
-export function onCollect(position) {
+// Food collected: lime sparks from the food's spot + squash-stretch on the
+// hero who ate it (plan 026 — the squash is per player).
+export function onCollect(position, player = state.players[0]) {
     spawnBurst(position, {
         count: 16,
         colorFrom: 0xCCFF66, // Bright lime-white pop...
@@ -301,7 +319,7 @@ export function onCollect(position) {
         upBias: 3,
         life: 0.45
     });
-    if (!reducedMotion) squashTime = SQUASH_DURATION;
+    if (!reducedMotion) player.squashTime = SQUASH_DURATION;
 }
 
 // Enemy defeated: a bigger burst in the enemy's body color that transitions
@@ -325,34 +343,36 @@ export function onEnemyKilled(position, bodyColorHex, enemyScale) {
 // on the object you stare at — skipped under prefers-reduced-motion, where
 // the block simply bursts. setupNewGame → resetEffects restores the mesh.
 const deathOrigin = { x: 0, y: 0, z: 0 }; // Scratch — never allocated per death
-let deathSquashTime = 0; // Seconds remaining in the squash; 0 = inactive
 
-export function onPlayerDeath() {
-    if (!state.player) return;
-    // The death sequence owns the player's scale from here — a collect
+// Per player (plan 026): killPlayer squashes ONE hero while the partner
+// plays on; endGame's final death is the same call for the last one.
+export function onPlayerDeath(player = state.players[0]) {
+    if (!player.mesh) return;
+    // The death sequence owns this player's scale from here — a collect
     // squash or milestone pulse mid-flight must not fight it.
-    squashTime = 0;
-    pulseTime = 0;
+    player.squashTime = 0;
+    player.pulseTime = 0;
     if (reducedMotion) {
-        spawnDeathBurst();
-        state.player.visible = false;
+        spawnDeathBurst(player);
+        player.mesh.visible = false;
         return;
     }
-    deathSquashTime = DEATH_SQUASH_TIME;
+    player.deathSquashTime = DEATH_SQUASH_TIME;
 }
 
-function spawnDeathBurst() {
+function spawnDeathBurst(player) {
     // Body center; endless lifts it by the terrain under the player
     // (player y is always 0 in classic).
-    const baseY = state.worldMode === 'endless' ? state.player.position.y : 0;
-    deathOrigin.x = state.player.position.x;
-    deathOrigin.y = baseY + Math.max(0.3, state.playerScale * 0.5);
-    deathOrigin.z = state.player.position.z;
+    const pos = player.mesh.position;
+    const baseY = state.worldMode === 'endless' ? pos.y : 0;
+    deathOrigin.x = pos.x;
+    deathOrigin.y = baseY + Math.max(0.3, player.scale * 0.5);
+    deathOrigin.z = pos.z;
     spawnBurst(deathOrigin, {
         count: 64,
         colorFrom: 0xFF8A50, // Hot orange flash...
         colorTo: 0xFF4500, // ...settling into the player's own orange-red
-        speed: 6.5 + state.playerScale * 0.5,
+        speed: 6.5 + player.scale * 0.5,
         upBias: 4,
         life: 0.8,
         gravity: 7
@@ -360,22 +380,24 @@ function spawnDeathBurst() {
 }
 
 function updateDeathFx(dt) {
-    if (deathSquashTime <= 0 || !state.player || !state.player.visible) return;
-    deathSquashTime -= dt;
-    const base = state.playerScale;
-    if (deathSquashTime <= 0) {
-        // Fully flat — the block bursts into sparks and is gone.
-        spawnDeathBurst();
-        state.player.visible = false;
-        return;
+    for (const player of state.players) {
+        if (player.deathSquashTime <= 0 || !player.mesh || !player.mesh.visible) continue;
+        player.deathSquashTime -= dt;
+        const base = player.scale;
+        if (player.deathSquashTime <= 0) {
+            // Fully flat — the block bursts into sparks and is gone.
+            spawnDeathBurst(player);
+            player.mesh.visible = false;
+            continue;
+        }
+        const t = 1 - player.deathSquashTime / DEATH_SQUASH_TIME;
+        const eased = t * t; // Accelerates into the floor
+        player.mesh.scale.set(
+            base * (1 + 0.7 * eased),
+            base * Math.max(0.04, 1 - 0.96 * eased), // Pancaked, never inverted
+            base * (1 + 0.7 * eased)
+        );
     }
-    const t = 1 - deathSquashTime / DEATH_SQUASH_TIME;
-    const eased = t * t; // Accelerates into the floor
-    state.player.scale.set(
-        base * (1 + 0.7 * eased),
-        base * Math.max(0.04, 1 - 0.96 * eased), // Pancaked, never inverted
-        base * (1 + 0.7 * eased)
-    );
 }
 
 // --- New-best celebration (spectacle pass) ---
@@ -395,7 +417,8 @@ export function onNewBest() {
 }
 
 function updateCelebration(dt) {
-    if (celebrationSteps <= 0 || !state.player) return;
+    const hero = state.players[0]; // Death-screen confetti centers on seat 0's spot
+    if (celebrationSteps <= 0 || !hero.mesh) return;
     celebrationClock -= dt;
     if (celebrationClock > 0) return;
     celebrationClock = CELEBRATION_STAGGER;
@@ -405,12 +428,13 @@ function updateCelebration(dt) {
     // out to fountain past the edges of the centered death box (which is
     // nearly opaque). Offsets scale with the camera's growth pull-back so
     // the confetti clears the box at every player size.
-    const frame = 1 + (state.playerScale - 1) * GROWTH_FRAME_FACTOR;
+    const frame = 1 + (hero.scale - 1) * GROWTH_FRAME_FACTOR;
     const side = celebrationSteps % 2 === 0 ? 1 : -1;
-    const baseY = state.worldMode === 'endless' ? state.player.position.y : 0;
-    celebrationOrigin.x = state.player.position.x + side * (8 + Math.random() * 4) * frame;
+    const pos = hero.mesh.position;
+    const baseY = state.worldMode === 'endless' ? pos.y : 0;
+    celebrationOrigin.x = pos.x + side * (8 + Math.random() * 4) * frame;
     celebrationOrigin.y = baseY + (1 + Math.random() * 2) * frame;
-    celebrationOrigin.z = state.player.position.z + (Math.random() - 0.5) * 5 * frame;
+    celebrationOrigin.z = pos.z + (Math.random() - 0.5) * 5 * frame;
     spawnBurst(celebrationOrigin, {
         count: 36,
         colorFrom: 0xFFFFFF, // White flash...
@@ -430,8 +454,8 @@ function updateCelebration(dt) {
 // Both ride the ONE pooled burst engine — zero new resources.
 const jumpDustOrigin = { x: 0, y: 0, z: 0 }; // Scratch — never allocated per hop
 
-function spawnJumpDust(count, speed) {
-    const p = state.player.position;
+function spawnJumpDust(player, count, speed) {
+    const p = player.mesh.position;
     jumpDustOrigin.x = p.x;
     // Feet height: in endless p.y is terrain + jumpOffset; at takeoff and
     // landing the offset is 0, so p.y IS the ground under the feet.
@@ -448,22 +472,22 @@ function spawnJumpDust(count, speed) {
     });
 }
 
-export function onJumpTakeoff() {
-    if (!state.player) return;
-    spawnJumpDust(10, 1.4);
-    if (!reducedMotion) squashTime = SQUASH_DURATION; // Crouch-anticipation squash
+export function onJumpTakeoff(player = state.players[0]) {
+    if (!player.mesh) return;
+    spawnJumpDust(player, 10, 1.4);
+    if (!reducedMotion) player.squashTime = SQUASH_DURATION; // Crouch-anticipation squash
 }
 
-export function onJumpLand() {
-    if (!state.player) return;
-    spawnJumpDust(14, 2.0); // Wider ring — the touchdown reads bigger than the hop
+export function onJumpLand(player = state.players[0]) {
+    if (!player.mesh) return;
+    spawnJumpDust(player, 14, 2.0); // Wider ring — the touchdown reads bigger than the hop
 }
 
 // Growth milestone (score-juice pass): a lime floor shockwave ring sized to
 // the player, plus a brief celebratory scale pulse. The pulse is screen-
 // space-adjacent motion on the object you stare at — skipped under
 // prefers-reduced-motion, like the squash. The ring (object motion) stays.
-export function onGrowthMilestone(position, playerScale) {
+export function onGrowthMilestone(position, playerScale, player = state.players[0]) {
     spawnRing(position, {
         count: 30,
         radius: 0.7 * playerScale,
@@ -472,7 +496,7 @@ export function onGrowthMilestone(position, playerScale) {
         colorTo: 0x76FF03, // ...settling into food lime
         life: 0.5
     });
-    if (!reducedMotion) pulseTime = PULSE_DURATION;
+    if (!reducedMotion) player.pulseTime = PULSE_DURATION;
 }
 
 // New run: park every particle and reset transient animation state.
@@ -482,20 +506,26 @@ export function resetEffects() {
         positions[i * 3 + 1] = PARKED_Y;
     }
     activeParticles = 0;
-    squashTime = 0;
-    pulseTime = 0;
-    // Cinematic-death cleanup: un-burst the player for the new run
-    // (setupNewGame restores the scale right before calling this).
-    deathSquashTime = 0;
     celebrationSteps = 0;
-    if (state.player) state.player.visible = true;
-    if (foodArrow) foodArrow.visible = false;
+    for (const player of state.players) {
+        player.squashTime = 0;
+        player.pulseTime = 0;
+        // Cinematic-death cleanup: un-burst the hero for the new run
+        // (setupNewGame restores the scale right before calling this).
+        player.deathSquashTime = 0;
+        if (player.mesh) {
+            player.mesh.visible = true;
+            resetWalk(player.mesh);
+        }
+    }
+    for (const arrow of foodArrows) {
+        if (arrow) arrow.visible = false;
+    }
     for (const p of popups) {
         p.life = 0;
         p.sprite.visible = false;
     }
     if (posAttr) posAttr.needsUpdate = true;
-    if (state.player) resetWalk(state.player);
 }
 
 // --- Per-frame update (dt in seconds, from the game clock) ---
@@ -511,14 +541,47 @@ export function updateEffects(dt) {
     // Hero glow accents (antenna tip + scarf) breathe at a gentle 0.5Hz —
     // one shared material, one uniform write per frame.
     HERO_GLOW_MATERIAL.emissiveIntensity = 0.6 + 0.25 * Math.sin(clock * Math.PI);
-    if (state.player) {
-        updateWalk(state.player, dt);
-        updateBlink(state.player, dt);
+    for (const player of state.players) {
+        if (!player.mesh) continue;
+        updateWalk(player.mesh, dt);
+        updateBlink(player.mesh, dt);
+        updateShadow(player.mesh);
     }
     for (const enemy of state.enemies) {
         updateWalk(enemy, dt);
-        updateEnemyAura(enemy); // Sets the scared flag updateBlink reads
+        updateEnemyAura(enemy, dt); // Sets the scared flag updateBlink reads
         updateBlink(enemy, dt);
+        updateShadow(enemy);
+    }
+}
+
+// --- Blob ground shadow (plan 023 UI-3) ---
+// The quad is a child of its character group, so its LOCAL y must cancel the
+// group's world y to sit on the terrain: local = (ground + lift − group.y) / scaleY
+// (group scale multiplies child offsets). Grounded characters reduce to
+// lift/scaleY; the airborne player's group rises with jumpOffset while the
+// shadow stays on the ground — and shrinks/fades with height, which is the
+// whole jump-legibility trick. Enemies never jump: their shared material
+// keeps the static grounded opacity. Deliberately NOT gated on reduced
+// motion: a ground shadow is static grounding, not motion.
+const SHADOW_LIFT = 0.02; // World units above the sampled terrain (z-fight clearance)
+
+function updateShadow(group) {
+    const quad = group.userData.shadowQuad;
+    if (!quad) return;
+    const sy = group.scale.y || 1;
+    const ground = state.worldMode === 'endless'
+        ? groundHeightAt(group.position.x, group.position.z)
+        : 0;
+    quad.position.y = (ground + SHADOW_LIFT - group.position.y) / sy;
+    const playerState = group.userData.playerState; // Set by createPlayer (plan 026)
+    if (playerState) {
+        const jump = playerState.jump.offset;
+        const shrink = 1 / (1 + jump * 0.35); // Higher hop → smaller pool of shade
+        const size = group.userData.shadowBaseSize * shrink;
+        quad.scale.set(size, size, 1);
+        // Per-hero material instance (characters.js) — enemies stay put.
+        quad.material.opacity = SHADOW_BASE_OPACITY / (1 + jump * 0.6);
     }
 }
 
@@ -565,37 +628,39 @@ function updateParticles(dt) {
 }
 
 // Player scale FX: the collect squash-and-stretch and the milestone pulse,
-// combined multiplicatively and layered ON TOP of playerScale. Restores the
-// exact base scale when both timers expire, so gameplay height checks are
-// untouched between pulses.
+// combined multiplicatively and layered ON TOP of the player's scale, per
+// hero (plan 026). Restores the exact base scale when both timers expire,
+// so gameplay height checks are untouched between pulses.
 function updatePlayerScaleFx(dt) {
-    if (!state.player) return;
-    if (squashTime <= 0 && pulseTime <= 0) return;
-    const base = state.playerScale;
-    let yf = 1;
-    let xzf = 1;
-    if (squashTime > 0) {
-        squashTime -= dt;
-        if (squashTime > 0) {
-            const t = 1 - squashTime / SQUASH_DURATION;
-            const wave = Math.sin(t * Math.PI * 2) * (1 - t) * 0.22;
-            yf *= 1 - wave; // Squash first (down), rebound second (up)
-            xzf *= 1 + wave * 0.6; // Roughly volume-preserving
+    for (const player of state.players) {
+        if (!player.mesh) continue;
+        if (player.squashTime <= 0 && player.pulseTime <= 0) continue;
+        const base = player.scale;
+        let yf = 1;
+        let xzf = 1;
+        if (player.squashTime > 0) {
+            player.squashTime -= dt;
+            if (player.squashTime > 0) {
+                const t = 1 - player.squashTime / SQUASH_DURATION;
+                const wave = Math.sin(t * Math.PI * 2) * (1 - t) * 0.22;
+                yf *= 1 - wave; // Squash first (down), rebound second (up)
+                xzf *= 1 + wave * 0.6; // Roughly volume-preserving
+            }
         }
-    }
-    if (pulseTime > 0) {
-        pulseTime -= dt;
-        if (pulseTime > 0) {
-            // A single proud swell: up ~10% and back, uniform on all axes
-            const t = 1 - pulseTime / PULSE_DURATION;
-            const swell = 1 + Math.sin(t * Math.PI) * 0.1;
-            yf *= swell;
-            xzf *= swell;
+        if (player.pulseTime > 0) {
+            player.pulseTime -= dt;
+            if (player.pulseTime > 0) {
+                // A single proud swell: up ~10% and back, uniform on all axes
+                const t = 1 - player.pulseTime / PULSE_DURATION;
+                const swell = 1 + Math.sin(t * Math.PI) * 0.1;
+                yf *= swell;
+                xzf *= swell;
+            }
         }
+        // When the LAST timer just expired this frame, yf/xzf are exactly 1 —
+        // this write IS the base-scale restore.
+        player.mesh.scale.set(base * xzf, base * yf, base * xzf);
     }
-    // When the LAST timer just expired this frame, yf/xzf are exactly 1 —
-    // this write IS the base-scale restore.
-    state.player.scale.set(base * xzf, base * yf, base * xzf);
 }
 
 // Panic food arrow: while the collect countdown is at or under PANIC_TIME
@@ -626,8 +691,8 @@ function lineCrossesWater(fromX, fromZ, toX, toZ) {
     return false;
 }
 
-function pickArrowTarget() {
-    const p = state.player.position;
+function pickArrowTarget(player) {
+    const p = player.mesh.position;
     if (state.worldMode !== 'endless') {
         let nearest = null;
         let best = Infinity;
@@ -663,28 +728,32 @@ function pickArrowTarget() {
 }
 
 function updateFoodArrow() {
-    if (!foodArrow || !state.player) return;
-    const active = state.gameActive &&
-        state.collectTimeLeft <= PANIC_TIME &&
-        state.collectibles.length > 0;
-    if (!active) {
-        if (foodArrow.visible) foodArrow.visible = false;
-        lastArrowTarget = null;
-        return;
+    for (const player of state.players) {
+        const arrow = foodArrows[player.seat];
+        if (!arrow || !player.mesh) continue;
+        const active = state.gameActive && player.alive &&
+            player.collectTimeLeft <= PANIC_TIME &&
+            state.collectibles.length > 0;
+        if (!active) {
+            if (arrow.visible) arrow.visible = false;
+            if (player.seat === 0) lastArrowTarget = null;
+            continue;
+        }
+        const nearest = pickArrowTarget(player);
+        if (player.seat === 0) lastArrowTarget = nearest; // effectsInfo probes seat 0's target
+        const pos = player.mesh.position;
+        torusDelta(pos, nearest.position, arrowDelta);
+        const frame = 1 + (player.scale - 1) * GROWTH_FRAME_FACTOR;
+        const baseY = state.worldMode === 'endless' ? pos.y : 0; // Above the head even on a hill
+        arrow.visible = true;
+        arrow.position.set(
+            pos.x,
+            baseY + player.scale * 1.5 + (0.4 + 0.12 * Math.sin(clock * 3)) * frame,
+            pos.z
+        );
+        arrow.rotation.y = Math.atan2(arrowDelta.x, arrowDelta.z); // +Z tip → shortest path
+        arrow.scale.setScalar(frame);
     }
-    const nearest = pickArrowTarget();
-    lastArrowTarget = nearest;
-    torusDelta(state.player.position, nearest.position, arrowDelta);
-    const frame = 1 + (state.playerScale - 1) * GROWTH_FRAME_FACTOR;
-    const baseY = state.worldMode === 'endless' ? state.player.position.y : 0; // Above the head even on a hill
-    foodArrow.visible = true;
-    foodArrow.position.set(
-        state.player.position.x,
-        baseY + state.playerScale * 1.5 + (0.4 + 0.12 * Math.sin(clock * 3)) * frame,
-        state.player.position.z
-    );
-    foodArrow.rotation.y = Math.atan2(arrowDelta.x, arrowDelta.z); // +Z tip → shortest path
-    foodArrow.scale.setScalar(frame);
 }
 
 // All food pulses in sync via the ONE shared material — deliberate and cheap.
@@ -692,11 +761,31 @@ function updateFoodGlow() {
     const endless = state.worldMode === 'endless';
     COLLECTIBLE_MATERIAL.emissiveIntensity = 0.3 + 0.22 * Math.sin(clock * 3);
     for (const c of state.collectibles) {
+        // Fog gate (plan 020 / audit P-4): food past ~90u from EVERY hero is
+        // fully fog-hidden in both halves (fog far ≈ 86), so its bob/rotation
+        // animates for nobody — skip it and leave the cube resting at its
+        // spawn pose (baseY + 0.45).
+        if (endless) {
+            let visibleToSomeone = false;
+            for (const player of state.players) {
+                if (!player.mesh) continue;
+                const dx = c.position.x - player.mesh.position.x;
+                const dz = c.position.z - player.mesh.position.z;
+                if (dx * dx + dz * dz <= 8100) { // 90²
+                    visibleToSomeone = true;
+                    break;
+                }
+            }
+            if (!visibleToSomeone) continue;
+        }
         const phase = c.userData.phase ?? 0;
-        // Endless: the bob rides the terrain under the cube (a fresh sample
-        // each frame — food never moves in XZ, but rebases shift its local
-        // coords, and groundHeightAt is origin-aware either way).
-        const baseY = endless ? groundHeightAt(c.position.x, c.position.z) : 0;
+        // Endless: the bob rides the spawn-time terrain height cache
+        // (userData.baseY, set by collectibles.js). Heights are REBASE-
+        // INVARIANT — they are heights, not coordinates: a rebase shifts
+        // local x/z, never the true-coordinate sample the spawn made — so
+        // the old per-collectible-per-frame groundHeightAt re-sample bought
+        // nothing (audit P-4).
+        const baseY = endless ? c.userData.baseY : 0;
         c.rotation.y = clock * 1.4 + phase;
         c.position.y = baseY + 0.45 + Math.sin(clock * 2.5 + phase) * 0.08;
     }
@@ -711,11 +800,12 @@ const JUMP_LEG_TUCK = 0.85; // Radians all four legs sweep back mid-air (a look,
 const walkScratch = { dx: 0, dz: 0 };
 
 function seamDelta(a, b) {
-    // Per-axis toroidal delta: the wrap seam must not read as a 200-unit sprint
-    let d = a - b;
-    if (d > worldSize / 2) d -= worldSize;
-    else if (d < -worldSize / 2) d += worldSize;
-    return d;
+    // Per-axis shortest delta via the ONE mode-aware dispatch point (audit
+    // C-13). Classic: the wrap seam must not read as a 200-unit sprint.
+    // Endless: plain subtraction — the old hardcoded worldSize/2 wrap here
+    // was NOT mode-aware, so any legitimate >100u endless step (teleporting
+    // specs, future dashes) would fold into a tiny phantom stride.
+    return torusDeltaComponent(b, a); // shortest signed b→a
 }
 
 function updateWalk(group, dt) {
@@ -733,8 +823,9 @@ function updateWalk(group, dt) {
     // Jump tuck (endless): mid-air the player's legs fold back instead of
     // striding on nothing — the tuck blend eases in fast and back out on
     // landing, and the stride phase (and its footstep dust) holds still
-    // until the feet are back on the ground.
-    const airborne = group === state.player && state.jumpAirborne;
+    // until the feet are back on the ground. Per hero via the playerState
+    // back-reference (plan 026); enemies never jump.
+    const airborne = group.userData.playerState?.jump.airborne === true;
     w.tuck = w.tuck ?? 0;
     w.tuck += ((airborne ? 1 : 0) - w.tuck) * (1 - Math.exp(-14 * dt));
     if (!airborne && w.tuck < 0.005) w.tuck = 0;
@@ -896,7 +987,7 @@ function updateBlink(group, dt) {
 // vulnerable") and a panicked side-to-side wobble as they flee. The pulse
 // is a smooth ~0.6Hz sine — nowhere near a strobe. Enemies own their body
 // material (per-instance, plan 007), so this repaints nothing else.
-function updateEnemyAura(enemyGroup) {
+function updateEnemyAura(enemyGroup, dt) {
     const body = enemyGroup.userData.bodyMesh;
     if (!body) return;
     // Role-reversal face: glowing-red hunter pupils become huge white scared
@@ -934,7 +1025,10 @@ function updateEnemyAura(enemyGroup) {
             body.material.emissive.setHex(0x000000);
         }
         if (enemyGroup.rotation.z !== 0) {
-            enemyGroup.rotation.z *= 0.8;
+            // dt-correct settle (audit C-12): ×0.8 per FRAME made the wobble
+            // snap back at 120Hz and linger at 30Hz. exp(-11·dt) is the same
+            // eased decay at every frame rate (≈0.83/frame at 60fps).
+            enemyGroup.rotation.z *= Math.exp(-11 * dt);
             if (Math.abs(enemyGroup.rotation.z) < 0.005) enemyGroup.rotation.z = 0;
         }
     }
@@ -958,6 +1052,14 @@ export function shiftActiveParticles(dx, dz) {
         p.sprite.position.x += dx;
         p.sprite.position.z += dz;
     }
+}
+
+// The kill-aura's current breathing intensity (plan 026): the per-viewer
+// color passes (enemies.js applyEdibilityTint) reuse the exact pulse the
+// solo aura runs on, deterministic within a frame — both halves breathe
+// the same value, so cross-pass writes can never flicker.
+export function auraPulseIntensity() {
+    return 0.35 + 0.25 * Math.sin(clock * 4);
 }
 
 // Debug/test introspection (read-only) — wired into window.__game by main.js.

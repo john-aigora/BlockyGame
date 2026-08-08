@@ -1,10 +1,16 @@
-import { MAX_ENEMY_INDICATORS, DANGER_RADIUS, DANGER_VIGNETTE_MAX, HEARTBEAT_BPM, DEATH_SCREEN_DELAY } from './constants.js';
+import * as THREE from 'three';
+import {
+    MAX_ENEMY_INDICATORS, DANGER_RADIUS, DANGER_VIGNETTE_MAX, HEARTBEAT_BPM, DEATH_SCREEN_DELAY,
+    SURVIVAL_BEAT_COOLDOWN, PHEW_PEAK_MIN, NEAR_MISS_FACTOR,
+    PLAYER_COLLIDER_HALF_WIDTH, ENEMY_COLLIDER_HALF_WIDTH, DANGER_MUSIC_THRESHOLD,
+    WORLD_SEED, DAILY_WORLD
+} from './constants.js';
 import { state } from './state.js';
 import { canKillSpecificEnemy } from './enemies.js';
-import { recordScore } from './hiscores.js';
+import { recordScore, recordCoopScore, loadHiscores } from './hiscores.js';
 import { torusDistance } from './worldmath.js';
-import { unlockAudio, sfx, music, isMuted, setMuted } from './audio.js';
-import { onPlayerDeath, onNewBest } from './effects.js';
+import { unlockAudio, sfx, music, isMuted, setMuted, audioState } from './audio.js';
+import { onPlayerDeath, onNewBest, spawnTextPopup } from './effects.js';
 import { rumble } from './rumble.js';
 
 // Cached DOM references, resolved once at init (plan 007) — the hot loop
@@ -13,8 +19,10 @@ export const el = {
     score: null,
     distanceDisplay: null,
     distance: null,
+    time: null,
     finalDistanceLine: null,
     finalDistance: null,
+    finalRegions: null,
     collectTime: null,
     collectTimerDisplay: null,
     killIndicator: null,
@@ -25,24 +33,53 @@ export const el = {
     finalScore: null,
     startOverlay: null,
     startButton: null,
-    modeClassic: null,
-    modeEndless: null,
     endlessHint: null,
-    controlsHint: null,
+    familyBest: null,
+    familyBestDistance: null,
     jumpButton: null,
     pauseButton: null,
     speedButton: null,
     hiscoreSlot: null,
     muteButton: null,
-    goFlourish: null
+    goFlourish: null,
+    dailyToggle: null,
+    seedValue: null,
+    // --- 2P dual-mode elements (plan 026) ---
+    onePlayerButton: null, // Start-overlay roster picker
+    twoPlayerButton: null,
+    scoreDisplay: null, // The solo Score row (hidden in 2P)
+    coopHud: null, // The two .player-hud columns (hidden solo)
+    coopFinal: null, // 2P death-screen columns (hidden solo)
+    coopP1Score: null,
+    coopP2Score: null,
+    coopP1Distance: null,
+    coopP2Distance: null,
+    coopTeamScore: null,
+    coopFinalRegions: null,
+    // Per-seat element sets, indexed by seat.
+    seatVignettes: [null, null],
+    seatKills: [null, null],
+    seatCombos: [null, null],
+    seatWaits: [null, null],
+    hudScores: [null, null],
+    hudDistances: [null, null],
+    hudCollects: [null, null],
+    hudCollectDisplays: [null, null]
 };
+
+// One seat's element out of a data-seat pair.
+function bySeat(selector, seat) {
+    return document.querySelector(`${selector}[data-seat="${seat}"]`);
+}
 
 export function initUI() {
     el.score = document.getElementById('score');
     el.distanceDisplay = document.getElementById('distance-display');
     el.distance = document.getElementById('distance');
+    el.time = document.getElementById('time');
     el.finalDistanceLine = document.getElementById('final-distance-line');
     el.finalDistance = document.getElementById('final-distance');
+    el.finalRegions = document.getElementById('final-regions');
     el.collectTime = document.getElementById('collect-time');
     el.collectTimerDisplay = document.getElementById('collect-timer-display');
     el.dangerVignette = document.getElementById('danger-vignette');
@@ -54,17 +91,107 @@ export function initUI() {
     el.finalScore = document.getElementById('final-score');
     el.startOverlay = document.getElementById('start-overlay');
     el.startButton = document.getElementById('start-button');
-    el.modeClassic = document.getElementById('mode-classic');
-    el.modeEndless = document.getElementById('mode-endless');
     el.endlessHint = document.getElementById('endless-hint');
-    el.controlsHint = document.getElementById('controls-hint');
+    el.familyBest = document.getElementById('family-best');
+    el.familyBestDistance = document.getElementById('family-best-distance');
     el.jumpButton = document.getElementById('jump-button');
     el.pauseButton = document.getElementById('pause-button');
     el.speedButton = document.getElementById('speed-cycle-button');
     el.hiscoreSlot = document.getElementById('hiscore-slot');
     el.muteButton = document.getElementById('mute-button');
     el.goFlourish = document.getElementById('go-flourish');
+    el.dailyToggle = document.getElementById('daily-toggle');
+    el.seedValue = document.getElementById('seed-value');
+    el.onePlayerButton = document.getElementById('one-player-button');
+    el.twoPlayerButton = document.getElementById('two-player-button');
+    el.scoreDisplay = document.getElementById('score-display');
+    el.coopHud = document.getElementById('coop-hud');
+    el.coopFinal = document.getElementById('coop-final');
+    el.coopP1Score = document.getElementById('coop-p1-score');
+    el.coopP2Score = document.getElementById('coop-p2-score');
+    el.coopP1Distance = document.getElementById('coop-p1-distance');
+    el.coopP2Distance = document.getElementById('coop-p2-distance');
+    el.coopTeamScore = document.getElementById('coop-team-score');
+    el.coopFinalRegions = document.getElementById('coop-final-regions');
+    for (const seat of [0, 1]) {
+        el.seatVignettes[seat] = bySeat('.danger-vignette', seat);
+        el.seatKills[seat] = bySeat('.kill-indicator', seat);
+        el.seatCombos[seat] = bySeat('.combo-chip', seat);
+        el.seatWaits[seat] = bySeat('.waiting-chip', seat);
+        const hud = bySeat('.player-hud', seat);
+        el.hudScores[seat] = hud ? hud.querySelector('.hud-score') : null;
+        el.hudDistances[seat] = hud ? hud.querySelector('.hud-distance') : null;
+        el.hudCollects[seat] = hud ? hud.querySelector('.hud-collect-time') : null;
+        el.hudCollectDisplays[seat] = hud ? hud.querySelector('.hud-collect-display') : null;
+    }
     initMuteToggle();
+    initDailyToggle();
+}
+
+// True while the live layout is the two-half coop screen.
+function coopMode() {
+    return state.players.length >= 2;
+}
+
+// --- Dual-mode HUD flip (plan 026) ---
+// Solo shows the classic id elements exactly as always; 2P swaps in the
+// per-seat sets. Called by setPlayerCount (game.js) on every roster change.
+export function updateHudMode() {
+    const coop = coopMode();
+    // The overlay picker's selected state tracks the live roster.
+    if (el.onePlayerButton) el.onePlayerButton.classList.toggle('mode-selected', !coop);
+    if (el.twoPlayerButton) el.twoPlayerButton.classList.toggle('mode-selected', coop);
+    if (el.scoreDisplay) el.scoreDisplay.style.display = coop ? 'none' : '';
+    if (el.collectTimerDisplay) el.collectTimerDisplay.style.display = coop ? 'none' : '';
+    if (el.distanceDisplay) el.distanceDisplay.style.display = coop ? 'none' : (state.worldMode === 'endless' ? '' : 'none');
+    if (el.coopHud) el.coopHud.style.display = coop ? 'flex' : 'none';
+    if (el.dangerVignette) el.dangerVignette.style.opacity = '0';
+    for (const seat of [0, 1]) {
+        if (el.seatVignettes[seat]) {
+            el.seatVignettes[seat].style.display = coop ? 'block' : 'none';
+            el.seatVignettes[seat].style.opacity = '0';
+        }
+        // KILL!/combo/waiting are frame/event-driven — a mode flip parks them.
+        if (el.seatKills[seat]) el.seatKills[seat].style.display = 'none';
+        if (el.seatCombos[seat]) el.seatCombos[seat].style.display = 'none';
+        if (el.seatWaits[seat]) el.seatWaits[seat].style.display = 'none';
+    }
+    if (el.killIndicator && coop) el.killIndicator.style.display = 'none';
+    if (el.comboChip && coop) el.comboChip.style.display = 'none';
+}
+
+// --- TODAY'S WORLD toggle + seed line (plan 025) ---
+// The seed resolves ONCE at module load (constants.js WORLD_SEED), so the
+// toggle persists the flag and NAVIGATES to re-resolve — a world cannot be
+// reseeded under a live run. The rebuilt URL drops ?seed/?daily so the
+// sessionStorage flag alone decides; every other param (move, paddebug)
+// survives. The seed line makes determinism visible: same number = same
+// world, today's number = the map the whole family is racing.
+function initDailyToggle() {
+    if (el.seedValue) {
+        el.seedValue.textContent = `${WORLD_SEED}${DAILY_WORLD ? ' · DAILY' : ''}`;
+    }
+    if (!el.dailyToggle) return;
+    el.dailyToggle.classList.toggle('mode-selected', DAILY_WORLD);
+    // The start overlay itself starts the run on ANY pointerdown — the
+    // toggle must not (same reason the START button needs no guard: its
+    // action IS starting). Stop the press here, act on the click.
+    el.dailyToggle.addEventListener('pointerdown', (e) => e.stopPropagation());
+    el.dailyToggle.addEventListener('click', () => {
+        const turningOn = !DAILY_WORLD;
+        try { sessionStorage.setItem('blocky.daily', turningOn ? '1' : '0'); }
+        catch { /* blocked storage — the reload below just keeps the default world */ }
+        // Mutual exclusion with 2P: coop only writes TEAM RUNS, so daily×2P
+        // would never place on TODAY'S BEST. Turning daily on forces solo.
+        if (turningOn) {
+            try { sessionStorage.setItem('blocky.playerCount', '1'); }
+            catch { /* blocked storage */ }
+        }
+        const url = new URL(location.href);
+        url.searchParams.delete('seed');
+        url.searchParams.delete('daily');
+        location.href = url.toString();
+    });
 }
 
 // --- GO! flourish (spectacle pass) ---
@@ -80,37 +207,19 @@ export function showGoFlourish() {
     el.goFlourish.classList.add('go-play');
 }
 
-// --- World-mode picker (retired UI; classic is test/debug only) ---
-// Markup may be absent. Still safe to call so forceWorldMode can refresh HUD.
-export function initModePicker(onPick) {
-    for (const [button, mode] of [[el.modeClassic, 'classic'], [el.modeEndless, 'endless']]) {
-        if (!button) continue;
-        button.addEventListener('pointerdown', (e) => e.stopPropagation());
-        button.addEventListener('click', (e) => {
-            e.stopPropagation();
-            sfx.click();
-            onPick(mode);
-        });
-    }
-    updateModePicker();
-}
-
-export function updateModePicker() {
+// --- Per-mode HUD visibility (audit D-4) ---
+// The mode-picker UI is retired (classic is a test/debug path via
+// forceWorldMode only); what survives is the LIVE per-mode HUD state: the
+// jump hint and the distance readout exist only in the endless world.
+// Controls-hint text is single-sourced in index.html (#controls-hint) —
+// the old per-mode textContent overwrite is gone (plan 021); classic is a
+// test-only path and keeps the endless wording.
+export function updateModeHud() {
     const endless = state.worldMode === 'endless';
-    if (el.modeClassic && el.modeEndless) {
-        el.modeClassic.classList.toggle('mode-selected', !endless);
-        el.modeEndless.classList.toggle('mode-selected', endless);
-        el.modeClassic.setAttribute('aria-pressed', String(!endless));
-        el.modeEndless.setAttribute('aria-pressed', String(endless));
-    }
     if (el.endlessHint) el.endlessHint.style.display = endless ? '' : 'none';
-    if (el.controlsHint) {
-        el.controlsHint.textContent = endless
-            ? 'Move: Stick / WASD · Jump: Space or A · Slow: X or R · Fast: Y · Pause: Start · Mute: Select'
-            : 'Move: Stick / WASD · Slow: X or R · Fast: Y · Pause: Start · Mute: Select · F cycles';
-    }
     if (el.distanceDisplay) {
-        el.distanceDisplay.style.display = endless ? '' : 'none';
+        // The solo distance row also yields to the per-seat columns in 2P.
+        el.distanceDisplay.style.display = endless && !coopMode() ? '' : 'none';
     }
 }
 
@@ -159,6 +268,21 @@ function initMuteToggle() {
     });
 }
 
+// FAMILY BEST on the start overlay (plan 023): the endless board's top
+// distance — the number the household actually chases — greets every boot
+// and every post-death menu. Hidden when the board is empty (fresh browser
+// or unavailable storage; loadHiscores already degrades to []).
+function updateFamilyBest() {
+    if (!el.familyBest) return;
+    const best = loadHiscores('endless')[0];
+    if (best) {
+        el.familyBestDistance.textContent = best.distance ?? 0;
+        el.familyBest.style.display = '';
+    } else {
+        el.familyBest.style.display = 'none';
+    }
+}
+
 // --- Start Overlay Functions (plan 008) ---
 // The overlay owns the boot (and post-death) UX: while it is visible the
 // game sits paused underneath and any key / click / tap starts the run.
@@ -166,6 +290,17 @@ export function showStartOverlay() {
     el.startOverlay.style.display = 'flex';
     state.onStartScreen = true;
     updateJumpButton(); // The menu never shows the touch JUMP control
+    updateFamilyBest();
+    // Title warmth (plan 023): a QUIET music bed under the menu — but only
+    // when a real gesture already unlocked the context (the gate submit
+    // counts; index.html rides unlockAudio on it). A bypassed gate or a
+    // rejected autoplay leaves ctx absent/suspended: skip SILENTLY, no
+    // retry — startRun's own gesture brings music up at full volume anyway.
+    // music.start() self-guards mute; a post-death overlay reuses this path.
+    if (audioState().state === 'running') {
+        music.setVolume(0.5); // HALF gain — a bed, not a performance
+        music.start();
+    }
 }
 
 export function hideStartOverlay() {
@@ -192,8 +327,52 @@ export function resetDistanceDisplay() {
     lastDistanceShown = -1;
     updateDistanceDisplay(); // furthestDistance was just reset — writes "0"
     if (el.distanceDisplay) {
-        el.distanceDisplay.style.display = state.worldMode === 'endless' ? '' : 'none';
+        // Solo row only — 2P shows the per-seat columns instead (plan 026).
+        el.distanceDisplay.style.display = state.worldMode === 'endless' && !coopMode() ? '' : 'none';
     }
+}
+
+// --- Survival time HUD (plan 023 DT-10) ---
+// "Time: m:ss" beside DISTANCE — time survived, the run's other currency,
+// finally visible. Driven from state.runTime (the game clock — pause and
+// death freeze it) with whole-second change detection, so the hot loop
+// writes the DOM at most once per second. Every full minute earns a beat:
+// the distance-milestone pattern (chime + popup over the player's head).
+let lastTimeShown = -1; // Whole seconds last written to the DOM
+
+export function updateTimeDisplay() {
+    if (!el.time) return;
+    const sec = Math.floor(state.runTime);
+    if (sec === lastTimeShown) return;
+    const prev = lastTimeShown;
+    lastTimeShown = sec;
+    const minutes = Math.floor(sec / 60);
+    el.time.textContent = `${minutes}:${String(sec % 60).padStart(2, '0')}`;
+    // Minute milestone: fires when the shown time crosses a whole-minute
+    // boundary mid-run. prev >= 0 guards the reset's -1 -> 0 write, and the
+    // gameActive/player guard keeps a post-death HUD refresh silent.
+    // Run time is SHARED (plan 026): the beat rises over every living hero
+    // (one popup each — solo is exactly one), with a single chime.
+    if (minutes >= 1 && prev >= 0 && minutes > Math.floor(prev / 60) &&
+        state.gameActive) {
+        let celebrated = false;
+        for (const player of state.players) {
+            if (!player.alive || !player.mesh) continue;
+            const p = player.mesh.position;
+            survivalBeatOrigin.x = p.x;
+            survivalBeatOrigin.y = p.y + player.scale + 0.6;
+            survivalBeatOrigin.z = p.z;
+            spawnTextPopup(survivalBeatOrigin, `${minutes} MINUTE${minutes > 1 ? 'S' : ''}!`, '#8BC34A', player);
+            celebrated = true;
+        }
+        if (celebrated) sfx.milestone();
+    }
+}
+
+// New game: rewind the change detector and write the fresh 0:00.
+export function resetTimeDisplay() {
+    lastTimeShown = -1;
+    updateTimeDisplay(); // runTime was just reset — writes "0:00", no beat (prev guard)
 }
 
 // --- Death Screen Functions ---
@@ -201,18 +380,36 @@ export function resetDistanceDisplay() {
 // #hiscore-slot hosts the local top-5 leaderboard (plan 009). A rank-0
 // NEW BEST earns confetti bursts behind the box + a victory fanfare.
 // Endless deaths also show how far the run pushed.
-export function showDeathScreen(reason, hiscores = [], rank = -1) {
+export function showDeathScreen(reason, hiscores = [], rank = -1, boardTitle = 'BEST RUNS') {
     el.deathReason.textContent = reason;
+    const coop = coopMode();
+    // 2P: the two columns + team line replace the solo score/distance lines.
+    if (el.finalScore.parentElement) {
+        el.finalScore.parentElement.style.display = coop ? 'none' : '';
+    }
+    if (el.coopFinal) el.coopFinal.style.display = coop ? '' : 'none';
+    if (coop) {
+        const [p1, p2] = state.players;
+        el.coopP1Score.textContent = p1.score;
+        el.coopP2Score.textContent = p2.score;
+        el.coopP1Distance.textContent = Math.floor(p1.distanceBest);
+        el.coopP2Distance.textContent = Math.floor(p2.distanceBest);
+        el.coopTeamScore.textContent = p1.score + p2.score;
+        if (el.coopFinalRegions) el.coopFinalRegions.textContent = state.regionsVisited.size || 1;
+    }
     el.finalScore.textContent = state.score;
     if (el.finalDistanceLine) {
-        if (state.worldMode === 'endless') {
+        if (!coop && state.worldMode === 'endless') {
             el.finalDistance.textContent = Math.floor(state.furthestDistance);
+            // REGIONS visited (plan 025): the run's exploration stat beside
+            // its distance — counts from 1 (the spawn region).
+            if (el.finalRegions) el.finalRegions.textContent = state.regionsVisited.size || 1;
             el.finalDistanceLine.style.display = '';
         } else {
             el.finalDistanceLine.style.display = 'none';
         }
     }
-    renderHiscores(hiscores, rank);
+    renderHiscores(hiscores, rank, boardTitle);
     el.messageBox.style.display = 'block'; // Make the death screen visible
     if (rank === 0) {
         onNewBest(); // Staggered palette bursts, visible around the box
@@ -224,7 +421,7 @@ export function showDeathScreen(reason, hiscores = [], rank = -1) {
 // rank) is highlighted; rank 0 also earns the NEW BEST! badge. An empty
 // list (storage unavailable AND the run failed to record) leaves the slot
 // empty, which hides it.
-function renderHiscores(list, rank) {
+function renderHiscores(list, rank, boardTitle = 'BEST RUNS') {
     el.hiscoreSlot.innerHTML = '';
     if (list.length === 0) return;
     if (rank === 0) {
@@ -235,18 +432,21 @@ function renderHiscores(list, rank) {
     }
     const title = document.createElement('p');
     title.className = 'hiscore-title';
-    title.textContent = 'BEST RUNS';
+    title.textContent = boardTitle; // "TODAY'S BEST" on a daily-world death (plan 025)
     el.hiscoreSlot.appendChild(title);
     const ol = document.createElement('ol');
     ol.className = 'hiscore-list';
     list.forEach((entry, i) => {
         const li = document.createElement('li');
-        // Endless rows lead with DISTANCE — the mode's real currency and now
+        // Coop rows lead with the TEAM total (their ranking key — plan 026);
+        // endless rows lead with DISTANCE — the mode's real currency and now
         // its ranking key (hiscores.js) — with the score alongside; classic
         // rows are untouched (score-ranked, score-first).
-        li.textContent = entry.distance !== undefined
-            ? `${entry.distance}u — ${entry.score} pts — ${entry.date}`
-            : `${entry.score} — ${entry.date}`;
+        li.textContent = entry.teamScore !== undefined
+            ? `${entry.teamScore} pts — ${entry.maxDistance}u — ${entry.date}`
+            : entry.distance !== undefined
+                ? `${entry.distance}u — ${entry.score} pts — ${entry.date}`
+                : `${entry.score} — ${entry.date}`;
         if (i === rank) li.classList.add('is-new');
         ol.appendChild(li);
     });
@@ -259,27 +459,35 @@ function renderHiscores(list, rank) {
 // remove/reflow/add dance as the score pop. enemies.js shows it on chained
 // kills; timers.js hides it when the window expires; death and new games
 // reset it here.
-export function showComboChip(count) {
-    if (!el.comboChip) return;
-    el.comboChip.textContent = `COMBO x${count}`;
-    el.comboChip.style.display = 'block';
-    el.comboChip.classList.remove('combo-pop');
-    void el.comboChip.offsetWidth; // Forces a reflow so the animation restarts
-    el.comboChip.classList.add('combo-pop');
+export function showComboChip(count, player = state.players[0]) {
+    // 2P: the chip pops under the KILLER's own half (plan 026).
+    const chip = coopMode() ? el.seatCombos[player.seat] : el.comboChip;
+    if (!chip) return;
+    chip.textContent = `COMBO x${count}`;
+    chip.style.display = 'block';
+    chip.classList.remove('combo-pop');
+    void chip.offsetWidth; // Forces a reflow so the animation restarts
+    chip.classList.add('combo-pop');
 }
 
-export function hideComboChip() {
-    if (el.comboChip && el.comboChip.style.display !== 'none') {
-        el.comboChip.style.display = 'none';
+export function hideComboChip(player = null) {
+    // No player: every chip (death/reset). A player: just their seat's.
+    const chips = player && coopMode()
+        ? [el.seatCombos[player.seat]]
+        : [el.comboChip, el.seatCombos[0], el.seatCombos[1]];
+    for (const chip of chips) {
+        if (chip && chip.style.display !== 'none') chip.style.display = 'none';
     }
 }
 
 // Zeroes the combo state and hides the chip — the single combo reset path
 // (death via endGame, and every setupNewGame so a mid-run restart can't
-// smuggle a live combo into the next run).
+// smuggle a live combo into the next run). All players (plan 026).
 export function resetCombo() {
-    state.comboCount = 0;
-    state.comboTimeLeft = 0;
+    for (const p of state.players) {
+        p.comboCount = 0;
+        p.comboTimeLeft = 0;
+    }
     hideComboChip();
 }
 
@@ -296,24 +504,80 @@ export function resetCombo() {
 // game is still sitting on THIS dead run before showing anything.
 let deathScreenTimer = null;
 
-export function endGame(reason) {
+// Kills ONE player (plan 026). The single per-player death entry: the
+// collect clock (timers.js) and enemy contact (enemies.js) both land here.
+// While a partner still lives the run continues — this hero squashes and
+// becomes a spectator (Stage E adds the partner-cam + WAITING chip); the
+// LAST death forwards to endGame, which is byte-for-byte the solo path.
+export function killPlayer(player, reason) {
+    if (!state.gameActive || !player.alive) return;
+    let othersLiving = 0;
+    for (const q of state.players) {
+        if (q !== player && q.alive) othersLiving++;
+    }
+    if (othersLiving === 0) {
+        endGame(reason, player);
+        return;
+    }
+    player.alive = false;
+    onPlayerDeath(player); // Squash flat + burst for THIS hero only
+    sfx.death();
+    rumble(180, 0.7, player.seat); // The fallen hero's own pad takes the hit
+    // Spectator mode (plan 026): their half switches to the partner cam
+    // (world.js renderFrame) under the WAITING chip; resetIndicators (via
+    // endGame/setupNewGame) retires the chip with the run.
+    if (el.seatWaits[player.seat]) el.seatWaits[player.seat].style.display = 'block';
+    // Their half's transient overlays go dark — nothing to fight the chip.
+    if (el.seatKills[player.seat]) el.seatKills[player.seat].style.display = 'none';
+    // Death breaks THEIR chain (B8 review ADV-7): zero the state with the
+    // chip, or the frozen window sits live until tickComboClock drains it.
+    player.comboCount = 0;
+    player.comboTimeLeft = 0;
+    hideComboChip(player);
+    if (el.seatVignettes[player.seat]) {
+        el.seatVignettes[player.seat].__lastCss = null;
+        el.seatVignettes[player.seat].style.opacity = '0';
+    }
+}
+
+export function endGame(reason, dyingPlayer = state.players[0]) {
     if (!state.gameActive) return;
     state.gameActive = false;
+    dyingPlayer.alive = false; // The final death — every seat is down now
     resetCombo(); // Death breaks the chain (and clears the chip behind the box)
     resetTension(); // Panic pulse and danger vignette must not haunt the death screen
     resetIndicators(); // Nor stale enemy arrows / a frozen KILL! flash
     updateJumpButton(); // The dead can't hop — hide the touch JUMP control
     music.stop(); // 0.3s fadeout — the death jingle plays over it
     sfx.death();
-    rumble(180, 0.7); // Stronger death pulse when the pad can rumble
-    onPlayerDeath(); // Squash flat + orange-red burst (pool), behind the beat
+    rumble(180, 0.7, dyingPlayer.seat); // Stronger death pulse when the pad can rumble
+    onPlayerDeath(dyingPlayer); // Squash flat + orange-red burst (pool), behind the beat
     // Per-mode boards: the death screen shows the ladder of the mode that
-    // just ended, and endless runs never pollute the classic top-5.
-    const { list, rank } = recordScore(state.score, state.worldMode, state.furthestDistance);
+    // just ended, and endless runs never pollute the classic top-5. A 2P
+    // run records ONLY the coop team board (plan 026) — never the solo
+    // endless/daily ladders (different game, different ladder).
+    let list;
+    let rank;
+    let boardTitle;
+    if (coopMode()) {
+        ({ list, rank } = recordCoopScore(
+            state.players[0].score, state.players[1].score, state.furthestDistance));
+        boardTitle = 'TEAM RUNS';
+    } else {
+        ({ list, rank } = recordScore(state.score, state.worldMode, state.furthestDistance));
+        boardTitle = 'BEST RUNS';
+        if (DAILY_WORLD && state.worldMode === 'endless') {
+            // A daily run IS an endless run — the solo board above already
+            // recorded it. It ALSO ranks on today's world's own ladder, and
+            // THAT is the board the death screen shows (the family race).
+            ({ list, rank } = recordScore(state.score, 'daily', state.furthestDistance));
+            boardTitle = "TODAY'S BEST";
+        }
+    }
     deathScreenTimer = setTimeout(() => {
         deathScreenTimer = null;
         if (state.gameActive || state.onStartScreen) return; // A restart beat us to it
-        showDeathScreen(reason, list, rank);
+        showDeathScreen(reason, list, rank, boardTitle);
     }, DEATH_SCREEN_DELAY * 1000);
 }
 
@@ -334,6 +598,27 @@ export function setTimerPanic(on) {
     el.collectTimerDisplay.classList.toggle('timer-panic', on);
 }
 
+// --- Survival beats (plan 023 DT-10) ---
+// PHEW! (a real scare fully drained away) and CLOSE ONE! (a hunter got
+// within a whisker of contact and the player slipped out) — the survival
+// axis finally celebrates. ONE shared rate limit on the GAME clock: two
+// simultaneous triggers (an escape that was also a near miss) fire once,
+// and neither can ever spam. Popup + sfx only — zero gameplay effect.
+const survivalBeatOrigin = { x: 0, y: 0, z: 0 }; // Scratch — never allocated per beat
+
+// Per player since plan 026: each hero has their own beat cooldown and the
+// popup rises over THEIR head — a P2 escape celebrates P2.
+function fireSurvivalBeat(player, text, fillStyle, sound) {
+    if (state.runTime - player.lastSurvivalBeat < SURVIVAL_BEAT_COOLDOWN) return;
+    player.lastSurvivalBeat = state.runTime;
+    const p = player.mesh.position;
+    survivalBeatOrigin.x = p.x;
+    survivalBeatOrigin.y = p.y + player.scale + 0.6; // Above the head (distance-milestone pattern)
+    survivalBeatOrigin.z = p.z;
+    spawnTextPopup(survivalBeatOrigin, text, fillStyle, player);
+    sound();
+}
+
 // Danger pulse + heartbeat, called each update frame from game.js BEFORE
 // updateEnemies — so a death inside the enemy pass can zero the vignette
 // without this frame re-raising it afterwards. The vignette eases toward
@@ -343,36 +628,120 @@ export function setTimerPanic(on) {
 // danger persists AND hunt mode is off — the hunt layer already owns the
 // music intensity; the heartbeat owns the dread.
 export function updateDangerPulse(dt) {
-    if (!state.gameActive || !state.player) return;
-    let nearest = Infinity;
-    let anyKillable = false;
-    for (const enemyGroup of state.enemies) {
-        if (canKillSpecificEnemy(enemyGroup)) {
-            anyKillable = true;
-            continue; // Killable enemies flee — they are prey, not danger
+    if (!state.gameActive || !state.players[0].mesh) return;
+    let maxIntensity = 0; // Music layer request = MAX of the players' states (plan 026)
+    let anyHeartbeatDanger = false; // Heartbeat fires if EITHER hero is in prey-less dread
+    for (const player of state.players) {
+        if (!player.alive || !player.mesh) continue;
+        let nearest = Infinity;
+        let anyKillable = false;
+        for (const enemyGroup of state.enemies) {
+            const ud = enemyGroup.userData;
+            // Near-miss arming is per (enemy, seat) since plan 026 — the
+            // same hunter can be a whisker from P2 while ignoring P1.
+            if (ud.nearMissArmed === undefined || typeof ud.nearMissArmed === 'boolean') {
+                ud.nearMissArmed = [false, false];
+            }
+            if (canKillSpecificEnemy(enemyGroup, player)) {
+                anyKillable = true;
+                // Disarm any stale near-miss: an armed hunter the player has
+                // since outgrown must not fire CLOSE ONE! if it ever un-flips
+                // (B5+B6 review ADV-5 — latent trap if rescaling ever lands).
+                ud.nearMissArmed[player.seat] = false;
+                continue; // Killable enemies flee — they are prey, not danger
+            }
+            if (ud.species.harmless) {
+                // Harmless species are NEVER a threat, even when too big for
+                // this viewer to eat (2P divergent scales): no vignette, no
+                // heartbeat, no CLOSE ONE! from a critter that cannot hurt
+                // you (terminal review B-1).
+                ud.nearMissArmed[player.seat] = false;
+                continue;
+            }
+            const d = torusDistance(enemyGroup.position, player.mesh.position);
+            if (d < nearest) nearest = d;
+            // CLOSE ONE! near-miss (plan 023): arm when a hunter enters the
+            // whisker band around actual contact, fire when it exits with the
+            // player still alive (a death never reaches here — gameActive gate
+            // above). Materializing spawns can't collide, so they never arm.
+            if (ud.materializing === undefined) {
+                const armRadius = NEAR_MISS_FACTOR * (
+                    player.scale * PLAYER_COLLIDER_HALF_WIDTH +
+                    enemyGroup.scale.y * ENEMY_COLLIDER_HALF_WIDTH
+                );
+                if (d < armRadius) {
+                    ud.nearMissArmed[player.seat] = true;
+                } else if (ud.nearMissArmed[player.seat]) {
+                    ud.nearMissArmed[player.seat] = false;
+                    fireSurvivalBeat(player, 'CLOSE ONE!', '#FFC107', sfx.tick); // Amber — warning that ended well
+                }
+            } else {
+                ud.nearMissArmed[player.seat] = false;
+            }
         }
-        const d = torusDistance(enemyGroup.position, state.player.position);
-        if (d < nearest) nearest = d;
-    }
-    const inDanger = nearest < DANGER_RADIUS;
+        const inDanger = nearest < DANGER_RADIUS;
 
-    const target = inDanger ? DANGER_VIGNETTE_MAX : 0;
-    state.dangerOpacity += (target - state.dangerOpacity) * (1 - Math.exp(-5 * dt));
-    if (!inDanger && state.dangerOpacity < 0.003) state.dangerOpacity = 0; // Settle instead of asymptote
-    // Reduced motion: static faint opacity (the eased base alone, no breath)
-    let shown = state.dangerOpacity;
-    if (!dangerReducedMotion && shown > 0) {
+        const target = inDanger ? DANGER_VIGNETTE_MAX : 0;
+        player.dangerOpacity += (target - player.dangerOpacity) * (1 - Math.exp(-5 * dt));
+        if (!inDanger && player.dangerOpacity < 0.003) player.dangerOpacity = 0; // Settle instead of asymptote
+
+        // PHEW! escape beat (plan 023): the dread system gets a positive
+        // resolution — when a REAL scare (peak above PHEW_PEAK_MIN) has fully
+        // drained away, celebrate the escape once, then re-arm. The peak always
+        // resets at the zero crossing, so one scare can never span two beats.
+        if (player.dangerOpacity > player.dangerPeak) player.dangerPeak = player.dangerOpacity;
+        if (player.dangerOpacity <= 0.01) {
+            if (player.dangerPeak > PHEW_PEAK_MIN) {
+                fireSurvivalBeat(player, 'PHEW!', '#8BC34A', sfx.phew); // Soft green — survival's own color
+            }
+            player.dangerPeak = 0;
+        }
+
+        // This player's music request: hunt (prey exists for THEM) keeps
+        // priority at 1; danger (2) only when dread owns their channel.
+        const intensity = anyKillable ? 1 : (player.dangerOpacity > DANGER_MUSIC_THRESHOLD ? 2 : 0);
+        if (intensity > maxIntensity) maxIntensity = intensity;
+        if (inDanger && !anyKillable) anyHeartbeatDanger = true;
+    }
+
+    // Vignette element(s): solo drives the classic full-frame overlay from
+    // seat 0; 2P drives each half's own vignette from ITS player. One
+    // shared breath clock — the halves breathe in phase, deliberately.
+    const anyShown = coopMode()
+        ? Math.max(state.players[0].dangerOpacity, state.players[1].dangerOpacity)
+        : state.players[0].dangerOpacity;
+    let breath = 1;
+    if (!dangerReducedMotion && anyShown > 0) {
         dangerBreathClock += dt;
         // 0.4Hz breath riding the eased base; peak stays DANGER_VIGNETTE_MAX
-        shown *= 0.8 + 0.2 * Math.sin(dangerBreathClock * Math.PI * 0.8);
+        breath = 0.8 + 0.2 * Math.sin(dangerBreathClock * Math.PI * 0.8);
     }
-    const css = shown.toFixed(3);
-    if (el.dangerVignette && css !== lastVignetteCss) {
-        lastVignetteCss = css;
-        el.dangerVignette.style.opacity = css;
+    if (coopMode()) {
+        for (const player of state.players) {
+            const vignette = el.seatVignettes[player.seat];
+            if (!vignette) continue;
+            const seatCss = (player.alive ? player.dangerOpacity * breath : 0).toFixed(3);
+            if (vignette.__lastCss !== seatCss) {
+                vignette.__lastCss = seatCss;
+                vignette.style.opacity = seatCss;
+            }
+        }
+    } else {
+        const css = (state.players[0].dangerOpacity * breath).toFixed(3);
+        if (el.dangerVignette && css !== lastVignetteCss) {
+            lastVignetteCss = css;
+            el.dangerVignette.style.opacity = css;
+        }
     }
 
-    if (inDanger && !anyKillable) {
+    // Music layer (plan 023 CAP-5) — the ONE setIntensity driver; in 2P the
+    // request is the MAX of the players' states (plan 026). Bar-line commits
+    // in audio.js keep every switch musical, so this per-frame write is safe.
+    music.setIntensity(maxIntensity);
+
+    // Heartbeat: ONE audible heart (seat 0's clock is THE clock), thumping
+    // while ANY living hero is in prey-less danger (plan 026 Stage E rule).
+    if (anyHeartbeatDanger) {
         state.heartbeatClock -= dt;
         if (state.heartbeatClock <= 0) {
             sfx.heartbeat();
@@ -388,11 +757,21 @@ export function updateDangerPulse(dt) {
 // a pulsing timer or a lingering red frame.
 export function resetTension() {
     setTimerPanic(false);
-    state.dangerOpacity = 0;
-    state.heartbeatClock = 0;
+    for (const p of state.players) {
+        p.dangerOpacity = 0;
+        p.dangerPeak = 0; // A scare must not leak a PHEW! across death / new game
+        p.lastSurvivalBeat = -SURVIVAL_BEAT_COOLDOWN; // Fresh run: first beat is free
+        p.heartbeatClock = 0;
+    }
     dangerBreathClock = 0;
     lastVignetteCss = null;
     if (el.dangerVignette) el.dangerVignette.style.opacity = '0';
+    for (const vignette of el.seatVignettes) {
+        if (vignette) {
+            vignette.__lastCss = null;
+            vignette.style.opacity = '0';
+        }
+    }
 }
 
 // Hides every enemy indicator — the off-screen arrow pool and the KILL!
@@ -405,11 +784,24 @@ export function resetTension() {
 export function resetIndicators() {
     for (const indicator of state.enemyIndicators) {
         if (indicator.style.display !== 'none') indicator.style.display = 'none';
+        indicator.__lastDisplay = 'none'; // Keep the hot-loop write cache honest
     }
-    state.killFlashClock = 0;
-    state.killIndicatorVisible = true;
+    for (const p of state.players) {
+        p.killFlashClock = 0;
+        p.killIndicatorVisible = true;
+    }
     if (el.killIndicator && el.killIndicator.style.display !== 'none') {
         el.killIndicator.style.display = 'none';
+    }
+    for (const seat of [0, 1]) {
+        if (el.seatKills[seat] && el.seatKills[seat].style.display !== 'none') {
+            el.seatKills[seat].style.display = 'none';
+        }
+        // The spectator chips die with the run too (endGame + setupNewGame
+        // both land here — the single reset path).
+        if (el.seatWaits[seat] && el.seatWaits[seat].style.display !== 'none') {
+            el.seatWaits[seat].style.display = 'none';
+        }
     }
 }
 
@@ -434,6 +826,32 @@ export function updateScoreDisplay() {
         void el.score.offsetWidth; // Forces a reflow so the animation restarts
         el.score.classList.add('score-pop');
     }
+    // 2P: each seat's own score column (same pop juice, per column).
+    if (coopMode()) {
+        for (const player of state.players) {
+            const slot = el.hudScores[player.seat];
+            if (!slot) continue;
+            const shown = Number(slot.textContent);
+            if (shown === player.score) continue;
+            slot.textContent = player.score;
+            if (player.score > shown) {
+                slot.classList.remove('score-pop');
+                void slot.offsetWidth;
+                slot.classList.add('score-pop');
+            }
+        }
+    }
+}
+
+// Per-seat DISTANCE readout (2P): each hero's own furthest, written on
+// change from updateEndlessProgress. Solo never calls this.
+export function updateSeatDistanceDisplay(player) {
+    const slot = el.hudDistances[player.seat];
+    if (!slot) return;
+    const shown = Math.floor(player.distanceBest);
+    if (slot.__lastShown === shown) return;
+    slot.__lastShown = shown;
+    slot.textContent = shown;
 }
 
 export function updateCollectTimeDisplay() {
@@ -459,10 +877,34 @@ export function createEnemyIndicators() {
 // under the 3/sec photosensitivity limit (WCAG 2.3.1) and, with the CSS
 // opacity transition removed, an actually visible discrete flash.
 export function updateKillIndicator(dt) {
+    // (Music intensity moved to updateDangerPulse — plan 023: it needs the
+    // danger scalar too, and one writer beats two fighting ones.)
+    if (coopMode()) {
+        // 2P: each half flashes for ITS viewer's edibility, on that
+        // player's own flash clock (plan 026). 1Hz per element — the same
+        // photosensitivity budget as solo, per half.
+        for (const player of state.players) {
+            const badge = el.seatKills[player.seat];
+            if (!badge) continue;
+            const anyForSeat = player.alive &&
+                state.enemies.some((enemy) => canKillSpecificEnemy(enemy, player));
+            if (anyForSeat) {
+                badge.style.display = 'block';
+                player.killFlashClock += dt;
+                if (player.killFlashClock > 0.5) {
+                    player.killFlashClock = 0;
+                    player.killIndicatorVisible = !player.killIndicatorVisible;
+                }
+                badge.style.opacity = player.killIndicatorVisible ? '1' : '0.35';
+            } else if (badge.style.display !== 'none') {
+                badge.style.display = 'none';
+                player.killFlashClock = 0;
+                player.killIndicatorVisible = true;
+            }
+        }
+        return;
+    }
     const anyEnemyKillable = state.enemies.some(enemy => canKillSpecificEnemy(enemy));
-    // Hunt-mode music layer keys off the same already-computed signal;
-    // the actual switch lands on the next bar boundary (audio.js).
-    music.setIntensity(anyEnemyKillable ? 1 : 0);
     if (!el.killIndicator) return;
     if (anyEnemyKillable) {
         el.killIndicator.style.display = 'block';
@@ -481,53 +923,139 @@ export function updateKillIndicator(dt) {
 }
 
 // --- Off-Screen Enemy Indicator Logic (per-frame) ---
-export function updateOffscreenIndicators() {
-    let indicatorsUsed = 0;
-    const screenPadding = 15; // How far from the game edge indicators should sit (reduced slightly)
+// View-space scratch for the behind-camera check (audit C-3) — reused per enemy.
+const indicatorViewPos = new THREE.Vector3();
+// Projection scratch (plan 020 P-5): copy into it, never clone, per enemy.
+const indicatorWorldPos = new THREE.Vector3();
 
-    state.enemies.forEach(enemyGroup => {
-        const enemyPos = enemyGroup.position.clone();
-        const screenPos = enemyPos.project(state.camera);
+// Hot-loop hygiene (plan 020 P-5): positions ride ONE rounded translate3d
+// transform (left/top are pinned to 0 in CSS — the old per-frame left/top
+// writes forced layout), and every style write is skipped when unchanged
+// (cached on the element). resetIndicators keeps the display cache honest.
+//
+// PER-VIEW passes (B8 review BLOCK-4): solo is ONE full-rect pass through
+// seat 0's camera over the whole pool — arithmetically identical to the
+// pre-2P code. 2P runs one pass per LIVING seat, each projecting through
+// THAT seat's camera and clamping inside THAT seat's half of the canvas
+// (the seam is an edge like any other), with the pool split half/half and
+// colors judged by THAT viewer's edibility. A dead seat's half is the
+// partner-cam spectator view — it carries no arrows of its own.
+export function updateOffscreenIndicators() {
+    if (coopMode()) {
+        const poolHalf = Math.floor(MAX_ENEMY_INDICATORS / 2);
+        // Same seam renderFrame draws (world.js): left half [0, halfW),
+        // right half [halfW, width).
+        const halfW = Math.floor(state.gameCanvasRect.width / 2);
+        for (const player of state.players) {
+            const poolStart = player.seat * poolHalf;
+            if (player.alive && player.camera) {
+                const rectLeft = player.seat === 0 ? 0 : halfW;
+                const rectWidth = player.seat === 0 ? halfW : state.gameCanvasRect.width - halfW;
+                updateIndicatorsForView(player.camera, player, rectLeft, rectWidth,
+                    poolStart, poolStart + poolHalf);
+            } else {
+                hideIndicatorRange(poolStart, poolStart + poolHalf);
+            }
+        }
+        return;
+    }
+    updateIndicatorsForView(state.camera, state.players[0], 0, state.gameCanvasRect.width,
+        0, MAX_ENEMY_INDICATORS);
+}
+
+// One view's indicator pass: project every enemy through `camera`, place
+// arrows for the off-view ones inside [rectLeft, rectLeft+rectWidth) of the
+// canvas using pool slots [poolStart, poolEnd), colored by `viewer`'s own
+// edibility. Solo passes the full rect and the whole pool.
+function updateIndicatorsForView(camera, viewer, rectLeft, rectWidth, poolStart, poolEnd) {
+    let indicatorsUsed = poolStart;
+    const screenPadding = 15; // How far from the view edge indicators should sit (reduced slightly)
+
+    for (const enemyGroup of state.enemies) {
+        if (indicatorsUsed >= poolEnd) break;
+        // Truthful arrows (audit C-3): project() divides by a NEGATIVE w for
+        // points behind the camera plane, mirroring both axes — enemies ≳30u
+        // "south" (+Z) of the player are routinely behind it, and their
+        // arrows pointed exactly the wrong way. View space tells the truth
+        // (z > -near means behind); for those, negate the mirrored
+        // projection to recover the true screen direction and push it far
+        // outside the frustum so the edge clamp below owns the placement.
+        indicatorViewPos.copy(enemyGroup.position).applyMatrix4(camera.matrixWorldInverse);
+        const behindCamera = indicatorViewPos.z > -camera.near;
+        const screenPos = indicatorWorldPos.copy(enemyGroup.position).project(camera);
+        if (behindCamera) {
+            // Mirror-correct the projection (negative w flipped both axes)
+            // and push it JUST past the NDC unit box along the true bearing:
+            // scaling by 1.001/max(|x|,|y|) saturates only the dominant
+            // axis, so the per-axis pixel clamp below lands on the TRUE
+            // edge point. The old fixed radius-1000 push blew BOTH axes
+            // past their clamps, corner-quantizing every non-axis-aligned
+            // bearing by up to ~25-30° (B2+B3 review, H7).
+            const major = Math.max(Math.abs(screenPos.x), Math.abs(screenPos.y)) || 1;
+            const push = 1.001 / major;
+            screenPos.x = -screenPos.x * push;
+            screenPos.y = -screenPos.y * push;
+        }
 
         const isOffScreenX = screenPos.x < -1 || screenPos.x > 1;
         const isOffScreenY = screenPos.y < -1 || screenPos.y > 1;
 
-        if ((isOffScreenX || isOffScreenY) && indicatorsUsed < MAX_ENEMY_INDICATORS) {
+        if (isOffScreenX || isOffScreenY) {
+            const viewerCanKill = canKillSpecificEnemy(enemyGroup, viewer);
+            // A harmless critter this viewer can't eat is neither threat nor
+            // food — no arrow at all; a blue "hunts you" arrow for a juja
+            // would be a lie (terminal review B-1).
+            if (enemyGroup.userData.species.harmless && !viewerCanKill) continue;
             const indicator = state.enemyIndicators[indicatorsUsed];
-            indicator.style.display = 'block';
 
-            // Set indicator color based on killability
-            if (canKillSpecificEnemy(enemyGroup)) {
-                indicator.style.backgroundColor = 'rgba(255, 235, 59, 0.8)'; // Yellow (match enemy killable color, with alpha)
-            } else {
-                indicator.style.backgroundColor = 'rgba(3, 169, 244, 0.8)'; // Electric Blue (match enemy normal color, with alpha)
+            // Color by killability FOR THIS VIEWER (yellow = killable by
+            // them, blue = hunts them) — each half tells its own truth.
+            const color = viewerCanKill
+                ? 'rgba(255, 235, 59, 0.8)'
+                : 'rgba(3, 169, 244, 0.8)';
+
+            // Convert NDC to pixels within THIS view's rect of the canvas
+            const x = (screenPos.x * rectWidth / 2) + rectWidth / 2 + rectLeft;
+            const y = -(screenPos.y * state.gameCanvasRect.height / 2) + state.gameCanvasRect.height / 2;
+
+            // Clamp to the view's edges (padding), in viewport coordinates
+            // (#offscreen-indicator-container is viewport-sized).
+            const clampedX = Math.max(rectLeft + screenPadding, Math.min(x, rectLeft + rectWidth - screenPadding)) + state.gameCanvasRect.left;
+            const clampedY = Math.max(screenPadding, Math.min(y, state.gameCanvasRect.height - screenPadding)) + state.gameCanvasRect.top;
+
+            // Angle from the VIEW center (the viewer's hero is centered in
+            // their own half) to the clamped screen position
+            const centerX = state.gameCanvasRect.left + rectLeft + rectWidth / 2;
+            const angle = Math.atan2(clampedY - state.gameCanvasCenterY, clampedX - centerX) * 180 / Math.PI;
+
+            const transform = `translate3d(${Math.round(clampedX)}px, ${Math.round(clampedY)}px, 0) translate(-50%, -50%) rotate(${Math.round(angle + 90)}deg)`;
+            if (indicator.__lastDisplay !== 'block') {
+                indicator.style.display = 'block';
+                indicator.__lastDisplay = 'block';
             }
-
-            // Convert NDC to pixels relative to gameCanvasRect origin
-            let x = (screenPos.x * state.gameCanvasRect.width / 2) + state.gameCanvasRect.width / 2;
-            let y = -(screenPos.y * state.gameCanvasRect.height / 2) + state.gameCanvasRect.height / 2;
-
-            // Clamp position to gameCanvasRect edges with padding
-            // Position is relative to the #offscreen-indicator-container, which is viewport-sized.
-            // So, we need to add gameCanvasRect.left and gameCanvasRect.top for final screen position.
-            let clampedX = Math.max(screenPadding, Math.min(x, state.gameCanvasRect.width - screenPadding)) + state.gameCanvasRect.left;
-            let clampedY = Math.max(screenPadding, Math.min(y, state.gameCanvasRect.height - screenPadding)) + state.gameCanvasRect.top;
-
-            // Angle calculation from gameCanvasCenter to clamped enemy screen position (relative to viewport for atan2)
-            const angle = Math.atan2(clampedY - state.gameCanvasCenterY, clampedX - state.gameCanvasCenterX) * 180 / Math.PI;
-
-            indicator.style.transform = `translate(-50%, -50%) rotate(${angle + 90}deg)`;
-            indicator.style.left = `${clampedX}px`;
-            indicator.style.top = `${clampedY}px`;
+            if (indicator.__lastBg !== color) {
+                indicator.style.backgroundColor = color;
+                indicator.__lastBg = color;
+            }
+            if (indicator.__lastTransform !== transform) {
+                indicator.style.transform = transform;
+                indicator.__lastTransform = transform;
+            }
 
             indicatorsUsed++;
         }
-    });
+    }
 
-    // Hide any unused indicators from the pool
-    for (let i = indicatorsUsed; i < MAX_ENEMY_INDICATORS; i++) {
-        if (state.enemyIndicators[i].style.display !== 'none') {
-            state.enemyIndicators[i].style.display = 'none';
+    // Hide this view's unused slice of the pool
+    hideIndicatorRange(indicatorsUsed, poolEnd);
+}
+
+function hideIndicatorRange(from, to) {
+    for (let i = from; i < to; i++) {
+        const indicator = state.enemyIndicators[i];
+        if (indicator.__lastDisplay !== 'none') {
+            indicator.style.display = 'none';
+            indicator.__lastDisplay = 'none';
         }
     }
 }

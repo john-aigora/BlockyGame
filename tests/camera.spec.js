@@ -6,8 +6,25 @@ test.beforeEach(async ({ page }) => {
   await openGame(page);
 });
 
+// H3 (B1 review): the click loops below ride a LIVE run — under parallel-
+// suite load, dozens of wall-clock clicks left the idle hero exposed to the
+// boot enemy (latent contact-death race). The measurement is the zoom
+// clamp, not survival: silence every threat and fatten the collect clock
+// so the run cannot end mid-loop. Fresh bubble spawns land ≥35u out and
+// close at ~1.5u/s — far slower than any click loop.
+async function calmRun(page) {
+  await page.evaluate(() => {
+    const s = window.__game.state;
+    s.enemies.forEach((e) => s.scene.remove(e));
+    s.enemies = [];
+    window.__game.debug.clearPendingSpawns();
+    s.players.forEach((p) => { p.collectTimeLeft = 900; });
+  });
+}
+
 test('zoom out clamps at ZOOM_MAX and the scene stays inside the fog', async ({ page }) => {
   await startGame(page); // The overlay covers the corner buttons until a run starts
+  await calmRun(page);
   for (let i = 0; i < 12; i++) {
     await page.locator('#zoom-out-button').click();
   }
@@ -25,6 +42,7 @@ test('zoom out clamps at ZOOM_MAX and the scene stays inside the fog', async ({ 
 
 test('zoom in clamps at ZOOM_MIN', async ({ page }) => {
   await startGame(page);
+  await calmRun(page); // 32 clicks of live-run exposure without it (H3)
   for (let i = 0; i < 12; i++) {
     await page.locator('#zoom-out-button').click();
   }
@@ -34,10 +52,14 @@ test('zoom in clamps at ZOOM_MIN', async ({ page }) => {
   const zoomLevel = await page.evaluate(() => window.__game.state.zoomLevel);
   expect(zoomLevel).toBeGreaterThanOrEqual(0.59);
   expect(zoomLevel).toBeLessThanOrEqual(0.61);
+  // The run survived the whole loop — the clamp reads above weren't taken
+  // off a dead, frozen game.
+  expect(await page.evaluate(() => window.__game.state.gameActive)).toBe(true);
 });
 
 test('restart resets zoom to the default framing', async ({ page }) => {
   await startGame(page);
+  await calmRun(page);
   for (let i = 0; i < 12; i++) {
     await page.locator('#zoom-out-button').click();
   }

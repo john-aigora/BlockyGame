@@ -1,4 +1,4 @@
-import { MAX_DRAG_DISTANCE, DEAD_ZONE_RADIUS, MOVEMENT_MODE, GAMEPAD_DEADZONE, GAMEPAD_STICK_CURVE } from './constants.js';
+import { MAX_DRAG_DISTANCE, DEAD_ZONE_RADIUS, CONTINUOUS_MOVEMENT, GAMEPAD_DEADZONE, GAMEPAD_STICK_CURVE } from './constants.js';
 import { state } from './state.js';
 import { togglePause, startRun, resetGame, cycleSpeed, speedUp, speedDown, tryJump } from './game.js';
 import { zoomIn, zoomOut } from './world.js';
@@ -20,7 +20,12 @@ export const keys = {}; // Object to keep track of currently pressed keys
 //   Select mute · Y faster · X slower · LB/RB zoom · Start+Select restart
 // Title: stick/D-pad left-right mode · face start
 const gamepadAxesScratch = { x: 0, z: 0 };
-let prevPadButtons = []; // Edge detection for face/menu buttons
+// Per-pad edge state keyed by gamepad.index — the only stable identity on
+// dual-port DB9 adapters (both interfaces may share an id string). A single
+// shared array would leak pressed-state across pads when the active pad
+// switches, firing false edges on the new pad.
+const prevPadButtonsByIndex = new Map();
+let lastPolledPadIndex = null; // Detect active-pad hand-off → seed, don't fire
 let padConnected = false;
 let preferredPadIndex = null; // Stick to the pad that last produced input
 let padDebugEl = null;
@@ -57,7 +62,8 @@ function buttonPressed(gp, index) {
 }
 
 function buttonEdge(gp, index) {
-    return buttonPressed(gp, index) && !prevPadButtons[index];
+    const prev = prevPadButtonsByIndex.get(gp.index);
+    return buttonPressed(gp, index) && !(prev && prev[index]);
 }
 
 // True when this pad is the F310 (or kin) in DirectInput / non-standard mode.
@@ -82,31 +88,45 @@ function padButtons(gp) {
 
 function padActivityScore(gp) {
     let score = 0;
-    if (gp.mapping === 'standard') score += 0.25;
     const ax = gp.axes || [];
     for (let i = 0; i < ax.length; i++) score += Math.abs(axisValue(ax, i));
     const btns = gp.buttons || [];
     for (let i = 0; i < btns.length; i++) {
         if (buttonPressed(gp, i)) score += 2;
     }
+    // Bias standard mapping only when the pad is already producing input, so an
+    // idle Xbox pad cannot outrank a live DirectInput/DB9 stick (battle-paddle fix).
+    if (score > 0 && gp.mapping === 'standard') score += 0.25;
     return score;
 }
 
 // Prefer the pad that is currently producing input; lock onto it so a
 // silent ghost slot (common on macOS) cannot steal the first index.
+// HuiJia dual DB9→USB: one device, two interfaces, same id, idle socket
+// always connected — identity by gamepad.index only, and activity always wins.
+// Scan ALL pads first; adopt any pad producing input (re-pointing the lock);
+// the lock is only the idle fallback. (Ported back from battle-paddle.)
+//
+// PER-FRAME CACHE (plan 020 P-7): the selection scan ran up to 3x per frame
+// (poll, movement vector, HUD). pollGamepad bumps padPollCounter once per
+// frame, the first caller scans, same-counter callers reuse the SELECTION.
+// The cached value is a live Gamepad reference — axis/button reads stay
+// fresh (the test mocks mutate their pad objects in place, and the connect/
+// disconnect listeners bump the counter so selection reacts immediately).
+let padPollCounter = 0;
+let padCacheCounter = -1;
+let padCacheResult = null;
+
 function activeGamepad() {
+    if (padCacheCounter === padPollCounter) return padCacheResult;
+    padCacheCounter = padPollCounter;
+    padCacheResult = scanActiveGamepad();
+    return padCacheResult;
+}
+
+function scanActiveGamepad() {
     const list = navigator.getGamepads ? navigator.getGamepads() : null;
     if (!list) return null;
-
-    if (preferredPadIndex != null) {
-        const locked = list[preferredPadIndex];
-        if (locked && locked.connected) {
-            if (padActivityScore(locked) > 0.15) return locked;
-            // Keep lock while connected even at rest, once claimed.
-            return locked;
-        }
-        preferredPadIndex = null;
-    }
 
     let best = null;
     let bestScore = 0;
@@ -127,15 +147,94 @@ function activeGamepad() {
             bestIndex = i;
         }
     }
+    // Dual-port adapters leave a silent second interface connected forever.
+    // Never keep a preferred lock on an idle pad when another pad is
+    // producing input.
     if (best && bestScore > 0.15) {
         preferredPadIndex = bestIndex;
         return best;
+    }
+    if (preferredPadIndex != null) {
+        const locked = list[preferredPadIndex];
+        if (locked && locked.connected) return locked;
+        preferredPadIndex = null;
     }
     if (first) {
         preferredPadIndex = firstIndex;
         return first;
     }
     return null;
+}
+
+// --- Two-player seat claims (plan 026; battle-paddle port) ---
+// A pad CLAIMS a seat by producing real directional input (deadzoned stick
+// or D-pad non-zero) — silent ghost interfaces (dual DB9 adapters) can
+// never claim. Claims are keyed by gamepad.index (the only stable identity
+// on those adapters — never the id string), persist until disconnect, and
+// the FIRST live pad takes P1 unless P1's keyboard half was used this run
+// (then P2 — the keyboard player keeps their hero); the second live pad
+// takes the other seat. Solo never consults any of this: the single-pad
+// activity-scan path below is untouched.
+const seatClaims = [null, null]; // seat → gamepad.index (null = open)
+const kbSeatActive = [false, false]; // This run used the seat's keyboard half (claim tiebreak)
+
+// New run: nobody has "used the keyboard" yet (game.js setupNewGame).
+export function resetSeatActivity() {
+    kbSeatActive[0] = false;
+    kbSeatActive[1] = false;
+}
+
+function seatForPadIndex(index) {
+    if (seatClaims[0] === index) return 0;
+    if (seatClaims[1] === index) return 1;
+    return -1;
+}
+
+// gamepad.index normally equals the list slot, but the mock harness (and
+// exotic stacks) may not — resolve by scanning.
+function padByIndex(list, index) {
+    if (!list) return null;
+    for (let i = 0; i < list.length; i++) {
+        if (list[i] && list[i].index === index && list[i].connected) return list[i];
+    }
+    return null;
+}
+
+// Deadzoned direction magnitude of THIS pad (stick + D-pad) — the claim test.
+function padDirectionMagnitude(gp) {
+    const ax = gp.axes || [];
+    const stick = applyDeadzone(axisValue(ax, 0), axisValue(ax, 1), GAMEPAD_DEADZONE);
+    const dpad = readDpad(gp);
+    return Math.hypot(stick.x + dpad.x, stick.y + dpad.z);
+}
+
+// Runs every 2P poll: vacate dead claims, seat live claimants.
+function refreshSeatClaims(list) {
+    for (let seat = 0; seat < 2; seat++) {
+        if (seatClaims[seat] != null && !padByIndex(list, seatClaims[seat])) {
+            seatClaims[seat] = null; // Disconnect vacates the seat
+        }
+    }
+    for (let i = 0; i < list.length; i++) {
+        const gp = list[i];
+        if (!gp || !gp.connected) continue;
+        if (seatForPadIndex(gp.index) >= 0) continue; // Already seated
+        if (padDirectionMagnitude(gp) <= 0) continue; // Ghosts never claim
+        let seat = -1;
+        if (seatClaims[0] == null && seatClaims[1] == null) {
+            seat = kbSeatActive[0] ? 1 : 0; // First live pad: P1 unless P1 is a keyboard player this run
+        } else if (seatClaims[0] == null) {
+            seat = 0;
+        } else if (seatClaims[1] == null) {
+            seat = 1;
+        }
+        if (seat >= 0) seatClaims[seat] = gp.index;
+    }
+}
+
+// Read-only snapshot for specs/debug (plain data, never the live arrays).
+export function seatInfo() {
+    return { claims: [...seatClaims], keyboardActive: [...kbSeatActive] };
 }
 
 // D-pad as buttons (standard) or hat axis (DirectInput F310: usually axis 9,
@@ -184,14 +283,13 @@ function readDpad(gp) {
     return { x: 0, z: 0 };
 }
 
-// Unit-length (or zero) move vector from left stick + D-pad. Stick Y is
-// screen-down positive on the standard mapping, matching our world +Z /
-// "S key" convention used by keyboardVector.
-export function gamepadVector() {
-    const gp = activeGamepad();
-    gamepadAxesScratch.x = 0;
-    gamepadAxesScratch.z = 0;
-    if (!gp) return gamepadAxesScratch;
+// Unit-length (or zero) move vector from ONE pad's left stick + D-pad.
+// Stick Y is screen-down positive on the standard mapping, matching our
+// world +Z / "S key" convention used by keyboardVector.
+function computePadVector(gp, out) {
+    out.x = 0;
+    out.z = 0;
+    if (!gp) return out;
 
     const ax = gp.axes || [];
     // Left stick is always axes 0/1 on F310 X and D modes and on standard pads.
@@ -206,13 +304,32 @@ export function gamepadVector() {
         x /= mag;
         z /= mag;
     }
-    gamepadAxesScratch.x = x;
-    gamepadAxesScratch.z = z;
-    return gamepadAxesScratch;
+    out.x = x;
+    out.z = z;
+    return out;
+}
+
+// The ACTIVE pad's vector (solo path + debug HUD).
+export function gamepadVector() {
+    return computePadVector(activeGamepad(), gamepadAxesScratch);
+}
+
+// The vector of the pad CLAIMING this seat (2P path); zero when unseated.
+const seatPadScratch = { x: 0, z: 0 };
+function seatPadVector(seat) {
+    const idx = seatClaims[seat];
+    if (idx == null) {
+        seatPadScratch.x = 0;
+        seatPadScratch.z = 0;
+        return seatPadScratch;
+    }
+    const list = navigator.getGamepads ? navigator.getGamepads() : null;
+    return computePadVector(padByIndex(list, idx), seatPadScratch);
 }
 
 // Re-export for debug callers that already import input.
 export { rumble } from './rumble.js';
+import { setSeatPadResolver } from './rumble.js';
 
 function anyFaceEdge(gp) {
     const b = padButtons(gp);
@@ -226,8 +343,12 @@ function anyFaceEdge(gp) {
 
 function snapshotButtons(gp) {
     const n = gp.buttons ? gp.buttons.length : 0;
-    if (prevPadButtons.length !== n) prevPadButtons = new Array(n).fill(false);
-    for (let i = 0; i < n; i++) prevPadButtons[i] = buttonPressed(gp, i);
+    let prev = prevPadButtonsByIndex.get(gp.index);
+    if (!prev || prev.length !== n) {
+        prev = new Array(n).fill(false);
+        prevPadButtonsByIndex.set(gp.index, prev);
+    }
+    for (let i = 0; i < n; i++) prev[i] = buttonPressed(gp, i);
 }
 
 // True while A or RT is held — continuous-mode boost (mirrors Space).
@@ -262,9 +383,19 @@ export function gamepadDebugInfo() {
 // Edge-triggered actions. Must run every animation frame (including pause /
 // start / death) because update() early-returns outside a live run.
 export function pollGamepad() {
+    padPollCounter++; // New frame — the first activeGamepad() call rescans
+    if (state.players.length >= 2) {
+        // 2P (plan 026): EVERY connected pad polls — seats claim, edge
+        // actions fire per pad (Start pauses both from either pad; A jumps
+        // for the pad's OWN seat). The solo single-active-pad path below is
+        // untouched.
+        pollGamepadSeats();
+        return;
+    }
     const gp = activeGamepad();
     if (!gp) {
-        if (prevPadButtons.length) prevPadButtons = [];
+        if (prevPadButtonsByIndex.size) prevPadButtonsByIndex.clear();
+        lastPolledPadIndex = null;
         padConnected = false;
         updatePadHud(null);
         updatePadDebug(null);
@@ -273,9 +404,12 @@ export function pollGamepad() {
     padConnected = true;
     updatePadHud(gp);
     updatePadDebug(gp);
-    // First frame after connect: seed edge state without firing. A button
-    // already held at plug-in must not auto-start or jump.
-    if (prevPadButtons.length === 0) {
+    // First poll of this pad (fresh connect, reconnect, or active-pad
+    // hand-off): seed edge state without firing. A button already held must
+    // not auto-start, jump, or toggle pause on the switch itself.
+    const isNewActivePad = gp.index !== lastPolledPadIndex;
+    lastPolledPadIndex = gp.index;
+    if (isNewActivePad || !prevPadButtonsByIndex.has(gp.index)) {
         snapshotButtons(gp);
         return;
     }
@@ -321,18 +455,17 @@ export function pollGamepad() {
         toggleMuteFromUI(); // Same path as the mute button (aria, unlock, music)
     }
 
-    // Classic: A mirrors Space (pause). Endless: A is jump. Continuous: A is
-    // boost (held — see gamepadBoostHeld), not an edge action.
-    if (MOVEMENT_MODE === 'continuous') {
-        // boost is level-held, not edge; nothing here
-    } else if (state.worldMode === 'endless') {
+    // A = jump, B = pause — one bind set in every world mode (audit D-6:
+    // the classic-only "A mirrors Space as pause" fork is gone; classic is
+    // a test/debug path and shares the endless binds, and tryJump itself
+    // no-ops outside endless). Continuous: A is boost (held — see
+    // gamepadBoostHeld), not an edge action.
+    if (!CONTINUOUS_MOVEMENT) {
         if (buttonEdge(gp, b.a)) tryJump();
         if (buttonEdge(gp, b.b)) {
             sfx.click();
             togglePause();
         }
-    } else if (buttonEdge(gp, b.a)) {
-        togglePause();
     }
 
     // Y = faster, X = slower (dedicated slow-down). F key still cycles.
@@ -358,26 +491,158 @@ export function pollGamepad() {
     snapshotButtons(gp);
 }
 
-// Status line: pad id + short bind reminder when live.
+// The 2P poll body (plan 026): claims + per-pad edges. Reuses the per-pad
+// edge Map (prevPadButtonsByIndex) — each pad's buttons edge independently,
+// and a fresh pad seeds without firing, exactly like the solo hand-off rule.
+function pollGamepadSeats() {
+    const list = navigator.getGamepads ? navigator.getGamepads() : null;
+    if (!list) {
+        if (prevPadButtonsByIndex.size) prevPadButtonsByIndex.clear();
+        padConnected = false;
+        updatePadHud(null);
+        updatePadDebug(null);
+        return;
+    }
+    refreshSeatClaims(list);
+    // Collect intents first, then apply shared actions ONCE (Fugu P2):
+    // mutating start/death/pause inside the per-pad loop let pad 1 observe
+    // pad 0's reset as a fresh start overlay and auto-startRun same frame.
+    let anyPad = null;
+    let wantStart = false;
+    let wantReset = false;
+    let wantPause = false;
+    let wantMute = false;
+    let wantSpeedUp = false;
+    let wantSpeedDown = false;
+    let wantZoomIn = false;
+    let wantZoomOut = false;
+    const jumpSeats = [];
+    const onStart = state.onStartScreen;
+    const inRun = state.gameActive && !state.onStartScreen;
+    const onDeath = !state.gameActive && !state.onStartScreen;
+
+    for (let i = 0; i < list.length; i++) {
+        const gp = list[i];
+        if (!gp || !gp.connected) continue;
+        if (!anyPad) anyPad = gp;
+        // First poll of this pad: seed edge state without firing — a button
+        // already held must not auto-start, jump, or toggle pause.
+        if (!prevPadButtonsByIndex.has(gp.index)) {
+            snapshotButtons(gp);
+            continue;
+        }
+        const b = padButtons(gp);
+
+        if (onStart) {
+            if (anyFaceEdge(gp)) wantStart = true;
+            snapshotButtons(gp);
+            continue;
+        }
+
+        if (onDeath) {
+            if (buttonEdge(gp, b.a) || buttonEdge(gp, b.start)) wantReset = true;
+            snapshotButtons(gp);
+            continue;
+        }
+
+        if (!inRun) {
+            snapshotButtons(gp);
+            continue;
+        }
+
+        // Start+Select chord = mid-run restart (priority over single binds).
+        if (buttonPressed(gp, b.start) && buttonPressed(gp, b.back) &&
+            (buttonEdge(gp, b.start) || buttonEdge(gp, b.back))) {
+            wantReset = true;
+            snapshotButtons(gp);
+            continue;
+        }
+
+        // Start / B = pause BOTH. Select/Back = mute. Shared → one apply.
+        if (buttonEdge(gp, b.start)) wantPause = true;
+        if (buttonEdge(gp, b.back)) wantMute = true;
+
+        // A = jump for the pad's OWN seat (claim required first).
+        if (!CONTINUOUS_MOVEMENT) {
+            if (buttonEdge(gp, b.a)) {
+                const seat = seatForPadIndex(gp.index);
+                if (seat >= 0) jumpSeats.push(seat);
+            }
+            if (buttonEdge(gp, b.b)) wantPause = true;
+        }
+
+        // Speed and zoom are world-shared — either pad may drive them.
+        if (!state.isPaused && buttonEdge(gp, b.y)) wantSpeedUp = true;
+        if (!state.isPaused && buttonEdge(gp, b.x)) wantSpeedDown = true;
+        if (buttonEdge(gp, b.lb)) wantZoomOut = true;
+        if (buttonEdge(gp, b.rb)) wantZoomIn = true;
+
+        snapshotButtons(gp);
+    }
+
+    // Apply shared intents once. Reset wins over start (never same state).
+    if (wantReset) {
+        if (inRun) sfx.click();
+        resetGame();
+    } else if (wantStart) {
+        startRun();
+    } else {
+        if (wantPause) {
+            sfx.click();
+            togglePause();
+        }
+        if (wantMute) toggleMuteFromUI();
+        for (const seat of jumpSeats) tryJump(seat);
+        if (wantSpeedUp) {
+            sfx.click();
+            speedUp();
+        }
+        if (wantSpeedDown) {
+            sfx.click();
+            speedDown();
+        }
+        if (wantZoomOut) {
+            sfx.click();
+            zoomOut();
+        }
+        if (wantZoomIn) {
+            sfx.click();
+            zoomIn();
+        }
+    }
+
+    padConnected = !!anyPad;
+    updatePadHud(anyPad);
+    updatePadDebug(anyPad);
+}
+
+// Status line: pad id + short bind reminder when live. The composed string
+// is compared against the last write (plan 020 P-7): a per-frame
+// textContent assignment invalidates layout even when the text is
+// identical, and this text only actually changes on connect/movement edges.
 let padHudEl = null;
+let lastPadHudText = null;
 function updatePadHud(gp) {
     if (!padHudEl) {
         padHudEl = document.getElementById('pad-status');
         if (!padHudEl) return;
     }
     if (!gp) {
-        padHudEl.hidden = true;
+        if (!padHudEl.hidden) padHudEl.hidden = true;
+        lastPadHudText = null; // A reconnect must rewrite the line
         return;
     }
-    padHudEl.hidden = false;
+    if (padHudEl.hidden) padHudEl.hidden = false;
     const mode = gp.mapping === 'standard' ? 'XInput' : 'DirectInput';
     const short = (gp.id || 'Gamepad').split('(')[0].trim().slice(0, 22);
     const mv = gamepadVector();
     const live = Math.hypot(mv.x, mv.z) > 0.05 ? ' · live' : '';
-    if (state.onStartScreen) {
-        padHudEl.textContent = `${short} · ${mode}${live} · A start`;
-    } else {
-        padHudEl.textContent = `${short} · ${mode}${live} · A jump · X slow · Y fast · Start pause · Select mute`;
+    const text = state.onStartScreen
+        ? `${short} · ${mode}${live} · A start`
+        : `${short} · ${mode}${live} · A jump · X slow · Y fast · Start pause · Select mute`;
+    if (text !== lastPadHudText) {
+        lastPadHudText = text;
+        padHudEl.textContent = text;
     }
 }
 
@@ -400,14 +665,29 @@ function updatePadDebug(gp) {
 }
 
 export function setupGamepad() {
+    // Seat-aware rumble (plan 026): kills/collects/deaths pulse the pad of
+    // the seat that earned them. Injection (not import) keeps rumble.js free
+    // of input.js — see rumble.js.
+    setSeatPadResolver((seat) => {
+        const idx = seatClaims[seat];
+        if (idx == null) return null;
+        return padByIndex(navigator.getGamepads ? navigator.getGamepads() : null, idx);
+    });
     window.addEventListener('gamepadconnected', (e) => {
+        padPollCounter++; // Invalidate the selection cache — react this frame
         padConnected = true;
         preferredPadIndex = e.gamepad ? e.gamepad.index : preferredPadIndex;
     });
     window.addEventListener('gamepaddisconnected', (e) => {
+        padPollCounter++; // Invalidate the selection cache — react this frame
         if (e.gamepad && e.gamepad.index === preferredPadIndex) preferredPadIndex = null;
+        if (e.gamepad) {
+            prevPadButtonsByIndex.delete(e.gamepad.index);
+            // A vacated seat reopens for the next live pad (plan 026).
+            if (seatClaims[0] === e.gamepad.index) seatClaims[0] = null;
+            if (seatClaims[1] === e.gamepad.index) seatClaims[1] = null;
+        }
         padConnected = !!activeGamepad();
-        prevPadButtons = [];
         updatePadHud(activeGamepad());
         updatePadDebug(activeGamepad());
     });
@@ -441,6 +721,75 @@ export function keyboardVector() {
     return keyboardScratch;
 }
 
+// One seat's HALF of the keyboard in 2P: WASD drives seat 0, Arrows drive
+// seat 1 (Space vs Slash jump the same split — see onKeyDown). Solo never
+// calls this — moveVector's solo branch keeps the full alias merge.
+const keyboardHalfScratch = { x: 0, z: 0 };
+function keyboardHalfVector(seat) {
+    const right = (seat === 0 ? keys['d'] : keys['arrowright']) ? 1 : 0;
+    const left = (seat === 0 ? keys['a'] : keys['arrowleft']) ? 1 : 0;
+    const down = (seat === 0 ? keys['s'] : keys['arrowdown']) ? 1 : 0;
+    const up = (seat === 0 ? keys['w'] : keys['arrowup']) ? 1 : 0;
+    keyboardHalfScratch.x = right - left;
+    keyboardHalfScratch.z = down - up;
+    return keyboardHalfScratch;
+}
+
+// THE movement vector (audit C-5): sums EVERY source for a seat — keyboard,
+// gamepad, and the touch drag — then clamps ONCE to unit length. game.js
+// consumes this for all player movement; the old shape added the touch
+// vector on top of the already-clamped keys+stick sum, so stacking touch
+// and keyboard reached 2x speed.
+// SOLO (one player): the exact classic merge — WASD+Arrows aliases, the
+// ACTIVE pad, touch. 2P (plan 026): the seat's keyboard half + the pad
+// claiming that seat (additive, same one-clamp rule, now per seat); the
+// touch drag keeps driving seat 0.
+// Returned object is a module-level scratch — read it, don't keep it.
+const moveScratch = { x: 0, z: 0 };
+export function moveVector(seat = 0) {
+    let x;
+    let z;
+    if (state.players.length < 2) {
+        const kv = keyboardVector();
+        x = kv.x;
+        z = kv.z;
+        if (state.touchActive) {
+            x += state.movementVector.x;
+            z += state.movementVector.y; // Touch vector is {x,y}: y drives world z
+        }
+    } else {
+        const kv = keyboardHalfVector(seat);
+        const pv = seatPadVector(seat);
+        x = kv.x + pv.x;
+        z = kv.z + pv.z;
+        if (seat === 0 && state.touchActive) {
+            x += state.movementVector.x;
+            z += state.movementVector.y;
+        }
+    }
+    const mag = Math.hypot(x, z);
+    if (mag > 1) {
+        x /= mag;
+        z /= mag;
+    }
+    moveScratch.x = x;
+    moveScratch.z = z;
+    return moveScratch;
+}
+
+// Zeroes every transient movement input — held keys, the touch drag, and
+// its vector (audit C-4). Wired to window blur and the visibilitychange
+// hidden branch in game.js: an alt-tab or app switch mid-run swallows the
+// matching keyup, and a latched key would walk the player into a lake on
+// resume. Plan 026 reuses this on seat switches — keep exported.
+export function clearTransientInput() {
+    for (const key in keys) keys[key] = false;
+    activeTouchId = null;
+    state.touchActive = false;
+    state.movementVector.x = 0;
+    state.movementVector.y = 0;
+}
+
 // --- Event Handlers ---
 // Handles key press down events.
 export function onKeyDown(event) {
@@ -457,6 +806,14 @@ export function onKeyDown(event) {
         return;
     }
 
+    // Modifier chords are the browser's, never the game's (audit C-10):
+    // Cmd/Ctrl/Alt+key means find, reload, tab-switch... — firing a game
+    // action underneath fights the OS. Bail before EVERY game bind,
+    // including the game-over restart below (Cmd+Space is Spotlight, not
+    // "reset my run" — B4 review advisory A1). Held movement keys are
+    // unaffected: a chord's keydown never latches; keyup still clears.
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+
     // Game over: Space/Enter returns to the start overlay; everything else
     // is ignored. This guard runs BEFORE the pause handling below, so the
     // same press can never also toggle pause — by the time gameActive is
@@ -471,22 +828,27 @@ export function onKeyDown(event) {
 
     const key = event.key.toLowerCase();
 
-    // Handle space bar for pause.
-    // Plan 014 spike: in continuous mode Space is BOOST (held — handled by
-    // movement-continuous.js's own listeners), so pause moves to P.
-    // ENDLESS (owner queue item 5): Space is JUMP — pause moves to P, the
-    // exact same pattern as the spike. Classic keeps Space = pause.
+    // Space = JUMP, P = pause — one bind set in every world mode (audit
+    // D-6: the classic-only Space-as-pause fork is gone; classic is a
+    // test/debug path and shares the endless binds, and tryJump itself
+    // no-ops outside endless). Plan 014 spike: in continuous mode Space is
+    // BOOST (held — handled by movement-continuous.js's own listeners);
+    // P still pauses there.
     if (key === ' ' || key === 'space') {
         event.preventDefault(); // Prevent page scroll
-        if (MOVEMENT_MODE === 'continuous') return; // Boost, not pause
-        if (state.worldMode === 'endless') {
-            if (!isRepeat) tryJump(); // Fresh presses only — no held-key hop strobe
-            return;
-        }
-        if (!isRepeat) togglePause();
+        if (CONTINUOUS_MOVEMENT) return; // Boost, not pause
+        if (!isRepeat) tryJump(0); // Fresh presses only — no held-key hop strobe
         return;
     }
-    if ((MOVEMENT_MODE === 'continuous' || state.worldMode === 'endless') && key === 'p') {
+    // 2P keyboard jump split (plan 026): Slash is seat 1's Space (Enter is
+    // pause, so the right hand gets the key beside its arrows). Solo leaves
+    // '/' exactly as before (an inert latched key).
+    if (key === '/' && state.players.length >= 2) {
+        event.preventDefault();
+        if (!isRepeat) tryJump(1);
+        return;
+    }
+    if (key === 'p') {
         if (!isRepeat) togglePause();
         return;
     }
@@ -523,6 +885,15 @@ export function onKeyDown(event) {
     }
 
     keys[key] = true; // Record that the key is pressed
+    // Seat-claim tiebreak (plan 026): remember which keyboard half moved
+    // this run — the first claiming pad then leaves that player their hero.
+    // WASD is seat 0's half; the arrows are seat 1's in 2P (in solo they
+    // alias seat 0, whose keyboard is then "in use" either way).
+    if (key === 'w' || key === 'a' || key === 's' || key === 'd') {
+        kbSeatActive[0] = true;
+    } else if (["arrowup", "arrowdown", "arrowleft", "arrowright"].includes(key)) {
+        kbSeatActive[state.players.length >= 2 ? 1 : 0] = true;
+    }
     // Prevent default browser action for arrow keys (scrolling)
     if (["arrowup", "arrowdown", "arrowleft", "arrowright"].includes(key)) {
         event.preventDefault();
@@ -591,12 +962,16 @@ export function onTouchEndOrCancel(e) {
 }
 
 export function setupTouchControls() {
-    state.gameScreenContainer = document.getElementById('game-container'); // Control area
+    // ONE container ref (audit D-10): the canvas host is also the touch
+    // control area. game.js init resolves state.gameContainer before calling
+    // this; the fallback lookup keeps any direct caller safe.
+    if (!state.gameContainer) state.gameContainer = document.getElementById('game-container');
+    const container = state.gameContainer;
 
-    if (state.gameScreenContainer) {
+    if (container) {
         // Calculate game container center once, and on resize
         const updateGameCanvasBounds = () => { // Renamed for clarity
-            const rect = state.gameScreenContainer.getBoundingClientRect();
+            const rect = container.getBoundingClientRect();
             state.gameCanvasRect = rect; // Store the whole rect
             state.gameCanvasCenterX = rect.left + rect.width / 2;
             state.gameCanvasCenterY = rect.top + rect.height / 2;
@@ -604,10 +979,10 @@ export function setupTouchControls() {
         updateGameCanvasBounds(); // Initial calculation
         window.addEventListener('resize', updateGameCanvasBounds); // Update on window resize
 
-        state.gameScreenContainer.addEventListener('touchstart', onTouchStart);
-        state.gameScreenContainer.addEventListener('touchmove', onTouchMove);
-        state.gameScreenContainer.addEventListener('touchend', onTouchEndOrCancel);
-        state.gameScreenContainer.addEventListener('touchcancel', onTouchEndOrCancel);
+        container.addEventListener('touchstart', onTouchStart);
+        container.addEventListener('touchmove', onTouchMove);
+        container.addEventListener('touchend', onTouchEndOrCancel);
+        container.addEventListener('touchcancel', onTouchEndOrCancel);
     } else {
         console.warn("Game container element not found for touch controls!");
     }

@@ -38,8 +38,17 @@ export function unlockAudio() {
 }
 
 // Test/debug introspection (exposed on window.__game.debug in main.js).
+// An OBJECT since plan 023: `state` is the old string; `intensity` is the
+// REQUESTED music layer (what setIntensity last stored — deterministic for
+// specs even when a suspended headless context never advances a bar line);
+// `activeIntensity` is the bar-committed layer actually sounding.
 export function audioState() {
-    return ctx?.state ?? 'none';
+    return {
+        state: ctx?.state ?? 'none',
+        intensity: pendingIntensity,
+        activeIntensity: intensity,
+        musicVolume: volumeFactor
+    };
 }
 
 // --- One-shot SFX -----------------------------------------------------
@@ -75,8 +84,15 @@ export const sfx = {
     start: () => { [523, 659, 784].forEach((f, i) => blip({ freq: f, dur: 0.09, vol: 0.15, delay: i * 0.09 })); },
     // New-best fanfare (spectacle pass): a four-note rising C-major arpeggio
     // capped with a held two-voice chord — unmistakably bigger than the
-    // three-note boot jingle. Plays under the death screen at rank 0.
-    fanfare: () => {
+    // three-note boot jingle. Plays under the death screen at rank 0, and
+    // FULL again for the titan kill (plan 025). fanfare('short') is the
+    // same arpeggio at double speed with no held chord — the gold-food
+    // flourish: richer than a collect blip, humbler than a triumph.
+    fanfare: (variant) => {
+        if (variant === 'short') {
+            [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => blip({ freq: f, dur: 0.07, vol: 0.13, delay: i * 0.05 }));
+            return;
+        }
         [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => blip({ freq: f, dur: 0.12, vol: 0.16, delay: i * 0.11 }));
         blip({ freq: 1567.98, dur: 0.4, vol: 0.13, delay: 0.44 });
         blip({ freq: 783.99, type: 'triangle', dur: 0.4, vol: 0.12, delay: 0.44 });
@@ -104,6 +120,14 @@ export const sfx = {
     // collect countdown is in its last PANIC_TIME seconds (timers.js drives
     // the cadence off the same shown-integer change that writes the DOM).
     tick: () => blip({ freq: 1150, dur: 0.025, vol: 0.06 }),
+    // Escape beat (plan 023 DT-10): a relieved exhale — a falling sigh
+    // answered by a small rising "we're okay" flick. Two soft sine blips,
+    // pure house style; name stays generic per the plan's maintenance note
+    // (future species reuse it).
+    phew: () => {
+        blip({ freq: 540, endFreq: 320, type: 'sine', dur: 0.18, vol: 0.15 });
+        blip({ freq: 392, endFreq: 660, type: 'sine', dur: 0.2, vol: 0.12, delay: 0.2 });
+    },
     // Danger heartbeat: one low lub-dub per call. The ~72bpm LOOP lives in
     // ui.js on the game clock (dt-driven) — audio stays fire-and-forget
     // one-shots, so pause and death stop the heart by not calling this.
@@ -117,9 +141,14 @@ export const sfx = {
 // ~112 BPM, A-minor pentatonic, 2-bar loop in 16th-note steps:
 //   triangle bass (one note per beat) + square arpeggio (16ths, quiet)
 //   + a soft bandpassed-noise hat. Master music gain sits low so the SFX
-// always ride on top. Hunt mode (any enemy killable) raises the lead an
-// octave and adds the off-beat hat — the switch lands on bar boundaries
-// only, so the layer change never jars mid-bar.
+// always ride on top. THREE layers since plan 023 (CAP-5):
+//   0 calm — the base loop;
+//   1 hunt (any enemy killable) — lead up an octave + off-beat hats;
+//   2 danger (dread owns the channel: no prey, vignette risen) — everything
+//     level 1 does PLUS a low held sine pad each half-bar (the bass root an
+//     octave down) and a doubled bass note on the bar start.
+// Every switch lands on bar boundaries only, so layer changes never jar
+// mid-bar. ui.js updateDangerPulse is the single setIntensity driver.
 
 const BPM = 112;
 const STEP_DUR = 60 / BPM / 4;   // one 16th note, in seconds
@@ -138,8 +167,9 @@ let musicTimer = null;    // setInterval id — doubles as the "active" flag
 let musicGain = null;     // per-run master gain (rides the stop() fadeout)
 let nextStepTime = 0;
 let stepIndex = 0;
-let intensity = 0;        // applied layer (0 calm, 1 hunt)
-let pendingIntensity = 0; // requested layer; adopted at the next bar line
+let intensity = 0;        // applied layer (0 calm, 1 hunt, 2 danger); commits on bar lines
+let pendingIntensity = 0; // requested layer (clamped 0..2); adopted at the next bar line
+let volumeFactor = 1;     // Master music scale 0..1 (plan 023: title bed 0.5, runs 1); persists across start/stop
 let noiseBuf = null;      // shared 1s white-noise buffer for the hat
 
 function getNoiseBuffer() {
@@ -184,13 +214,25 @@ function scheduleStep(s, t) {
     if (s % STEPS_PER_BAR === 0) intensity = pendingIntensity;
     // Triangle bass, one note per beat, held almost to the next beat.
     if (s % 4 === 0) {
-        note({ freq: BASS_HZ[(s / 4) % BASS_HZ.length], type: 'triangle', dur: STEP_DUR * 3.5, vol: 1.0, t });
+        const bass = BASS_HZ[(s / 4) % BASS_HZ.length];
+        note({ freq: bass, type: 'triangle', dur: STEP_DUR * 3.5, vol: 1.0, t });
+        // Danger layer: the bar-start bass note is DOUBLED (a second unison
+        // triangle voice — constructive attack, a heavier downbeat thump).
+        if (intensity === 2 && s % STEPS_PER_BAR === 0) {
+            note({ freq: bass, type: 'triangle', dur: STEP_DUR * 3.5, vol: 0.8, t });
+        }
     }
-    // Square arpeggio on every 16th; hunt mode lifts it an octave.
-    const lead = ARP_HZ[s % ARP_HZ.length] * (intensity ? 2 : 1);
+    // Danger layer: a low held pad each half-bar — the current bass root an
+    // octave DOWN, sine, held nearly the whole half-bar. vol is relative to
+    // musicGain: 0.42 × MUSIC_VOL ≈ 0.05 absolute, the plan's target gain.
+    if (intensity === 2 && s % 8 === 0) {
+        note({ freq: BASS_HZ[(s / 4) % BASS_HZ.length] / 2, type: 'sine', dur: STEP_DUR * 7.5, vol: 0.42, t });
+    }
+    // Square arpeggio on every 16th; levels >=1 lift it an octave.
+    const lead = ARP_HZ[s % ARP_HZ.length] * (intensity >= 1 ? 2 : 1);
     note({ freq: lead, type: 'square', dur: STEP_DUR * 0.9, vol: 0.4, t });
-    // Hat on the beats; hunt mode adds the off-beat 8ths.
-    if (s % 4 === 0 || (intensity && s % 4 === 2)) hat(t);
+    // Hat on the beats; levels >=1 add the off-beat 8ths.
+    if (s % 4 === 0 || (intensity >= 1 && s % 4 === 2)) hat(t);
 }
 
 function schedulerTick() {
@@ -207,7 +249,8 @@ export const music = {
         if (!ctx || muted || musicTimer) return;
         musicGain = ctx.createGain();
         musicGain.gain.setValueAtTime(0.0001, ctx.currentTime);
-        musicGain.gain.exponentialRampToValueAtTime(MUSIC_VOL, ctx.currentTime + 0.1);
+        musicGain.gain.exponentialRampToValueAtTime(
+            Math.max(MUSIC_VOL * volumeFactor, 0.0001), ctx.currentTime + 0.1);
         musicGain.connect(ctx.destination);
         stepIndex = 0;
         intensity = 0;
@@ -231,7 +274,23 @@ export const music = {
         musicGain = null;
     },
     setIntensity(level) {
-        pendingIntensity = level ? 1 : 0;
+        // Stores the clamped integer 0|1|2; scheduleStep adopts it at the
+        // next bar line (never mid-bar — the musical-transition law).
+        pendingIntensity = Math.max(0, Math.min(2, Math.round(Number(level) || 0)));
+    },
+    // Title warmth (plan 023): scales the ONE master music gain. The factor
+    // persists so a start() that follows (or already ran) plays at it —
+    // ui.js sets 0.5 for the overlay bed, startRun restores 1. Live changes
+    // ramp over 0.25s: a step would click.
+    setVolume(factor) {
+        volumeFactor = Math.max(0, Math.min(1, Number(factor) || 0));
+        if (ctx && musicGain) {
+            const t = ctx.currentTime;
+            musicGain.gain.cancelScheduledValues(t);
+            musicGain.gain.setValueAtTime(Math.max(musicGain.gain.value, 0.0001), t);
+            musicGain.gain.exponentialRampToValueAtTime(
+                Math.max(MUSIC_VOL * volumeFactor, 0.0001), t + 0.25);
+        }
     },
     isActive() {
         return musicTimer !== null;

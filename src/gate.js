@@ -2,7 +2,9 @@
 // Trivial client-side check by design — keeps casual visitors out, not a
 // security boundary. Unlock is session-scoped so a new tab re-prompts.
 
-const GATE_PASSWORD = 'blocky';
+// THE single source of the family password (audit SEC-3): tests/helpers.js
+// imports this constant — never re-declare the literal anywhere else.
+export const GATE_PASSWORD = 'blocky';
 const UNLOCK_KEY = 'blocky.gate.unlocked';
 
 export function isUnlocked() {

@@ -12,7 +12,7 @@ A full play session on the Logitech F310 (Mac **D** mode) without keyboard/mouse
 
 | ID | Criterion |
 |---|---|
-| B1-A1 | Title: D-pad / stick left-right switches Classic ↔ Endless without starting |
+| B1-A1 | ~~Title: D-pad / stick left-right switches Classic ↔ Endless without starting~~ — superseded mid-plan by the classic retirement (see line 3) |
 | B1-A2 | Title: face button starts; D-pad alone never starts |
 | B2-A1 | `speedUp` / `speedDown` step along ordered multipliers; UI button still cycles |
 | B2-A2 | Pad **Y** = faster, **X** = slower; keyboard **R** = slower (F still cycles) |
@@ -21,8 +21,8 @@ A full play session on the Logitech F310 (Mac **D** mode) without keyboard/mouse
 | B4-A1 | Stick ease-in curve after deadzone; right stick never moves player |
 | B4-A2 | Optional light rumble on collect / kill / death when actuator exists |
 | B5-A1 | Pad HUD shows live binds; `?paddebug=1` shows axes/buttons |
-| B5-A2 | First pad wake on title this session prefers Endless once |
-| B6-A1 | Playwright covers speedDown, title mode toggle via mock pad, right-stick isolation |
+| B5-A2 | ~~First pad wake on title this session prefers Endless once~~ — superseded mid-plan by the classic retirement (see line 3) |
+| B6-A1 | Playwright covers speedDown, ~~title mode toggle via mock pad~~ (superseded mid-plan by the classic retirement — see line 3), right-stick isolation |
 
 ## Batches
 

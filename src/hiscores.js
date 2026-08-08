@@ -1,17 +1,60 @@
 // Local storage owner (plan 009 + endless mode). The ONLY module (besides
-// src/audio.js) allowed to touch localStorage — the world-mode preference
-// lives here for that reason. Every storage access is wrapped in try/catch —
-// Safari private mode, blocked storage, or corrupt JSON must degrade to
-// "nothing persists", never to a crash.
+// src/audio.js) allowed to touch localStorage. Every storage access is
+// wrapped in try/catch — Safari private mode, blocked storage, or corrupt
+// JSON must degrade to "nothing persists", never to a crash.
 // Keys are versioned: any future schema change (names, per-mode boards)
 // bumps to .v2 with a migration read of .v1.
 
+import { dailySeed, WORLD_SEED } from './constants.js';
+
 const KEY = 'blocky.hiscores.v1'; // Classic board — untouched by endless runs
 const KEY_ENDLESS = 'blocky.hiscores.endless.v1'; // Endless board — its own ladder
-const MODE_KEY = 'blocky.worldMode';
+const KEY_DAILY = 'blocky.hiscores.daily.v1'; // TODAY'S WORLD board — seed-stamped rows; stale worlds prune on read
+const KEY_COOP = 'blocky.hiscores.coop.v1'; // 2P team board (plan 026) — its own ladder; 2P runs record ONLY here
 const MAX = 5;
 
+// --- Coop (2P) board (plan 026) ---
+// Entry: { p1Score, p2Score, teamScore, maxDistance, date } ranked by
+// teamScore (a TEAM run is the two of them together), maxDistance breaking
+// ties. Separate shape and key — coop never mixes with the solo ladders.
+function sortCoopBoard(list) {
+    list.sort((a, b) => (b.teamScore ?? 0) - (a.teamScore ?? 0) || (b.maxDistance ?? 0) - (a.maxDistance ?? 0));
+    return list;
+}
+
+export function loadCoopScores() {
+    try {
+        const raw = localStorage.getItem(KEY_COOP);
+        const arr = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(arr)) return [];
+        const list = arr.filter((e) => Number.isFinite(e.teamScore));
+        for (const e of list) {
+            e.maxDistance = Number.isFinite(e.maxDistance) ? Math.floor(e.maxDistance) : 0;
+        }
+        return sortCoopBoard(list);
+    } catch { return []; /* private mode / corrupt JSON / disabled storage */ }
+}
+
+export function recordCoopScore(p1Score, p2Score, maxDistance) {
+    const list = loadCoopScores();
+    const entry = {
+        p1Score,
+        p2Score,
+        teamScore: p1Score + p2Score,
+        maxDistance: Math.max(0, Math.floor(maxDistance)),
+        date: new Date().toISOString().slice(0, 10)
+    };
+    list.push(entry);
+    sortCoopBoard(list);
+    const trimmed = list.slice(0, MAX);
+    const rank = trimmed.indexOf(entry);
+    try { localStorage.setItem(KEY_COOP, JSON.stringify(trimmed)); }
+    catch { /* storage may be unavailable; still return the in-memory result */ }
+    return { list: trimmed, rank };
+}
+
 function keyForMode(mode) {
+    if (mode === 'daily') return KEY_DAILY;
     return mode === 'endless' ? KEY_ENDLESS : KEY;
 }
 
@@ -22,7 +65,9 @@ function keyForMode(mode) {
 // the entry shape is unchanged (distance was always stored), so the key
 // stays v1 — no bump, no migration read.
 function sortBoard(list, mode) {
-    if (mode === 'endless') {
+    if (mode === 'endless' || mode === 'daily') {
+        // The daily ladder IS an endless ladder — same currency (distance),
+        // just scoped to one day's world.
         list.sort((a, b) => (b.distance ?? 0) - (a.distance ?? 0) || b.score - a.score);
     } else {
         list.sort((a, b) => b.score - a.score);
@@ -30,15 +75,26 @@ function sortBoard(list, mode) {
     return list;
 }
 
-export function loadHiscores(mode = 'classic') {
+// Default mode is ENDLESS — the live product board (audit D-5). A caller
+// that forgets to pass the mode must hit the board players actually see;
+// the classic key + sort branch stay only because real scores exist there.
+export function loadHiscores(mode = 'endless') {
     try {
         const raw = localStorage.getItem(keyForMode(mode));
         const arr = raw ? JSON.parse(raw) : [];
         if (!Array.isArray(arr)) return [];
-        const list = arr.filter(e => Number.isFinite(e.score));
-        if (mode === 'endless') {
-            // Defensive normalize: every endless row renders (and ranks by)
-            // its distance — a malformed one reads as 0, never NaN.
+        let list = arr.filter(e => Number.isFinite(e.score));
+        if (mode === 'daily') {
+            // Stale worlds evaporate (plan 025): only rows stamped with
+            // TODAY'S seed rank or render — yesterday's board was a
+            // different map, so comparing distances would be a lie. The
+            // pruned list persists at the next write (recordScore).
+            const today = dailySeed();
+            list = list.filter(e => e.seed === today);
+        }
+        if (mode === 'endless' || mode === 'daily') {
+            // Defensive normalize: every distance-ranked row renders (and
+            // ranks by) its distance — a malformed one reads as 0, never NaN.
             for (const e of list) {
                 e.distance = Number.isFinite(e.distance) ? Math.floor(e.distance) : 0;
             }
@@ -52,10 +108,15 @@ export function loadHiscores(mode = 'classic') {
 // own board AND its own ladder rule (sortBoard): a monster endless run must
 // not bury the classic ladder, and endless NEW BEST means furthest, not
 // richest.
-export function recordScore(score, mode = 'classic', distance = 0) {
+export function recordScore(score, mode = 'endless', distance = 0) {
     const list = loadHiscores(mode);
     const entry = { score, date: new Date().toISOString().slice(0, 10) };
-    if (mode === 'endless') entry.distance = Math.max(0, Math.floor(distance));
+    if (mode === 'endless' || mode === 'daily') entry.distance = Math.max(0, Math.floor(distance));
+    // Daily rows carry the world they were RUN ON (the resolved seed), not
+    // the clock at death time: a run finishing just past midnight stamps
+    // yesterday's world and the read-side prune correctly retires it from
+    // the new day's board.
+    if (mode === 'daily') entry.seed = WORLD_SEED;
     list.push(entry);
     sortBoard(list, mode);
     const trimmed = list.slice(0, MAX);
@@ -66,16 +127,9 @@ export function recordScore(score, mode = 'classic', distance = 0) {
 }
 
 // --- World-mode preference ---
-// Product is endless-only. load always returns endless; save is a no-op
-// kept so older call sites and tests that still write do not throw.
+// Product is endless-only: load always returns endless. The old saveWorldMode
+// 'blocky.worldMode' write is deleted (audit D-5) — nothing ever read it back
+// (this function ignores storage entirely), so it only planted a stale key.
 export function loadWorldMode() {
     return 'endless';
-}
-
-export function saveWorldMode(mode) {
-    try {
-        // Still record debug classic requests so forceWorldMode can round-trip
-        // in tests; the product boot path never reads classic from storage.
-        localStorage.setItem(MODE_KEY, mode === 'classic' ? 'classic' : 'endless');
-    } catch { /* preference just doesn't persist */ }
 }

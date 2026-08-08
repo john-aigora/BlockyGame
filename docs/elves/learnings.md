@@ -1,8 +1,9 @@
 # Project Learnings
 
-> Durable memory across Elves runs for BlockyGame. Read after the survival guide and
-> `.elves-session.json`, before the plan and execution log. Promote only reusable, stable,
-> actionable, specific lessons. Batch status and one-off debugging belong in the execution log.
+> Durable repo truth now lives in /CLAUDE.md; this file keeps run-specific lessons.
+> Read after the survival guide and `.elves-session.json`, before the plan and
+> execution log. Promote only reusable, stable, actionable, specific lessons. Batch
+> status and one-off debugging belong in the execution log.
 
 ---
 
@@ -26,7 +27,7 @@
 ## Product and Domain Invariants
 
 - [2026-07-25] Game-over message text must always contain "GAME OVER" (smoke tests + plan 004/008 assert on it).
-- [2026-07-25] The world is a torus (±100 wrap on X/Z). ALL entity-to-entity direction/distance math must go through `src/worldmath.js` (post-plan-005). Raw `subVectors`/`distanceTo` on world positions is the recurring bug class.
+- [2026-07-25, corrected 2026-08-08] The shipping world (endless) is a flat infinite plane with a floating origin; the retired classic arena was a ±100 torus. ALL entity-to-entity direction/distance math still routes through `src/worldmath.js` (mode dispatch). Raw `subVectors`/`distanceTo` on world positions is the recurring bug class.
 - [2026-07-25] Enemy body material must be per-instance (killable color flips per enemy); sharing it repaints every enemy at once (plan 007 documents this trap).
 - [2026-07-25] Kill-indicator flash must stay ≤3 flashes/sec (photosensitivity, WCAG 2.3.1); plan 007 sets 1 Hz.
 
@@ -35,8 +36,16 @@
 - [2026-07-25] Push to origin is DENIED (account RBrownHOPE is read-only on john-aigora/BlockyGame) and the user forbade pushing anyway. Never `git push` this run.
 - [2026-07-25] `isMobile` UA-sniffing falsely matches touch laptops (until plan 012 replaces it with `pointer: coarse`).
 - [2026-07-25] npm's shebang (`#!/usr/bin/env node`) fails if node isn't on PATH even when called by absolute path — always export PATH first.
+- [2026-08-07] Dual-port DB9→USB adapters (HuiJia, VID 0e8f PID 3013) enumerate a permanently-connected ghost interface, often with the SAME id string as the live socket. Pad selection must re-scan all pads for activity EVERY poll — never hold a preferred lock on an idle pad when another pad is producing input (plan 018) — and identity is by `gamepad.index` only, never id/name.
+- [2026-08-08] three r128 `renderer.info` RESETS on every `render()` call — with two render passes per frame (plan 026 split-screen) the counters show only the LAST half. perfInfo needs `info.autoReset = false` + ONE `info.reset()` at frame start (game.js animate) — byte-identical numbers for a single render, whole-frame sums for many. `info.memory` (geometries/textures) is never reset and stays valid either way.
+- [2026-08-08] Choreography specs that despawn enemies each hop (`s.enemies = []`) must ALSO clear the warn pipeline (`debug.clearPendingSpawns()`): a pending red disc materializes a full-size hunter onto the next teleport landing and ends the run mid-loop — a frozen game clock then hangs every game-clock wait until the test times out (surfaced twice in effects pool spec under 3-worker load; solo-green both times).
 - [2026-07-26] Game time is NOT wall time in tests. Concurrent Playwright suites (or other agents on the machine) push headless software rendering below 20fps, and the MAX_DELTA=0.05 clamp in `src/game.js` then dilates game time to a fraction of wall clock. Specs must time gameplay against `state.runTime` (the dt-accumulated run clock) or condition-based waits with generous wall ceilings — never `performance.now()` deltas or fixed `waitForTimeout`s around game-clock behavior. See `tests/helpers.js` (`waitForGameOver`, `waitGameSeconds`).
 
 ## Retired Learnings
 
-- (none yet)
+- [retired 2026-08-08] "The world is a torus (±100 wrap on X/Z). ALL entity-to-entity direction/distance math must go through `src/worldmath.js` (post-plan-005)." — superseded by the classic retirement (87771ab); the torus is true only of the retired classic mode. The worldmath routing rule survives, corrected, under Product and Domain Invariants.
+- [2026-08-08] Style shared/clonable HUD pieces by CLASS from the start: ID-selector CSS silently paints nothing on class-based clones (B8's dead coop vignette; same class of miss hit score/combo pops). A computed-style assert (position+background, not just driven opacity) is the spec that catches it.
+- [2026-08-08] The render tree is not the hitbox: `Box3.setFromObject` on decorated characters made a giant's TAIL touch the hero's FACE at 40+u (rooted the "flaky" combo spec — it was a real fairness bug). Gameplay collides explicit body blocks.
+- [2026-08-08] Wall-clock→game-clock conversion ended the load-flake era: 17 sites converted (B9) took full-suite flake from ~1-in-3 to zero across 151 tests. `debug.advance(seconds)` (rAF-paused real-update pump) makes time-dependent specs cheap.
+- [2026-08-08] Measure before optimizing: every audit perf estimate that got measured (B10 Step 0) ran 6-16x pessimistic; three planned optimizations were skipped on evidence. Keep the perfInfo hook; the reference rig is the 3-statue ring, parked (B10) vs traveled (B8) mixes differ legitimately.
+- [2026-08-08] Species invariants must reach EVERY consumer surface: `harmless` was honored at contact/color sites but not dread/arrows/AI-branch — reachable only via 2P divergent scales (per-seat spawn anchors). When adding a per-entity flag, grep every threat/readability surface, not just the mechanic that motivated it.

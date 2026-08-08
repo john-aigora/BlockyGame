@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openGame, startGame } from './helpers.js';
+import { openGame, startGame, settleFrames } from './helpers.js';
 
 // Rendering & resource hygiene (plan 007): shared GPU resources (no geometry
 // growth across the food cycle), device pixel ratio applied, and a kill-flash
@@ -11,20 +11,34 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('food spawn/remove cycle does not grow the geometry count', async ({ page }) => {
-  // Let the first frames render so all boot-time geometries are registered.
-  await page.waitForTimeout(300);
+  // Let the first frames render so all boot-time geometries are registered
+  // (registration happens at render — frames, not any clock, are the axis).
+  await settleFrames(page, 3);
+
+  // Endless streams chunk geometry on movement; measure after warm-up so the
+  // pool is settled (plan 017): run one full spawn/remove cycle, then wait
+  // for the terrain build queue to drain before sampling `before` (boot-time
+  // chunk builds otherwise register mid-measurement).
+  await page.evaluate(() => {
+    for (let i = 0; i < 30; i++) window.__game.debug.spawnNearPlayer();
+    const s = window.__game.state;
+    s.collectibles.forEach((c) => s.scene.remove(c));
+    s.collectibles = [];
+  });
+  await page.waitForFunction(() => window.__game.debug.terrainInfo().queued === 0, null, { timeout: 30000 });
+  await settleFrames(page, 3); // A rendered frame registers late geometries
   const before = await page.evaluate(() => window.__game.state.renderer.info.memory.geometries);
 
   await page.evaluate(() => {
     for (let i = 0; i < 30; i++) window.__game.debug.spawnNearPlayer();
   });
-  await page.waitForTimeout(200); // Render with the 30 extra collectibles
+  await settleFrames(page, 3); // Render with the 30 extra collectibles
   await page.evaluate(() => {
     const s = window.__game.state;
     s.collectibles.forEach((c) => s.scene.remove(c));
     s.collectibles = [];
   });
-  await page.waitForTimeout(200);
+  await settleFrames(page, 3);
 
   const after = await page.evaluate(() => window.__game.state.renderer.info.memory.geometries);
   // Shared geometry: the cycle must not allocate (delta ≤ 1 allows three.js
@@ -32,12 +46,44 @@ test('food spawn/remove cycle does not grow the geometry count', async ({ page }
   expect(after - before).toBeLessThanOrEqual(1);
 });
 
-test('renderer pixel ratio matches min(devicePixelRatio, 2)', async ({ page }) => {
-  const { actual, expected } = await page.evaluate(() => ({
+// Tiered DPR rule (plan 020 P-10): cap 2 on desktop (fine pointer), 1.5 on
+// coarse-pointer devices. This desktop context asserts the desktop tier;
+// the mobile tier has its own emulated context below.
+test('renderer pixel ratio matches the desktop tier: min(devicePixelRatio, 2)', async ({ page }) => {
+  const { isMobile, actual, expected } = await page.evaluate(() => ({
+    isMobile: window.__game.state.isMobile,
     actual: window.__game.state.renderer.getPixelRatio(),
     expected: Math.min(window.devicePixelRatio, 2)
   }));
+  expect(isMobile).toBe(false); // This context really is the desktop tier
   expect(actual).toBe(expected);
+});
+
+// Mobile render tier (plan 020 P-10): a coarse-pointer device gets DPR cap
+// 1.5, no MSAA, and no shadow map — phone GPUs were paying desktop-tier
+// fill cost. Emulated phone context: hasTouch flips `pointer: coarse`.
+test.describe('mobile render tier', () => {
+  // deviceScaleFactor 3 (H5, B2/B3 review): a phone-real DPR — without it
+  // the emulated context reports devicePixelRatio 1 and min(1, 1.5) never
+  // exercises the cap, so the assertion was vacuously green.
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 3 });
+
+  test('coarse-pointer devices get the mobile tier: DPR cap 1.5, no MSAA, no shadows', async ({ page }) => {
+    const t = await page.evaluate(() => ({
+      isMobile: window.__game.state.isMobile,
+      dpr: window.devicePixelRatio,
+      actual: window.__game.state.renderer.getPixelRatio(),
+      expected: Math.min(window.devicePixelRatio, 1.5),
+      shadows: window.__game.state.renderer.shadowMap.enabled,
+      antialias: window.__game.state.renderer.getContext().getContextAttributes().antialias
+    }));
+    expect(t.isMobile).toBe(true); // The emulated context reads as coarse-pointer
+    expect(t.dpr).toBe(3); // The emulation really carries a phone DPR
+    expect(t.actual).toBe(1.5); // ...so the 1.5 CAP is what the renderer got
+    expect(t.actual).toBe(t.expected);
+    expect(t.shadows).toBe(false);
+    expect(t.antialias).toBe(false);
+  });
 });
 
 test('kill indicator flashes at ~1Hz when an enemy is killable', async ({ page }) => {

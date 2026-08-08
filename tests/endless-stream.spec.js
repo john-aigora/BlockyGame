@@ -214,7 +214,6 @@ test('a 400u walk: flat resource plateau, bounded ramped enemy bubble, land-only
 
 test('endless deaths record distance under their own key; the classic board is untouched', async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.setItem('blocky.worldMode', 'endless');
     localStorage.setItem('blocky.hiscores.v1', JSON.stringify([{ score: 50, date: '2026-01-01' }]));
   });
   await openGame(page);
@@ -286,6 +285,60 @@ test('the hunt works in endless: flee flip, kill, bounty, and combo state', asyn
   expect(result.collectTicking).toBe(true); // The collect pressure runs in endless too
 });
 
+test('the full 8-slot spawn rotation is pinned: prey→giant→peer→giant→sprinter→giant→juja→peer', async ({ page }) => {
+  // Deterministic on the paused start overlay (nothing else schedules):
+  // schedule one bubble spawn per slot, classify it, then CLEAR the pending
+  // queue so the threat gate can never close mid-rotation (pending giants
+  // count as threats — that gate has its own spec in species.spec.js). The
+  // rotation counter only advances on a REAL schedule, so the recorded
+  // sequence is exactly SPAWN_SIZE_PATTERN from slot 0 (plan 024's 8-band
+  // pattern; plan 027 Step 2 pins the ORDER, not just the mix).
+  await openGame(page);
+  const r = await page.evaluate(() => {
+    const g = window.__game;
+    const d = g.debug;
+    const s = g.state;
+    s.enemies.forEach((e) => s.scene.remove(e));
+    s.enemies = [];
+    d.clearPendingSpawns();
+    d.resetEnemyStreaming(); // Rotation restarts at slot 0
+    const out = [];
+    for (let i = 0; i < 8; i++) {
+      let info = [];
+      // A slot may fail all 10 placement rolls into water (does NOT advance
+      // the rotation) — retry the tick until the schedule lands.
+      for (let guard = 0; guard < 25 && info.length === 0; guard++) {
+        d.updateEnemyStreaming(5); // Big dt clears the cooldown; schedules ONE
+        info = d.pendingSpawnInfo();
+      }
+      if (info.length !== 1) return { failedAt: i, out };
+      out.push({
+        species: info[0].species,
+        // Scaled body height vs the player's height — the band currency.
+        ratio: (1.2 * info[0].scaleFactor) / s.playerScale
+      });
+      d.clearPendingSpawns();
+    }
+    return { out };
+  });
+  expect(r.failedAt).toBeUndefined();
+  expect(r.out.map((o) => o.species)).toEqual(
+    ['grunt', 'grunt', 'grunt', 'grunt', 'sprinter', 'grunt', 'juja', 'grunt']);
+  const [prey, giant1, peer1, giant2, sprinter, giant3, juja, peer2] = r.out.map((o) => o.ratio);
+  expect(prey).toBeGreaterThanOrEqual(0.55); // PREY_HEIGHT_RANGE
+  expect(prey).toBeLessThanOrEqual(0.85);
+  for (const giant of [giant1, giant2, giant3]) {
+    expect(giant).toBeCloseTo(1.5, 9); // The exact classic giant rule (ramp 0)
+  }
+  for (const peer of [peer1, peer2]) {
+    expect(peer).toBeGreaterThanOrEqual(0.95); // PEER_HEIGHT_RANGE
+    expect(peer).toBeLessThanOrEqual(1.25);
+  }
+  expect(sprinter).toBeGreaterThanOrEqual(0.5); // SPRINTER_HEIGHT_RANGE
+  expect(sprinter).toBeLessThanOrEqual(0.7);
+  expect(juja).toBeCloseTo(0.35, 9); // JUJA_HEIGHT_FACTOR — fixed critter size
+});
+
 test('bubble spawns rotate size bands: prey appears, not only giants', async ({ page }) => {
   await bootEndless(page);
   const heights = await page.evaluate(() => {
@@ -300,6 +353,11 @@ test('bubble spawns rotate size bands: prey appears, not only giants', async ({ 
     let tries = 0;
     while (s.enemies.length < 3 && tries < 40) {
       d.updateEnemyStreaming(5); // Big dt clears the cooldown each call
+      // The streaming tick only QUEUES a warn disc now (0.95s red warn
+      // before materializing — src/enemies.js); tick the warn pipeline
+      // 2.0 game-seconds so the queued spawn lands in state.enemies
+      // (plan 017 endless-semantics rewrite).
+      for (let i = 0; i < 40; i++) d.updateSpawnWarnings(0.05);
       tries++;
     }
     // Scaled BODY height of each spawn vs the player's height — read the

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openGame, startGame } from './helpers.js';
+import { openGame, startGame, waitGameSeconds, settleFrames } from './helpers.js';
 
 // Mobile polish (plan 012): touches that start on UI never drive movement,
 // exactly one tracked finger owns the drag, and the phone layout applies.
@@ -23,7 +23,9 @@ test('a tap on the pause button pauses without moving the player', async ({ page
   }));
   await page.tap('#pause-button');
   await expect(page.locator('#pause-button')).toHaveText('Resume'); // It really paused
-  await page.waitForTimeout(300); // Any wrongly-started drag would move the player here
+  // The game is paused (its clock is frozen) — rendered frames are the
+  // honest axis for "a wrongly-started drag would have moved the player".
+  await settleFrames(page, 20);
   const after = await page.evaluate(() => ({
     x: window.__game.state.player.position.x,
     z: window.__game.state.player.position.z,
@@ -60,7 +62,7 @@ test('a canvas drag moves the player; a second finger cannot hijack it', async (
   expect(vector.x).toBeCloseTo(1); // Still the first finger's rightward drag
   expect(vector.y).toBeCloseTo(0);
 
-  await page.waitForTimeout(400); // Let the run integrate the vector
+  await waitGameSeconds(page, 0.4); // The run integrates the vector on the GAME clock
   const afterX = await page.evaluate(() => window.__game.state.player.position.x);
   expect(afterX).toBeGreaterThan(beforeX);
 

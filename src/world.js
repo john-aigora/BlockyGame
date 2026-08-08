@@ -7,10 +7,12 @@ import {
     ATTRACT_ORBIT_PERIOD, ATTRACT_EASE_TIME, CAMERA_TERRAIN_CLEARANCE
 } from './constants.js';
 import { state } from './state.js';
-// Import cycle note: terrain.js imports makeGroundTexture from this module.
-// Both edges are function-references used at call time (never during module
-// evaluation), so the cycle is benign under ES modules.
+// Import cycle note: terrain.js imports makeGroundTexture from this module,
+// and enemies.js imports triggerKillShake while we import its per-viewer
+// paint (plan 026). All edges are function-references used at call time
+// (never during module evaluation), so the cycles are benign under ES modules.
 import { groundHeightAt } from './terrain.js';
+import { applyEdibilityTint } from './enemies.js';
 
 // --- World Creation ---
 // Builds the scene, camera, renderer, lights, and ground plane.
@@ -135,18 +137,19 @@ export function createWorld() {
     state.scene.background = makeSkyTexture(); // Gradient sky (plan 015)
     state.scene.fog = new THREE.Fog(HORIZON_COLOR, 20, 100); // Fog for depth perception, tuned to the horizon
 
-    // 2. Camera: Defines the viewpoint.
-    // PerspectiveCamera(fov, aspect_ratio, near_clipping_plane, far_clipping_plane)
-    const aspect = state.gameContainer.clientWidth / state.gameContainer.clientHeight;
-    state.camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
-    state.camera.position.set(0, 15, 10); // Initial camera position (x, y, z)
-    state.camera.lookAt(0, 0, 0); // Camera looks at the center of the scene
+    // 2. Camera: Defines the viewpoint. Seat 0's camera IS state.camera
+    // (createCameraFor syncs the alias); 2P adds a second via the same path.
+    createCameraFor(state.players[0]);
 
     // 3. Renderer: Draws the scene from the camera's perspective.
-    state.renderer = new THREE.WebGLRenderer({ antialias: true }); // antialias for smoother edges
-    state.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Sharp on retina; cap 2 — dpr 3+ costs GPU for invisible gains
+    // MOBILE TIER (plan 020 P-10): coarse-pointer devices trade MSAA, the
+    // retina DPR cap, and shadows for frame rate — phone GPUs were paying
+    // desktop-tier fill cost on a 6x smaller screen. init() resolves
+    // state.isMobile BEFORE calling createWorld (ordering contract).
+    state.renderer = new THREE.WebGLRenderer({ antialias: !state.isMobile });
+    state.renderer.setPixelRatio(Math.min(window.devicePixelRatio, state.isMobile ? 1.5 : 2)); // Desktop cap 2 — dpr 3+ costs GPU for invisible gains
     state.renderer.setSize(state.gameContainer.clientWidth, state.gameContainer.clientHeight);
-    state.renderer.shadowMap.enabled = true; // Enable shadows in the scene
+    state.renderer.shadowMap.enabled = !state.isMobile; // Shadows are a desktop luxury
     // Add the renderer's canvas element to the game container div
     state.gameContainer.insertBefore(state.renderer.domElement, state.gameContainer.firstChild);
 
@@ -181,24 +184,61 @@ export function createWorld() {
     return directionalLight;
 }
 
-// Handles window resize events to keep the game looking correct.
+// --- Split-screen layout (plan 026) ---
+// One canvas, two viewports: P1 LEFT half, P2 RIGHT half, one shared scene,
+// one camera per player. Solo keeps the EXACT single full-rect render path
+// (no scissor calls at all) so one-player play is bit-identical.
+function isSplitScreen() {
+    return state.players.length >= 2;
+}
+
+// The aspect each player camera should carry under the current layout.
+// The start overlay is SINGLE-VIEW by design even with two players selected
+// (renderFrame's splitLive gate falls through to the full-rect attract
+// render there), so its cameras must carry the FULL aspect — a half aspect
+// projected into the full rect stretched the title world 2x horizontally
+// (B8 review BLOCK-3). startRun/setupNewGame re-apply aspects on both
+// overlay transitions via onWindowResize.
+function viewAspect() {
+    const w = state.gameContainer.clientWidth;
+    const h = state.gameContainer.clientHeight;
+    return isSplitScreen() && !state.onStartScreen ? (w / 2) / h : w / h;
+}
+
+// Builds (or rebuilds the aspect of) the camera for one player slot; keeps
+// the classic state.camera alias pointed at seat 0's camera.
+export function createCameraFor(playerState) {
+    // PerspectiveCamera(fov, aspect_ratio, near_clipping_plane, far_clipping_plane)
+    const camera = new THREE.PerspectiveCamera(75, viewAspect(), 0.1, 1000);
+    camera.position.set(0, 15, 10); // Initial camera position (x, y, z)
+    camera.lookAt(0, 0, 0); // Camera looks at the center of the scene
+    playerState.camera = camera;
+    if (playerState === state.players[0]) state.camera = camera;
+    return camera;
+}
+
+// Handles window resize events (and 1P/2P layout flips) to keep the game
+// looking correct.
 export function onWindowResize() {
-    if (!state.gameContainer || !state.renderer || !state.camera) return; // Ensure elements are initialized
+    if (!state.gameContainer || !state.renderer) return; // Ensure elements are initialized
 
     const newWidth = state.gameContainer.clientWidth;
     const newHeight = state.gameContainer.clientHeight;
 
-    state.camera.aspect = newWidth / newHeight; // Update camera aspect ratio
-    state.camera.updateProjectionMatrix(); // Apply changes to camera
-    state.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Window may have moved to a display with a different dpr
+    for (const player of state.players) {
+        if (!player.camera) continue;
+        player.camera.aspect = viewAspect(); // Per-half aspect in 2P; full-rect solo
+        player.camera.updateProjectionMatrix(); // Apply changes to camera
+    }
+    state.renderer.setPixelRatio(Math.min(window.devicePixelRatio, state.isMobile ? 1.5 : 2)); // Same tier rule as createWorld; the window may have moved displays
     state.renderer.setSize(newWidth, newHeight); // Resize renderer
 }
 
-// The camera offset the current zoom level and player size ask for.
+// The camera offset the current zoom level and THIS player's size ask for.
 // Growth compensation pulls the camera back as the player grows so the
 // player never dominates the screen.
-function cameraTargets() {
-    const growthComp = 1 + (state.playerScale - 1) * GROWTH_FRAME_FACTOR;
+function cameraTargets(player) {
+    const growthComp = 1 + (player.scale - 1) * GROWTH_FRAME_FACTOR;
     return {
         y: INITIAL_CAMERA_Y_OFFSET * state.zoomLevel * growthComp,
         z: INITIAL_CAMERA_Z_OFFSET * state.zoomLevel * growthComp
@@ -218,23 +258,17 @@ let attractAngle = 0; // Orbit phase (radians)
 let attractBob = 0; // Height-bob clock (seconds)
 let attractBlend = 0; // 0 = gameplay framing, 1 = full orbit view
 
-// Endless-mode vertical smoothing: the camera follows a LERPED terrain
-// height under the player instead of the raw one, so hill crests read as
-// gentle rises, not camera jolts. Classic keeps the raw p.y (always 0).
-let camAnchorY = 0;
 const lookTarget = new THREE.Vector3(); // Scratch for the smoothed lookAt
 
-// Updates camera position to follow the player, easing the offset toward the
-// zoom/growth target, and keeps the fog scaled to the camera distance.
-// dt is the frame delta in seconds; callers outside the frame loop (e.g.
-// zoom clicks while paused) pass 1/60.
+// Updates every player camera (plan 026): each follows ITS hero, easing the
+// offset toward the zoom/growth target, with the attract orbit on camera 0
+// only. dt is the frame delta in seconds; callers outside the frame loop
+// (e.g. zoom clicks while paused) pass 1/60.
 export function updateCameraPosition(dt) {
-    if (!state.player || !state.camera) return; // Check for player and camera
-    const target = cameraTargets();
-    const smoothing = 1 - Math.exp(-6 * dt);
-    state.camY += (target.y - state.camY) * smoothing;
-    state.camZ += (target.z - state.camZ) * smoothing;
-
+    // Kill micro-shake decays ONCE per frame (both cameras thump together —
+    // a kill is a world event); the per-camera jitter is applied below.
+    if (shakeTime > 0) shakeTime = Math.max(0, shakeTime - dt);
+    // Attract state advances once per frame too — it belongs to camera 0.
     const wantAttract = state.onStartScreen && shakeEnabled;
     const blendStep = shakeEnabled ? dt / ATTRACT_EASE_TIME : 1; // Reduced motion: snap
     attractBlend = Math.max(0, Math.min(1, attractBlend + (wantAttract ? blendStep : -blendStep)));
@@ -245,29 +279,45 @@ export function updateCameraPosition(dt) {
         attractAngle = 0; // The next overlay always starts from the behind-view
         attractBob = 0;
     }
+    for (const player of state.players) {
+        updateCameraForPlayer(player, dt);
+    }
+    // Scene fog is per-render-pass in 2P (renderFrame overrides per half);
+    // between frames it carries seat 0's framing — the solo behavior.
+    updateFog(state.players[0]);
+}
 
-    const p = state.player.position;
+function updateCameraForPlayer(player, dt) {
+    if (!player.mesh || !player.camera) return; // Check for player and camera
+    const target = cameraTargets(player);
+    const smoothing = 1 - Math.exp(-6 * dt);
+    player.camY += (target.y - player.camY) * smoothing;
+    player.camZ += (target.z - player.camZ) * smoothing;
+
+    const p = player.mesh.position;
     // Vertical follow base: classic is the raw player y (always 0); endless
     // eases toward the terrain height under the player.
     let followY = p.y;
     if (state.worldMode === 'endless') {
         // Follow the TERRAIN under the player, not the jump arc: subtracting
-        // jumpOffset keeps the camera glued to the ground line so a hop
+        // jump.offset keeps the camera glued to the ground line so a hop
         // reads through the player, not as a camera bounce.
-        camAnchorY += ((p.y - state.jumpOffset) - camAnchorY) * (1 - Math.exp(-4 * dt));
-        followY = camAnchorY;
+        player.camAnchorY += ((p.y - player.jump.offset) - player.camAnchorY) * (1 - Math.exp(-4 * dt));
+        followY = player.camAnchorY;
     }
     let camX = p.x; // Gameplay framing: the behind-view
-    let camYpos = followY + state.camY;
-    let camZpos = p.z + state.camZ;
-    if (attractBlend > 0) {
+    let camYpos = followY + player.camY;
+    let camZpos = p.z + player.camZ;
+    // Attract orbit is CAMERA 0 only (plan 026: the title scene stays
+    // single-view); the P2 camera never blends.
+    if (attractBlend > 0 && player.seat === 0) {
         // Orbit at the CURRENT framing distance (camY/camZ keep easing above,
         // so zoom and player growth still frame correctly mid-orbit).
         const k = attractBlend * attractBlend * (3 - 2 * attractBlend); // Smoothstep
         const bob = 1 + 0.06 * Math.sin(attractBob * 0.7); // Gentle height breath
-        camX += (p.x + Math.sin(attractAngle) * state.camZ - camX) * k;
-        camYpos += (followY + state.camY * bob - camYpos) * k;
-        camZpos += (p.z + Math.cos(attractAngle) * state.camZ - camZpos) * k;
+        camX += (p.x + Math.sin(attractAngle) * player.camZ - camX) * k;
+        camYpos += (followY + player.camY * bob - camYpos) * k;
+        camZpos += (p.z + Math.cos(attractAngle) * player.camZ - camZpos) * k;
     }
     if (state.worldMode === 'endless') {
         // Terrain clearance (stage 3): the camera — attract orbit included —
@@ -281,56 +331,105 @@ export function updateCameraPosition(dt) {
             camYpos = camGround + CAMERA_TERRAIN_CLEARANCE;
         }
     }
-    state.camera.position.set(camX, camYpos, camZpos);
+    player.camera.position.set(camX, camYpos, camZpos);
     if (state.worldMode === 'endless') {
         // Aim at the smoothed height too — aiming at the raw p.y would put
         // the crest jolt right back into the frame.
-        state.camera.lookAt(lookTarget.set(p.x, followY, p.z));
+        player.camera.lookAt(lookTarget.set(p.x, followY, p.z));
     } else {
-        state.camera.lookAt(state.player.position);
+        player.camera.lookAt(p);
     }
     // Kill micro-shake: additive offset AFTER lookAt, so the camera jitters
     // in place without re-aiming — a punchy 0.12s thump, not a swing. The
     // amplitude decays linearly to zero; at ~7 frames total this is far from
     // any strobe, and reduced-motion users never get here (triggerKillShake).
     if (shakeTime > 0) {
-        shakeTime = Math.max(0, shakeTime - dt);
         const amp = SHAKE_AMPLITUDE * (shakeTime / SHAKE_DURATION);
-        state.camera.position.x += (Math.random() * 2 - 1) * amp;
-        state.camera.position.y += (Math.random() * 2 - 1) * amp;
-        state.camera.position.z += (Math.random() * 2 - 1) * amp;
+        player.camera.position.x += (Math.random() * 2 - 1) * amp;
+        player.camera.position.y += (Math.random() * 2 - 1) * amp;
+        player.camera.position.z += (Math.random() * 2 - 1) * amp;
     }
-    updateFog();
 }
 
 // Fog follows the camera distance so the game stays visible at every zoom
 // level, with the same depth-haze character as the original fixed 20/100.
-function updateFog() {
-    if (!state.scene || !state.scene.fog) return;
-    const camDist = Math.hypot(state.camY, state.camZ);
+// Takes the VIEWING player (plan 026): renderFrame re-aims the one scene
+// fog before each half's render pass.
+function updateFog(player) {
+    if (!state.scene || !state.scene.fog || !player) return;
+    const camDist = Math.hypot(player.camY, player.camZ);
     state.scene.fog.near = camDist * 1.1;
     state.scene.fog.far = camDist * 4.5;
 }
 
-// Resets the zoom for a new game and snaps the camera straight to the
+// --- Frame render (plan 026) ---
+// Solo (or the single-view attract screen): the EXACT pre-split path — one
+// full-rect render, scissor test untouched. 2P: left/right halves with
+// viewport + scissor set together per pass, each with its own camera + fog.
+export function renderFrame() {
+    const renderer = state.renderer;
+    if (!renderer || !state.scene) return;
+    const p2 = state.players[1];
+    const splitLive = isSplitScreen() && p2.camera && !state.onStartScreen;
+    if (!splitLive) {
+        if (scissorActive) {
+            // Leaving split rendering (death screen keeps both halves, so
+            // this is the overlay/solo return): restore the full rect once.
+            scissorActive = false;
+            renderer.setScissorTest(false);
+            renderer.setViewport(0, 0, state.gameContainer.clientWidth, state.gameContainer.clientHeight);
+        }
+        renderer.render(state.scene, state.camera);
+        return;
+    }
+    const w = state.gameContainer.clientWidth;
+    const h = state.gameContainer.clientHeight;
+    const halfW = Math.floor(w / 2);
+    const p1 = state.players[0];
+    // Spectator halves (plan 026 Stage E): a dead hero's half shows the
+    // LIVING partner's camera (under the WAITING chip) until both are down
+    // — then each half freezes on its own last view behind the death screen.
+    const p1View = p1.alive || !p2.alive ? p1 : p2;
+    const p2View = p2.alive || !p1.alive ? p2 : p1;
+    scissorActive = true;
+    renderer.setScissorTest(true);
+    // P1 — LEFT half
+    renderer.setViewport(0, 0, halfW, h);
+    renderer.setScissor(0, 0, halfW, h);
+    updateFog(p1View);
+    applyEdibilityTint(p1View); // This half's colors = this viewer's edibility
+    renderer.render(state.scene, p1View.camera);
+    // P2 — RIGHT half
+    renderer.setViewport(halfW, 0, w - halfW, h);
+    renderer.setScissor(halfW, 0, w - halfW, h);
+    updateFog(p2View);
+    applyEdibilityTint(p2View);
+    renderer.render(state.scene, p2View.camera);
+}
+
+let scissorActive = false; // True while the last frame rendered split halves
+
+// Resets the zoom for a new game and snaps every camera straight to the
 // default framing (no lerp-in from the previous game's zoom).
 export function resetCameraZoom() {
     state.zoomLevel = 1.0;
     shakeTime = 0; // A new run never inherits the last kill's shake
-    camAnchorY = state.player ? state.player.position.y : 0; // Snap the vertical follow — no lerp-in from the last run's hill
-    const target = cameraTargets();
-    state.camY = target.y;
-    state.camZ = target.z;
-    updateFog();
+    for (const player of state.players) {
+        player.camAnchorY = player.mesh ? player.mesh.position.y : 0; // Snap the vertical follow — no lerp-in from the last run's hill
+        const target = cameraTargets(player);
+        player.camY = target.y;
+        player.camZ = target.z;
+    }
+    updateFog(state.players[0]);
 }
 
 // Clamped zoom, shared by both buttons. Forces a camera update + render so
 // zoom responds while paused.
 function setZoomLevel(level) {
     state.zoomLevel = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, level));
-    updateCameraPosition(1 / 60); // Immediately step the camera toward the new target
+    updateCameraPosition(1 / 60); // Immediately step the cameras toward the new target
     if (state.renderer && state.scene && state.camera) { // Ensure renderer is ready
-        state.renderer.render(state.scene, state.camera); // Re-render if paused to show zoom change
+        renderFrame(); // Re-render if paused to show zoom change
     }
 }
 
