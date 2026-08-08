@@ -645,7 +645,7 @@ export function killEnemy(enemyGroup, index, player = state.players[0]) {
     enemyDeathPosition.y = (enemyGroup.userData.bodyBaseY ?? 0.9) * enemyGroup.scale.y +
         (state.worldMode === 'endless' ? enemyGroup.position.y : 0);
     onEnemyKilled(enemyDeathPosition, burstColor, enemyGroup.scale.y);
-    spawnScorePopup(enemyDeathPosition, payout); // "+N" rises from the body center
+    spawnScorePopup(enemyDeathPosition, payout, player); // "+N" rises from the body center
     triggerKillShake(); // 0.12s camera thump (no-op under reduced motion)
     enemyDeathPosition.y = 0; // Food still spawns at ground level below
 
@@ -685,7 +685,7 @@ export function killEnemy(enemyGroup, index, player = state.players[0]) {
         // Banner at the fallen titan's chest height ABOVE the terrain it
         // stood on — the absolute y already carries the ground (B7 rev ADV-1).
         enemyDeathPosition.y = enemyGroup.position.y + enemyBaseHeight * enemyGroup.scale.y * 0.6;
-        spawnTextPopup(enemyDeathPosition, 'TITAN DOWN!', '#FFD700');
+        spawnTextPopup(enemyDeathPosition, 'TITAN DOWN!', '#FFD700', player);
     } else {
         for (let i = 0; i < enemyGroup.userData.species.foodDrop; i++) {
             spawnAtPosition(enemyDeathPosition);

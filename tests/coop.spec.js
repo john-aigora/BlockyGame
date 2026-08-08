@@ -316,6 +316,31 @@ test('start-overlay entry: 2 PLAYERS flips and persists across reload; 1 PLAYER 
   expect(await page.evaluate(() => sessionStorage.getItem('blocky.playerCount'))).toBe('1');
 });
 
+test('2 PLAYERS and TODAY\'S WORLD are mutually exclusive (coop has no daily board)', async ({ page }) => {
+  // Turning daily on while 2P is remembered forces solo so the death screen
+  // can show TODAY'S BEST (coop only writes TEAM RUNS).
+  await page.locator('#two-player-button').click();
+  expect(await page.evaluate(() => window.__game.state.players.length)).toBe(2);
+  await page.locator('#daily-toggle').click();
+  await page.waitForFunction(() => window.__game?.state?.enemies?.length >= 1, null, { timeout: 30000 });
+  expect(await page.evaluate(() => ({
+    daily: window.__game.debug.worldSeedInfo().daily,
+    players: window.__game.state.players.length,
+    playerCount: sessionStorage.getItem('blocky.playerCount'),
+    dailyFlag: sessionStorage.getItem('blocky.daily'),
+  }))).toEqual({ daily: true, players: 1, playerCount: '1', dailyFlag: '1' });
+
+  // Picking 2P while daily is on clears daily and reloads as coop.
+  await page.locator('#two-player-button').click();
+  await page.waitForFunction(() => window.__game?.state?.enemies?.length >= 1, null, { timeout: 30000 });
+  expect(await page.evaluate(() => ({
+    daily: window.__game.debug.worldSeedInfo().daily,
+    players: window.__game.state.players.length,
+    playerCount: sessionStorage.getItem('blocky.playerCount'),
+    dailyFlag: sessionStorage.getItem('blocky.daily'),
+  }))).toEqual({ daily: false, players: 2, playerCount: '2', dailyFlag: '0' });
+});
+
 test('per-half danger vignette: a hunter stalking P2 reddens ONLY P2\'s half — and the CSS rule actually paints it', async ({ page }) => {
   await startTwoPlayerGame(page);
   await clearThreats(page);
@@ -492,8 +517,6 @@ test('an oversized juja is nobody\'s nightmare: no dread, no arrow, and it FLEES
   const probe = await page.evaluate(() => {
     const s = window.__game.state;
     const juja = s.enemies.find((e) => e.userData.speciesKey === 'juja');
-    const killableForP1 = window.__game.debug.canKill
-      ? window.__game.debug.canKill(juja, s.players[0]) : null;
     return {
       exists: !!juja,
       p1Danger: s.players[0].dangerOpacity,

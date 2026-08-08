@@ -10,7 +10,8 @@ import {
     PLAYER_COLLIDER_HALF_WIDTH, RAMP_DISTANCE, RAMP_SPEED_STEP, RAMP_SPEED_MAX,
     DISTANCE_MILESTONE_STEP, REGION_DISCOVER_DEBOUNCE,
     BOSS_DISTANCE, BOSS_LEAD_DISTANCE, BOSS_SCALE_MULT, ENEMY_COLLIDER_HALF_WIDTH,
-    JUMP_APEX_HEIGHT, JUMP_APEX_GROWTH, JUMP_AIRTIME, JUMP_AIRTIME_GROWTH
+    JUMP_APEX_HEIGHT, JUMP_APEX_GROWTH, JUMP_AIRTIME, JUMP_AIRTIME_GROWTH,
+    DAILY_WORLD
 } from './constants.js';
 import { initContinuousMovement, resetContinuousMovement, updateContinuousMovement } from './movement-continuous.js';
 import { wrapPosition, torusDeltaComponent } from './worldmath.js';
@@ -137,6 +138,10 @@ function init() {
     // (they must not start the run — the overlay's own pointerdown does
     // that; stop the press, act on the click — the daily-toggle pattern),
     // and the choice persists for the session.
+    // Mutual exclusion with TODAY'S WORLD: coop records only the TEAM RUNS
+    // board, so a daily×2P combo would silently drop TODAY'S BEST. Picking
+    // 2P while daily is on clears daily and reloads into a non-daily world
+    // with the 2P roster remembered.
     for (const [button, count] of [[el.onePlayerButton, 1], [el.twoPlayerButton, 2]]) {
         if (!button) continue;
         button.addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -144,6 +149,15 @@ function init() {
             sfx.click();
             try { sessionStorage.setItem('blocky.playerCount', String(count)); }
             catch { /* blocked storage — the choice still applies this session */ }
+            if (count === 2 && DAILY_WORLD) {
+                try { sessionStorage.setItem('blocky.daily', '0'); }
+                catch { /* blocked storage */ }
+                const url = new URL(location.href);
+                url.searchParams.delete('seed');
+                url.searchParams.delete('daily');
+                location.href = url.toString();
+                return;
+            }
             setPlayerCount(count);
         });
     }
@@ -520,7 +534,7 @@ function update(dt) {
                     milestoneOrigin.x = player.mesh.position.x;
                     milestoneOrigin.y = player.mesh.position.y + player.scale + 0.6;
                     milestoneOrigin.z = player.mesh.position.z;
-                    spawnTextPopup(milestoneOrigin, `+${GOLD_FOOD_POINTS} GOLD!`, '#FFD54F');
+                    spawnTextPopup(milestoneOrigin, `+${GOLD_FOOD_POINTS} GOLD!`, '#FFD54F', player);
                     sfx.fanfare('short');
                 } else {
                     sfx.collect();
@@ -645,7 +659,7 @@ function updateRegionDiscovery(player) {
         milestoneOrigin.x = p.x;
         milestoneOrigin.y = p.y + player.scale + 0.6; // Above the head (milestone pattern)
         milestoneOrigin.z = p.z;
-        spawnTextPopup(milestoneOrigin, `DISCOVERED: ${region.name}`, region.color);
+        spawnTextPopup(milestoneOrigin, `DISCOVERED: ${region.name}`, region.color, player);
         sfx.milestone();
     }
 }
@@ -685,7 +699,7 @@ function tryScheduleBoss(player) {
         milestoneOrigin.x = p.x;
         milestoneOrigin.y = p.y + player.scale + 0.6; // The dread banner rides over the head like every beat
         milestoneOrigin.z = p.z;
-        spawnTextPopup(milestoneOrigin, 'SOMETHING BIG COMES...', '#FF5252');
+        spawnTextPopup(milestoneOrigin, 'SOMETHING BIG COMES...', '#FF5252', player);
         return;
     }
 }
@@ -718,7 +732,7 @@ function updateEndlessProgress() {
                 milestoneOrigin.x = p.x;
                 milestoneOrigin.y = p.y + player.scale + 0.6; // Above the head; popup pool adds its own rise
                 milestoneOrigin.z = p.z;
-                spawnTextPopup(milestoneOrigin, `DISTANCE ${milestone * DISTANCE_MILESTONE_STEP}!`, '#76FF03'); // Food lime — reward color
+                spawnTextPopup(milestoneOrigin, `DISTANCE ${milestone * DISTANCE_MILESTONE_STEP}!`, '#76FF03', player); // Food lime — reward color
                 sfx.distance();
             }
             state.furthestDistance = dist;

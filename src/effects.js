@@ -250,17 +250,18 @@ export function spawnRing(origin, opts = {}) {
 
 // Spawns a floating "+N" score popup at `position` (world space) — the
 // kill-bounty yellow. Delegates to the shared text-popup pool.
-export function spawnScorePopup(position, points_) {
-    spawnTextPopup(position, `+${points_}`, '#FFEB3B'); // Bright Yellow — the kill/bounty color
+export function spawnScorePopup(position, points_, player = state.players[0]) {
+    spawnTextPopup(position, `+${points_}`, '#FFEB3B', player); // Bright Yellow — the kill/bounty color
 }
 
 // The general pooled text popup (stage 3: distance milestones reuse the
 // SAME pool/ring — no new system). The only work is a 2D redraw + upload;
 // fillText's maxWidth squeezes long labels (e.g. "DISTANCE 1250!") into the
-// canvas instead of clipping them.
+// canvas instead of clipping them. `player` (optional) scales the popup to
+// THAT hero's growth so a large P2 does not inherit P1's frame size.
 let lastPopupText = null; // Test introspection (effectsInfo)
 
-export function spawnTextPopup(position, text, fillStyle) {
+export function spawnTextPopup(position, text, fillStyle, player = state.players[0]) {
     if (popups.length === 0) return;
     lastPopupText = text;
     const p = popups[popupCursor];
@@ -278,8 +279,10 @@ export function spawnTextPopup(position, text, fillStyle) {
     ctx2d.fillText(text, 128, 64, 240);
     p.texture.needsUpdate = true;
     // Popups scale with the camera's growth pull-back so they stay the same
-    // size ON SCREEN as the player (and the framing) grows.
-    const frame = 1 + (state.playerScale - 1) * GROWTH_FRAME_FACTOR;
+    // size ON SCREEN as the player (and the framing) grows. Use the owning
+    // hero's scale (2P: each half frames its own seat).
+    const ownerScale = (player && Number.isFinite(player.scale)) ? player.scale : state.playerScale;
+    const frame = 1 + (ownerScale - 1) * GROWTH_FRAME_FACTOR;
     p.sprite.scale.set(3.0 * frame, 1.5 * frame, 1);
     p.sprite.position.set(position.x, position.y + 0.5, position.z);
     p.baseY = p.sprite.position.y;

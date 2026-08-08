@@ -178,8 +178,15 @@ function initDailyToggle() {
     // action IS starting). Stop the press here, act on the click.
     el.dailyToggle.addEventListener('pointerdown', (e) => e.stopPropagation());
     el.dailyToggle.addEventListener('click', () => {
-        try { sessionStorage.setItem('blocky.daily', DAILY_WORLD ? '0' : '1'); }
+        const turningOn = !DAILY_WORLD;
+        try { sessionStorage.setItem('blocky.daily', turningOn ? '1' : '0'); }
         catch { /* blocked storage — the reload below just keeps the default world */ }
+        // Mutual exclusion with 2P: coop only writes TEAM RUNS, so daily×2P
+        // would never place on TODAY'S BEST. Turning daily on forces solo.
+        if (turningOn) {
+            try { sessionStorage.setItem('blocky.playerCount', '1'); }
+            catch { /* blocked storage */ }
+        }
         const url = new URL(location.href);
         url.searchParams.delete('seed');
         url.searchParams.delete('daily');
@@ -355,7 +362,7 @@ export function updateTimeDisplay() {
             survivalBeatOrigin.x = p.x;
             survivalBeatOrigin.y = p.y + player.scale + 0.6;
             survivalBeatOrigin.z = p.z;
-            spawnTextPopup(survivalBeatOrigin, `${minutes} MINUTE${minutes > 1 ? 'S' : ''}!`, '#8BC34A');
+            spawnTextPopup(survivalBeatOrigin, `${minutes} MINUTE${minutes > 1 ? 'S' : ''}!`, '#8BC34A', player);
             celebrated = true;
         }
         if (celebrated) sfx.milestone();
@@ -608,7 +615,7 @@ function fireSurvivalBeat(player, text, fillStyle, sound) {
     survivalBeatOrigin.x = p.x;
     survivalBeatOrigin.y = p.y + player.scale + 0.6; // Above the head (distance-milestone pattern)
     survivalBeatOrigin.z = p.z;
-    spawnTextPopup(survivalBeatOrigin, text, fillStyle);
+    spawnTextPopup(survivalBeatOrigin, text, fillStyle, player);
     sound();
 }
 
