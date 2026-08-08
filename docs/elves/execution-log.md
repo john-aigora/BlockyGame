@@ -793,3 +793,14 @@ All five steps landed; suite grew 95 → 102 (+4 tension, +3 audio).
   consecutive zero-flake (7.1m/7.2m), lint 0, build exit 0. Suite 79 → 151
   over the run. Learnings promoted (5 entries). Session acceptance flipped
   with evidence; stop_allowed → true.
+
+## 2026-08-08 — Landing check CLEAN at evidence tip db5f0ac
+
+- Strict elves_landing_check: 0 errors after canonical-schema conformance
+  (B#-A# ids mirrored verbatim into per-batch plan Acceptance sections; B2b →
+  B11; readiness attested at the evidence tip with inputs digest; no content
+  changed — ids carry their historical labels inside the criterion text).
+- Order per the canonical contract: evidence committed → check green at that
+  exact tip → this record → one cleanup commit removes operational run docs
+  (session/survival guide/execution log/worker packet); run plan + learnings
+  + plans/ stay. Post-cleanup tip attestation follows the cleanup.
