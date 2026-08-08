@@ -217,7 +217,11 @@ canvas {
     }
 }
 
-#score.score-pop {
+/* The class selector serves the 2P per-seat .hud-score columns (B8 review
+   ADV-3): ui.js adds .score-pop to those class-based elements too, and the
+   id-only selector never matched them — the coop pop painted nothing. */
+#score.score-pop,
+.hud-score.score-pop {
     animation: score-pop 0.35s ease-out;
 }
 
@@ -252,8 +256,13 @@ canvas {
 /* Danger vignette (tension pass): a red radial glow hugging the frame when
    a non-killable enemy stalks close. ui.js drives opacity per frame (eased
    toward 0.22 max, slow breathing) — this rule only paints the gradient.
-   The transparent center keeps gameplay fully readable. */
-#danger-vignette {
+   The transparent center keeps gameplay fully readable.
+   The class selector is the base rule for the 2P per-seat clones (B8 review
+   BLOCK-1): they are class-only elements, and without it they were unstyled
+   static divs — the per-frame opacity writes painted nothing. The
+   .danger-vignette[data-seat] rules below override one inset side each. */
+#danger-vignette,
+.danger-vignette {
     position: absolute;
     inset: 0;
     z-index: 40;
@@ -698,7 +707,10 @@ canvas {
     }
 }
 
-#combo-chip.combo-pop {
+/* The class selector serves the 2P per-seat chips (B8 review ADV-3): ui.js
+   pops .combo-chip[data-seat] elements the id-only selector never matched. */
+#combo-chip.combo-pop,
+.combo-chip.combo-pop {
     animation: combo-pop 0.25s ease-out;
 }
 
@@ -912,7 +924,9 @@ canvas {
 @media (prefers-reduced-motion: reduce) {
 
     #score.score-pop,
+    .hud-score.score-pop,
     #combo-chip.combo-pop,
+    .combo-chip.combo-pop,
     .message-box {
         animation: none;
     }
