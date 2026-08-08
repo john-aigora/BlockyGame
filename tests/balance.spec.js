@@ -59,22 +59,43 @@ test('two rapid kills pay more than 2x the single-kill bounty (combo)', async ({
 
   // Endless spawns go through a 0.95s warn + 0.5s materialize pipeline
   // (src/enemies.js), so the wave spawned by the first kill is not in
-  // state.enemies yet — settle on the GAME clock, then require a live
-  // enemy before touching enemies[0] (plan 017). enemies[0] is the first
-  // wave spawn, whose size band the rotation fixes at height 30 — the
-  // choreography below relies on that, so no reordering/despawning here.
-  await waitGameSeconds(page, 2.0);
-  await page.waitForFunction(() => window.__game.state.enemies.length >= 1, null, { timeout: 10000 });
+  // state.enemies yet — settle on the GAME clock, then wait for enemies[0]
+  // to be live AND fully materialized (its scale.y feeds the bounty math
+  // below; mid-materialize it is still growing). Which spawn lands at [0]
+  // depends on frame timing (the kill-wave giants and the first streaming
+  // prey expire their warns within one frame of each other, and same-frame
+  // expiry reverses the push order) — both bands are killable at 35, so the
+  // choreography works with either.
+  await waitGameSeconds(page, 1.5);
+  await page.waitForFunction(() => {
+    const e = window.__game.state.enemies[0];
+    return !!e && e.userData.materializing === undefined;
+  }, null, { timeout: 10000 });
 
-  // Second kill inside the 4s combo window: grow just past the fresh spawns
-  // (height 30) and land on one. 35 — not huge — keeps the wave spawned by
-  // THIS kill (height 52.5, 80 units out) clear of the player's own AABB,
-  // so the run survives and the combo state stays readable afterwards.
+  // Second kill inside the 4s combo window: grow past every live spawn
+  // (heights ≤ ~31) and land on enemies[0] through the real collision path.
+  // CHOREOGRAPHY STABILIZATION (B3, driver-granted): every OTHER enemy is
+  // moved out of the despawn ring in the SAME evaluate as the teleport.
+  // Mechanism being defused: these bodies are huge — a scale-20 player's
+  // honest body box (half-width 0.54·20) meets a height-30 giant's box
+  // (half-width 0.6·25) at up to ~37u of diagonal separation, and streaming
+  // giants spawn from ENDLESS_SPAWN_MIN = 35u while CHASING during the
+  // unattended CDP round-trip window before this evaluate — a legitimate
+  // contact death (score frozen, "Distance 0u") that killed ~half of runs
+  // before the fairness pass and a residual ~1/10 after it. Relocating the
+  // bystanders (they despawn+dispose next frame; backwards splice keeps [0]
+  // at index 0) leaves exactly one enemy — the killable target — so the
+  // payout, not the ambush, decides the test. Intent is unchanged: two
+  // rapid kills through the REAL collision branch pay > 2x the single
+  // bounty via the combo multiplier.
   const { before, bounty } = await page.evaluate(() => {
     const s = window.__game.state;
     s.playerScale = 35;
     s.player.scale.set(35, 35, 35);
     const enemy = s.enemies[0];
+    for (const other of s.enemies) {
+      if (other !== enemy) other.position.x = enemy.position.x + 500;
+    }
     const bounty = 25 + 5 * Math.floor(1.2 * enemy.scale.y); // KILL_POINTS + SIZE_BOUNTY_PER_UNIT * floor(height)
     const before = s.score;
     s.player.position.set(enemy.position.x, 0, enemy.position.z);

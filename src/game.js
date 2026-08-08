@@ -260,6 +260,11 @@ function update(dt) {
 
     // Advance the collect countdown on the game clock (before the enemy loop)
     tickCollectClock(dt);
+    // Dead-run guard (audit C-1): tickCollectClock may call endGame. The
+    // frame must stop WITH the run — otherwise updateEnemies still executes,
+    // killEnemy pays score and schedules spawns on a dead run, and the HUD
+    // ends up showing more than the board recorded at endGame time.
+    if (!state.gameActive) return;
 
     // Combo window runs on the same clock (kills in enemies.js refresh it)
     tickComboClock(dt);
@@ -278,6 +283,10 @@ function update(dt) {
 
     // Enemy AI, movement, and player-collision handling
     updateEnemies(dt);
+    // Dead-run guard (audit C-1), same rule as after tickCollectClock: a
+    // death inside the enemy pass must not keep ticking warn discs into
+    // fresh materializing monsters over the death screen.
+    if (!state.gameActive) return;
     // Red pre-spawn warns → materialize (after AI so a just-spawned foe
     // waits one frame, same as kill-spawn appends).
     updateSpawnWarnings(dt);

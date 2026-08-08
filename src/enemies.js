@@ -9,7 +9,8 @@ import {
     SPAWN_WARN_TIME, SPAWN_WARN_RADIUS,
     ENEMY_COLLIDER_HALF_WIDTH, ENEMY_WEDGE_TIME, ENEMY_DETOUR_TIME,
     ENDLESS_ENEMY_TARGET, ENDLESS_ENEMY_CAP, ENEMY_DESPAWN_RADIUS,
-    ENDLESS_SPAWN_MIN, ENDLESS_SPAWN_MAX, ENDLESS_SPAWN_INTERVAL, RAMP_HEIGHT_STEP
+    ENDLESS_SPAWN_MIN, ENDLESS_SPAWN_MAX, ENDLESS_SPAWN_INTERVAL, RAMP_HEIGHT_STEP,
+    PLAYER_COLLIDER_HALF_WIDTH
 } from './constants.js';
 import { state } from './state.js';
 import { createCharacter, disposeCharacter, shadeColor, CAP_LIGHTEN } from './characters.js';
@@ -32,6 +33,52 @@ const awayVec = new THREE.Vector3();
 // is reused for every enemy/collectible test. game.js imports both.
 export const playerBox = new THREE.Box3();
 export const scratchBox = new THREE.Box3();
+
+// Scratch for the explicit hitbox builders below — never allocated per frame.
+const boxCenter = new THREE.Vector3();
+const boxSize = new THREE.Vector3();
+
+// --- Explicit gameplay hitboxes (audit C-2) ---
+// Gameplay collides the BODY BLOCK, not the render tree (tails/scarves/
+// outlines are decoration) — audit C-2. The old render-tree bbox unioned
+// EVERY child mesh: the ×1.06 outline shell, the enemy tail (to −1.044 ×
+// base height behind the center), the hero scarf (to z ≈ −0.91 × scale),
+// and face parts riding in front — at giant scales, decorations were making
+// contact 40+ units before the bodies did (B3 probe evidence). Deriving the
+// player box from state.playerScale (not the render scale) also means the
+// collect squash / milestone pulse no longer throbs the hitbox.
+// Both builders stay EXPORTED: plan 026 reuses them for per-player collision.
+export function setPlayerCollisionBox(box) {
+    const s = state.playerScale;
+    const half = PLAYER_COLLIDER_HALF_WIDTH * s; // True visual half-width × scale
+    boxCenter.set(
+        state.player.position.x,
+        state.player.position.y + s * 0.5, // Body height base is 1.0 — center at half-height
+        state.player.position.z
+    );
+    boxSize.set(half * 2, s * 1.0, half * 2);
+    box.setFromCenterAndSize(boxCenter, boxSize);
+    // Jump (endless): flatten the collision test to XZ while airborne by
+    // stretching the box back down to the ground it left — hopping is for
+    // rocks, never an accidental enemy dodge (owner queue item 5).
+    if (state.jumpOffset > 0) box.min.y -= state.jumpOffset;
+    return box;
+}
+
+export function setEnemyCollisionBox(box, enemyGroup) {
+    // Gameplay collides the BODY BLOCK, not the render tree (tails/scarves/
+    // outlines are decoration) — audit C-2.
+    const sy = enemyGroup.scale.y;
+    const half = ENEMY_COLLIDER_HALF_WIDTH * sy; // True visual half-width × scale
+    boxCenter.set(
+        enemyGroup.position.x,
+        enemyGroup.position.y + enemyBaseHeight * sy * 0.5, // enemyBaseHeight = 1.2
+        enemyGroup.position.z
+    );
+    boxSize.set(half * 2, enemyBaseHeight * sy, half * 2);
+    box.setFromCenterAndSize(boxCenter, boxSize);
+    return box;
+}
 
 // The cap (top-face highlight) flips shade-for-shade with the body color —
 // computed once here from the same shade factor characters.js builds with.
@@ -211,13 +258,10 @@ const materializeOrigin = { x: 0, y: 0, z: 0 };
 // enemies appended mid-frame by spawnNewEnemies() get indexes above the
 // cursor and intentionally act on the NEXT frame (same as the old forEach).
 export function updateEnemies(dt) {
-    // Refresh the player's AABB ONCE for this whole collision pass —
-    // setFromObject traverses all child meshes and is too heavy per enemy.
-    playerBox.setFromObject(state.player);
-    // Jump (endless): flatten the collision test to XZ while airborne by
-    // stretching the box back down to the ground it left — hopping is for
-    // rocks, never an accidental enemy dodge (owner queue item 5).
-    if (state.jumpOffset > 0) playerBox.min.y -= state.jumpOffset;
+    // Refresh the player's AABB ONCE for this whole collision pass. The
+    // explicit builder (audit C-2) covers the body block only and preserves
+    // the airborne flatten rule internally.
+    setPlayerCollisionBox(playerBox);
     for (let i = state.enemies.length - 1; i >= 0; i--) {
         const enemyGroup = state.enemies[i];
         const bodyMesh = enemyGroup.getObjectByName('body'); // Get the body mesh
@@ -347,7 +391,7 @@ export function updateEnemies(dt) {
         // All gameplay math above is torus-aware, so this is invisible to AI.
 
         // --- Collision Detection (with player) ---
-        scratchBox.setFromObject(enemyGroup); // enemyGroup is now the object
+        setEnemyCollisionBox(scratchBox, enemyGroup); // Body block only (audit C-2)
         if (playerBox.intersectsBox(scratchBox)) {
             if (canKillSpecificEnemy(enemyGroup)) {
                 killEnemy(enemyGroup, i); // splice(i, 1) — safe going backwards

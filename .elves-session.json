@@ -33,7 +33,7 @@
       { "id": "018-5", "criterion": "plans/README.md row updated with hardware-check-pending note", "met": true, "evidence": "row: DONE — hardware check pending family; full-suite criterion BLOCKED note" },
       { "id": "021-0", "criterion": "Plan 021 (all criteria)", "met": false, "evidence": "NOT STARTED — batch gate '018 complete and suite green' unmet; read-only prep findings preserved in .elves/runtime/worker-progress-b2.md" }
     ] },
-    { "id": "B3", "plans": ["019", "020"], "title": "Fairness + perf pass 1 (019 first, then 020) + DRIVER-GRANTED authority to stabilize tests/balance.spec.js:42 (intent preserved: two rapid kills pay > 2x single bounty)", "status": "pending", "acceptance": [] },
+    { "id": "B3", "plans": ["019", "020"], "title": "Fairness + perf pass 1 (019 first, then 020) + DRIVER-GRANTED authority to stabilize tests/balance.spec.js:42 (intent preserved: two rapid kills pay > 2x single bounty)", "status": "in_progress", "acceptance": [] },
     { "id": "B2b", "plans": ["021"], "title": "Docs truth + CLAUDE.md (deferred from B2; after B3; preserve 018's readme DB9 line)", "status": "pending", "acceptance": [] },
     { "id": "B4", "plans": ["022"], "title": "Debt/UI/security bundle", "status": "pending", "acceptance": [] },
     { "id": "B5", "plans": ["023"], "title": "Fun: survival & readability", "status": "pending", "acceptance": [] },
