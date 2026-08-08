@@ -82,31 +82,27 @@ function padButtons(gp) {
 
 function padActivityScore(gp) {
     let score = 0;
-    if (gp.mapping === 'standard') score += 0.25;
     const ax = gp.axes || [];
     for (let i = 0; i < ax.length; i++) score += Math.abs(axisValue(ax, i));
     const btns = gp.buttons || [];
     for (let i = 0; i < btns.length; i++) {
         if (buttonPressed(gp, i)) score += 2;
     }
+    // Bias standard mapping only when the pad is already producing input, so an
+    // idle Xbox pad cannot outrank a live DirectInput/DB9 stick (battle-paddle fix).
+    if (score > 0 && gp.mapping === 'standard') score += 0.25;
     return score;
 }
 
 // Prefer the pad that is currently producing input; lock onto it so a
 // silent ghost slot (common on macOS) cannot steal the first index.
+// HuiJia dual DB9→USB: one device, two interfaces, same id, idle socket
+// always connected — identity by gamepad.index only, and activity always wins.
+// Scan ALL pads first; adopt any pad producing input (re-pointing the lock);
+// the lock is only the idle fallback. (Ported back from battle-paddle.)
 function activeGamepad() {
     const list = navigator.getGamepads ? navigator.getGamepads() : null;
     if (!list) return null;
-
-    if (preferredPadIndex != null) {
-        const locked = list[preferredPadIndex];
-        if (locked && locked.connected) {
-            if (padActivityScore(locked) > 0.15) return locked;
-            // Keep lock while connected even at rest, once claimed.
-            return locked;
-        }
-        preferredPadIndex = null;
-    }
 
     let best = null;
     let bestScore = 0;
@@ -127,9 +123,17 @@ function activeGamepad() {
             bestIndex = i;
         }
     }
+    // Dual-port adapters leave a silent second interface connected forever.
+    // Never keep a preferred lock on an idle pad when another pad is
+    // producing input.
     if (best && bestScore > 0.15) {
         preferredPadIndex = bestIndex;
         return best;
+    }
+    if (preferredPadIndex != null) {
+        const locked = list[preferredPadIndex];
+        if (locked && locked.connected) return locked;
+        preferredPadIndex = null;
     }
     if (first) {
         preferredPadIndex = firstIndex;
