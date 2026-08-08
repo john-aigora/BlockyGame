@@ -17,7 +17,14 @@
   "landing": { "merge_authorized": false, "push_allowed": false, "reason": "LOCAL-ONLY: origin read-only for this account; owner forbade pushing; owner merges after family playtest" },
   "environment": { "node_path_export": "export PATH=\"$HOME/.local/elves-tools/node/bin:$PATH\"" },
   "batches": [
-    { "id": "B1", "plans": ["017"], "title": "Baseline repair + CI", "status": "in_progress", "acceptance": [] },
+    { "id": "B1", "plans": ["017"], "title": "Baseline repair + CI", "status": "complete", "acceptance": [
+      { "id": "017-1", "criterion": "npm run lint exits 0", "met": true, "evidence": "npm run lint → exit 0 (78 no-undef gone via video/ ignore; re-verified at final HEAD)" },
+      { "id": "017-2", "criterion": "npm test → 0 failed, twice in a row", "met": true, "evidence": "npm test x2 consecutive → 79 passed / 0 failed both (4.6m, 4.7m) at workers:3" },
+      { "id": "017-3", "criterion": "playwright.config.js has trace/screenshot/video retain-on-failure", "met": true, "evidence": "use: { trace/video: 'retain-on-failure', screenshot: 'only-on-failure' } + list/html reporter (commit 064083e)" },
+      { "id": "017-4", "criterion": ".github/workflows/ci.yml exists", "met": true, "evidence": "created (checkout, node 22 + npm cache, npm ci, lint, playwright install chromium, npm test, report artifact on failure) — commit ee54ce5" },
+      { "id": "017-5", "criterion": "git status shows only in-scope files changed", "met": true, "evidence": "git diff --stat vs batch start: eslint/playwright configs, 5 in-scope specs, src/main.js (1 debug entry), readme.md test-count line, ci.yml, plans/README.md row + run docs" },
+      { "id": "017-6", "criterion": "plans/README.md row updated", "met": true, "evidence": "plan 017 row TODO → DONE in status table" }
+    ] },
     { "id": "B2", "plans": ["018", "021"], "title": "Gamepad reliability + docs/CLAUDE.md", "status": "pending", "acceptance": [] },
     { "id": "B3", "plans": ["019", "020"], "title": "Fairness + perf pass 1 (019 first, then 020)", "status": "pending", "acceptance": [] },
     { "id": "B4", "plans": ["022"], "title": "Debt/UI/security bundle", "status": "pending", "acceptance": [] },
