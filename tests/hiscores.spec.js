@@ -17,8 +17,11 @@ async function idleRunToDeath(page) {
 }
 
 test('records the run and ranks it below an existing better score', async ({ page }) => {
+  // Endless board (the one the death screen renders) ranks by DISTANCE first
+  // (src/hiscores.js sortBoard); an idle run scores 0 points and ~0 distance,
+  // so the seeded 400u entry stays rank 0 (plan 017 endless-semantics rewrite).
   await page.addInitScript(() => {
-    localStorage.setItem('blocky.hiscores.v1', JSON.stringify([{ score: 50, date: '2026-01-01' }]));
+    localStorage.setItem('blocky.hiscores.endless.v1', JSON.stringify([{ score: 50, date: '2026-01-01', distance: 400 }]));
   });
   await idleRunToDeath(page);
   const rows = page.locator('#hiscore-slot .hiscore-list li');
@@ -37,12 +40,14 @@ test('first-ever run shows the NEW BEST! badge at rank 0', async ({ page }) => {
 });
 
 test('list is trimmed to top 5 and a worse run does not displace them', async ({ page }) => {
+  // Endless key + descending distance values: the board ranks by distance,
+  // so the idle run's ~0u entry lands last and is trimmed (plan 017).
   await page.addInitScript(() => {
-    const five = [50, 40, 30, 20, 10].map((score) => ({ score, date: '2026-01-01' }));
-    localStorage.setItem('blocky.hiscores.v1', JSON.stringify(five));
+    const five = [50, 40, 30, 20, 10].map((score, i) => ({ score, date: '2026-01-01', distance: 500 - i * 100 }));
+    localStorage.setItem('blocky.hiscores.endless.v1', JSON.stringify(five));
   });
   await idleRunToDeath(page);
-  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('blocky.hiscores.v1')));
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('blocky.hiscores.endless.v1')));
   expect(stored.length).toBe(5);
   expect(Math.min(...stored.map((e) => e.score))).toBe(10); // 0 didn't place
 });

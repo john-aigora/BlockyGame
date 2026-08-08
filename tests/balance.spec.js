@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openGame, startGame } from './helpers.js';
+import { openGame, startGame, waitGameSeconds } from './helpers.js';
 
 // Scoring & balance (plan 011 + score-juice pass): defeating an enemy pays
 // at least the KILL_POINTS bounty through the REAL collision path (the size
@@ -57,6 +57,13 @@ test('two rapid kills pay more than 2x the single-kill bounty (combo)', async ({
   await startGame(page);
   await page.waitForFunction(() => window.__game.state.score >= 25, null, { timeout: 10000 });
 
+  // Endless spawns go through a 0.95s warn + 0.5s materialize pipeline
+  // (src/enemies.js), so the wave spawned by the first kill is not in
+  // state.enemies yet — settle on the GAME clock, then require a live
+  // enemy before touching enemies[0] (plan 017).
+  await waitGameSeconds(page, 2.0);
+  await page.waitForFunction(() => window.__game.state.enemies.length >= 1, null, { timeout: 10000 });
+
   // Second kill inside the 4s combo window: grow just past the fresh spawns
   // (height 30) and land on one. 35 — not huge — keeps the wave spawned by
   // THIS kill (height 52.5, 80 units out) clear of the player's own AABB,
@@ -91,14 +98,27 @@ test('two rapid kills pay more than 2x the single-kill bounty (combo)', async ({
   expect(combo).toBeGreaterThanOrEqual(2); // The multiplier really escalated
 });
 
-test('spawnNewEnemies never grows the horde past 8', async ({ page }) => {
+test('spawnNewEnemies never grows the horde past the endless cap (12)', async ({ page }) => {
   // The game sits paused on the start overlay, so nothing else mutates the
-  // array: 1 boot enemy + 2 per call, saturating exactly at the cap.
+  // array. Endless spawns are QUEUED as red warn discs first and pending
+  // discs reserve cap slots (src/enemies.js spawnNewEnemies); while paused
+  // nothing ticks the pipeline, so materialize the queue deterministically
+  // with the debug warn-pipeline tick, re-topping between ticks exactly as
+  // kills would (plan 017 endless-semantics rewrite; cap is
+  // ENDLESS_ENEMY_CAP = 12, not the classic 8).
   const count = await page.evaluate(() => {
-    for (let i = 0; i < 10; i++) window.__game.debug.spawnNewEnemies();
+    const d = window.__game.debug;
+    for (let i = 0; i < 10; i++) d.spawnNewEnemies();
+    // 3 game-seconds of ticks covers warn (0.95s) twice over; interleaved
+    // spawn calls keep pressure on the cap while slots free up.
+    for (let i = 0; i < 60; i++) {
+      d.updateSpawnWarnings(0.05);
+      if (i % 10 === 0) d.spawnNewEnemies();
+    }
     return window.__game.state.enemies.length;
   });
-  expect(count).toBe(8);
+  expect(count).toBeLessThanOrEqual(12); // Never past the endless cap
+  expect(count).toBeGreaterThan(8); // ...and it really saturates beyond the classic 8
 });
 
 test('player speed grows with size and caps at SPEED_GROWTH_CAP', async ({ page }) => {
