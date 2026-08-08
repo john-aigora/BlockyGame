@@ -39,18 +39,16 @@
 
 ## Next action
 
-- **NOW**: B3 worker (plan 019 THEN 020) with ADDED AUTHORITY: stabilize
-  tests/balance.spec.js:42 (latent pre-existing race; B2's probe data in
-  execution log 2026-08-08 + .elves/runtime/worker-progress-b2.md). Inherited
-  gate is RED (82/83, that spec only) — expected at start; must be green ×2
-  after 019 before 020 begins.
-- Then B2b: plan 021 alone (docs; deferred from B2 — preserve 018's readme
-  Pad/DB9 line). Then B4 022 onward per original order.
+- **NOW**: B2b worker — plan 021 alone (docs truth + CLAUDE.md). Preserve
+  018's readme DB9 line; ADD one sentence to the readme hardware note: the
+  FIRST button press on a not-yet-active pad claims it and is deliberately
+  swallowed — wiggle/press once, then play (B2+B3 review advisory 5).
+- Then B4 (022) with driver-granted extra: behind-camera arrow edge push uses
+  a fixed NDC 1000 which corner-quantizes bearings — scale by
+  `1.001 / max(|x|,|y|)` instead to keep the true edge point (review adv. 3).
+- Then B5 (023) → B6 (024) → B7 (025) → B8 (026) → B9 (027) → B10 (028).
 - Loop per batch: worker → driver verify → fresh review → reconcile
   (Review-phase commit) → guide/log update → next batch.
-- B2 REVIEW DEBT: batch-2's diff (018) has NOT had its fresh-subagent review
-  yet — run it TOGETHER with B3's review (combined window 4c07c00..B3-close)
-  so the reviewer sees the pad work and the fairness work that builds on it.
 
 ## Deferred hygiene
 
@@ -62,6 +60,19 @@
 - H3 (B1 worker+review): camera.spec.js:26 latent enemy-contact race (32 live
   clicks vs idle death) — despawn-then-click or drive zoom via debug handle.
 - H4 (B1 review): effects.spec.js:97 missing the 200ms settle its siblings use.
+- H5 (B2+B3 review adv.2, → B9): mobile-tier DPR assertion vacuous — add
+  `deviceScaleFactor: 3` to the mobile test.use so the 1.5-vs-2 cap is pinned.
+- H6 (adv.1, → B8): pickup boxes still render-tree (`game.js:391,394`) —
+  unify on body-block builders during the players[] refactor (also a per-frame
+  setFromObject cost); pair with adv.11: `setPlayerCollisionBox` must take
+  `(box, player, scale)` for per-player reuse.
+- H7 (adv.3, → B4): arrow edge push corner-quantizes — granted to B4 prompt.
+- H8 (adv.7, → B10): chunk-cull `userData.registered` hardening for the
+  reset-twice-without-render path (unreachable today).
+- H9 (adv.4, log-only): C-6 diagonal grace band narrowed not eliminated —
+  benign residual, documented; no action planned.
+- H10 (adv.8, done in log): perf reference rig = the 3-enemy deterministic
+  ring; 29f04d3's settled-run numbers are NOT the plan-028 baseline.
 
 ## Decisions made
 

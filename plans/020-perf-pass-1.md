@@ -57,7 +57,10 @@ this headroom is a prerequisite. Evidence: P-1..P-12 in `plans/audit-2026-07-31.
 
 ## Scope
 
-**In scope**: files listed in the drift check. **Out of scope**: InstancedMesh
+**In scope**: files listed in the drift check, plus `style.css` (Step 5's
+indicator pinning) — `src/game.js`/`src/enemies.js` were already in the drift
+check via Steps 1/5. *(Scope line corrected post-landing by the B3 review.)*
+**Out of scope**: InstancedMesh
 conversion (plan 028), water recolor internals (028), audio, `movement-continuous.js`.
 
 ## Git workflow

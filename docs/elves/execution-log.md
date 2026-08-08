@@ -109,3 +109,18 @@
   preserved (two rapid kills pay > 2x single bounty). 021 becomes B2b after B3.
 - B2's fresh review is deferred and COMBINED with B3's (window 4c07c00..B3
   close) so one reviewer sees the pad work plus what builds on it.
+
+## 2026-08-08 — Combined B2+B3 review: APPROVE-WITH-ADVISORIES, 0 blockers
+
+- Reviewer independently verified: combo-spec assertion pair byte-identical to
+  pre-fix (intent preserved; still red if the combo window sticks at 0); r128
+  really does reset renderer.info AFTER the shadow pass (three.module.js:24323)
+  so the shadow diet lands in frame time, not draw calls; hand-off edge seeding
+  cannot swallow a genuine second press (traced + pinned by test); no
+  in-frustum enemy can take the mirrored-arrow path; scope fully clean.
+- PERF REFERENCE RIG for plan 028: the 3-enemy deterministic ring
+  (calls 200→182, triangles 71026→50290) — NOT 29f04d3's settled-run numbers.
+- Advisories triaged to H5-H10 in the survival guide (owners: B4 arrow edge
+  math, B8 pickup-box unification + builder signature, B9 DPR pin, B10 cull
+  hardening; H9 benign residual documented). Two plan-scope self-contradictions
+  (019 terrain helper, 020 style.css) corrected in the plan files.

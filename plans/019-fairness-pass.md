@@ -57,9 +57,13 @@ walk through boulders. The repo's own design law (`src/constants.js:118-122`):
 ## Scope
 
 **In scope**: `src/enemies.js`, `src/ui.js`, `src/game.js`, `src/input.js`,
-`src/constants.js` (new derived consts only), `tests/fairness.spec.js`,
-`tests/toys.spec.js` (re-run/re-baseline), new `tests/hitbox.spec.js`.
-**Out of scope**: enemy AI/balance values; species work (plan 024); terrain.
+`src/constants.js` (new derived consts only), `src/terrain.js` (Step 6's
+`isRockWedged` helper ONLY), `tests/fairness.spec.js`, `tests/toys.spec.js`
+(re-run/re-baseline), new `tests/hitbox.spec.js`.
+**Out of scope**: enemy AI/balance values; species work (plan 024); terrain
+generation/streaming beyond the Step 6 helper.
+*(Scope corrected post-landing by the B3 review — Step 6 always required the
+terrain helper; the original out-of-scope line contradicted it.)*
 
 ## Git workflow
 
