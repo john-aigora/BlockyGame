@@ -691,12 +691,24 @@ function updateFoodArrow() {
 function updateFoodGlow() {
     const endless = state.worldMode === 'endless';
     COLLECTIBLE_MATERIAL.emissiveIntensity = 0.3 + 0.22 * Math.sin(clock * 3);
+    const p = state.player ? state.player.position : null;
     for (const c of state.collectibles) {
+        // Fog gate (plan 020 / audit P-4): food past ~90u is fully fog-hidden
+        // (fog far ≈ 86), so its bob/rotation animates for nobody — skip it
+        // and leave the cube resting at its spawn pose (baseY + 0.45).
+        if (endless && p) {
+            const dx = c.position.x - p.x;
+            const dz = c.position.z - p.z;
+            if (dx * dx + dz * dz > 8100) continue; // 90²
+        }
         const phase = c.userData.phase ?? 0;
-        // Endless: the bob rides the terrain under the cube (a fresh sample
-        // each frame — food never moves in XZ, but rebases shift its local
-        // coords, and groundHeightAt is origin-aware either way).
-        const baseY = endless ? groundHeightAt(c.position.x, c.position.z) : 0;
+        // Endless: the bob rides the spawn-time terrain height cache
+        // (userData.baseY, set by collectibles.js). Heights are REBASE-
+        // INVARIANT — they are heights, not coordinates: a rebase shifts
+        // local x/z, never the true-coordinate sample the spawn made — so
+        // the old per-collectible-per-frame groundHeightAt re-sample bought
+        // nothing (audit P-4).
+        const baseY = endless ? c.userData.baseY : 0;
         c.rotation.y = clock * 1.4 + phase;
         c.position.y = baseY + 0.45 + Math.sin(clock * 2.5 + phase) * 0.08;
     }

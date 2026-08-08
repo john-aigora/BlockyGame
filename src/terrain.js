@@ -369,10 +369,19 @@ function processQueue(cx, cz, budget) {
 }
 
 // --- Chunk build / release ---
+// Frustum culling is ON (plan 020 / audit P-2): buildChunk computes a
+// bounding sphere inflated by +24u, covering the horizon bend's worst-case
+// vertex drop (~16.7u at the far chunk corner) with margin — behind-camera
+// chunks stop costing draws. A FRESH mesh draws unconditionally for exactly
+// one frame before the cull engages (onAfterRender flip): geometry
+// registration with the renderer happens on first draw, and the resource-
+// plateau specs pin registration to ALLOCATION time, not to whenever the
+// camera happens to look at the chunk.
 function acquireChunkMesh() {
     const pooled = meshPool.pop();
     if (pooled) {
         pooled.visible = true;
+        pooled.frustumCulled = true; // Geometry already registered — cull from frame 1
         return pooled;
     }
     meshAllocCount++;
@@ -381,9 +390,11 @@ function acquireChunkMesh() {
     geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(VERTS * 3), 3));
     const mesh = new THREE.Mesh(geometry, terrainMaterial);
     mesh.receiveShadow = true;
-    // No frustum culling: the horizon bend moves vertices far below the
-    // unbent bounding sphere, and 49 chunks is a trivial draw count anyway.
-    mesh.frustumCulled = false;
+    mesh.frustumCulled = false; // One eager-registration draw, then...
+    mesh.onAfterRender = () => {
+        mesh.frustumCulled = true; // ...culled for life (pool reuse keeps it)
+        mesh.onAfterRender = () => {};
+    };
     terrainRoot.add(mesh);
     return mesh;
 }
@@ -415,6 +426,14 @@ function buildChunk(key, cx, cz) {
     mesh.geometry.attributes.color.needsUpdate = true;
     mesh.geometry.attributes.uv.needsUpdate = true;
     mesh.geometry.computeVertexNormals();
+    // Cullable chunks (plan 020 / audit P-2): a fresh sphere per (re)build —
+    // pooled meshes are re-displaced in place — inflated +24u to cover the
+    // horizon bend's ≤~16.7u worst-case downward vertex shift (dist² ×
+    // CURVE_STRENGTH at the far corner of the window) plus margin. The
+    // frustumCulled flag itself is owned by acquireChunkMesh (fresh meshes
+    // stay uncullable for one eager-registration draw).
+    mesh.geometry.computeBoundingSphere();
+    mesh.geometry.boundingSphere.radius += 24;
     mesh.position.set(centerTrueX - state.worldOrigin.x, 0, centerTrueZ - state.worldOrigin.z);
 
     const chunk = { key, cx, cz, mesh, rocks: [], colliders: [] };
@@ -453,7 +472,9 @@ function acquireRock() {
     const boxGeometry = getRockGeometry();
     for (let i = 0; i < ROCK_BLOCKS; i++) {
         const box = new THREE.Mesh(boxGeometry, rockMaterial);
-        box.castShadow = true;
+        // receiveShadow only (plan 020 / audit P-1): characters shadow ONTO
+        // boulders, but a boulder's own cast is invisible against the
+        // terrain shading — and every rock block was a shadow-pass draw.
         box.receiveShadow = true;
         group.add(box);
     }

@@ -150,6 +150,11 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
     // Face, cap, ears, tail, and antenna are CHILDREN of the body mesh, so
     // the walk-cycle body bounce (effects.js) carries the whole head along.
     // The player gets the chunkier hero body; enemies keep the pure cube.
+    // SHADOW DIET (plan 020 / audit P-1): only the silhouette casters — the
+    // body, cap, and legs/feet — write into the shadow map. Face parts,
+    // ears, tail, spikes, jaw, teeth, antenna, and scarf are sub-pixel (or
+    // fully inside the body's own shadow) at gameplay zoom, yet each one was
+    // a shadow-pass draw call across ~700 shadow-eligible meshes.
     const bodyMesh = new THREE.Mesh(menacing ? geoms.body : geoms.heroBody, bodyMaterial);
     bodyMesh.name = 'body'; // Assign a name to easily access it later for color changes
     bodyMesh.castShadow = true;
@@ -220,7 +225,6 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
     for (const side of [-1, 1]) {
         const eyeWhite = new THREE.Mesh(geoms.eye, whiteMaterial);
         eyeWhite.position.set(side * eyeXSpacing, eyeLocalY, eyeZOffset);
-        eyeWhite.castShadow = true;
         bodyMesh.add(eyeWhite);
         group.userData.eyeWhites.push(eyeWhite);
 
@@ -229,7 +233,6 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
         // to the scared (white, wide) material by reference when killable.
         const pupil = new THREE.Mesh(geoms.pupil, menacing ? ENEMY_PUPIL_HUNT_MATERIAL : faceMaterial);
         pupil.position.set(side * (eyeXSpacing - pupilInset), eyeLocalY, pupilZOffset);
-        pupil.castShadow = true;
         bodyMesh.add(pupil);
         group.userData.pupils.push(pupil);
 
@@ -245,7 +248,6 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
             baseSize / 2 + baseSize * 0.03 - facePartDepthOffset
         );
         brow.rotation.z = side * browTilt;
-        brow.castShadow = true;
         // Scared flip targets (worried = inner ends UP, raised off the eyes);
         // effects.js snaps between these on the killable transition.
         brow.userData.baseRotZ = brow.rotation.z;
@@ -262,7 +264,6 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
     const mouthZOffset = baseSize / 2 + mouthDepth / 2 - facePartDepthOffset; // Front face
     mouthMesh.position.set(menacing ? 0 : baseSize * 0.03, mouthLocalY, mouthZOffset);
     if (!menacing) mouthMesh.rotation.z = 0.12; // Cocky smirk — heroes grin
-    mouthMesh.castShadow = true;
     bodyMesh.add(mouthMesh);
 
     if (menacing) {
@@ -273,7 +274,6 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
             const ear = new THREE.Mesh(geoms.ear, bodyMaterial);
             ear.position.set(side * baseSize * 0.3, baseSize * 0.58, 0);
             ear.rotation.z = Math.PI / 4;
-            ear.castShadow = true;
             ear.userData.baseY = ear.position.y; // Walk cycle bounces around this
             bodyMesh.add(ear);
             return ear;
@@ -285,7 +285,6 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
         // otherwise swallow its front half and leave a sad little nub).
         const tail = new THREE.Mesh(geoms.tail, bodyMaterial);
         tail.position.set(0, -baseSize * 0.28, -(baseSize / 2 + baseSize * 0.22));
-        tail.castShadow = true;
         bodyMesh.add(tail);
         group.userData.tailMesh = tail;
 
@@ -298,7 +297,6 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
             spike.position.set(0, baseSize * 0.58, spec.z * baseSize);
             spike.rotation.set(Math.PI / 4, 0, Math.PI / 4);
             spike.scale.setScalar(spec.s);
-            spike.castShadow = true;
             bodyMesh.add(spike);
         }
 
@@ -309,11 +307,9 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
         // which vanished at gameplay zoom.
         const jaw = new THREE.Mesh(geoms.jaw, footMaterial);
         jaw.position.set(0, -baseSize * 0.32, baseSize / 2 + baseSize * 0.04);
-        jaw.castShadow = true;
         for (const tx of [-0.15, 0, 0.15]) {
             const tooth = new THREE.Mesh(geoms.tooth, whiteMaterial);
             tooth.position.set(tx * baseSize, baseSize * 0.1, baseSize * 0.03);
-            tooth.castShadow = true;
             jaw.add(tooth);
         }
         bodyMesh.add(jaw);
@@ -324,10 +320,8 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
         // off-center back-right: cuter than symmetric.
         const antenna = new THREE.Mesh(geoms.antenna, bodyMaterial);
         antenna.position.set(baseSize * 0.18, baseSize / 2 + baseSize * 0.12, -baseSize * 0.12);
-        antenna.castShadow = true;
         const tip = new THREE.Mesh(geoms.antennaTip, HERO_GLOW_MATERIAL);
         tip.position.set(0, baseSize * 0.14 + baseSize * 0.04, 0);
-        tip.castShadow = true;
         antenna.add(tip);
         bodyMesh.add(antenna);
 
@@ -352,7 +346,6 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
             }
             seg.rotation.x = -0.5; // Rest droop; effects.js animates from here
             seg.userData.restRotX = -0.5;
-            seg.castShadow = true;
             scarfParent.add(seg);
             scarfSegs.push(seg);
             scarfParent = seg;
@@ -360,7 +353,6 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
         group.userData.scarfSegs = scarfSegs;
     }
 
-    group.castShadow = true; // Though individual parts cast, good to set for group if needed
     return group;
 }
 

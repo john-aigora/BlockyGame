@@ -17,7 +17,8 @@ applyWorldBend(COLLECTIBLE_MATERIAL);
 // Builds a collectible mesh (small lime-green cube) on the shared resources.
 function buildCollectible() {
     const collectible = new THREE.Mesh(COLLECTIBLE_GEOMETRY, COLLECTIBLE_MATERIAL);
-    collectible.castShadow = true;
+    // No castShadow (plan 020 / audit P-1): a 0.7u glowing cube's shadow is
+    // invisible at gameplay zoom, but every food block was a shadow-pass draw.
     collectible.receiveShadow = true; // Though small, good practice
     // Per-item phase so the rotate/bob idle animation (effects.js) doesn't
     // move every cube in visible lockstep.
@@ -49,8 +50,14 @@ export function spawnCollectible(pickPosition) {
     wrapPosition(collectible.position); // Never place food outside the world — it would be uncollectable
     if (state.worldMode === 'endless') {
         // Grounded at spawn so food sits on the hills even on the paused
-        // title screen (the per-frame bob in effects.js re-grounds it live).
-        collectible.position.y = groundHeightAt(collectible.position.x, collectible.position.z) + 0.45;
+        // title screen. The terrain height is CACHED (plan 020 / audit P-4):
+        // food never moves in XZ and heights are rebase-invariant (they are
+        // heights, not coordinates — a rebase shifts local x/z, never the
+        // true-coordinate sample made here), so the per-frame bob in
+        // effects.js reuses baseY instead of re-sampling the noise field.
+        const groundY = groundHeightAt(collectible.position.x, collectible.position.z);
+        collectible.position.y = groundY + 0.45;
+        collectible.userData.baseY = groundY;
         // Streaming ownership: every endless collectible belongs to the
         // chunk under it and despawns when that chunk releases (terrain.js).
         collectible.userData.chunkKey = chunkKeyForTrue(
@@ -67,7 +74,9 @@ export function spawnCollectible(pickPosition) {
 // this places directly — no picker, no retry, deterministic layout.
 export function spawnChunkFood(localX, localZ, chunkKey) {
     const collectible = buildCollectible();
-    collectible.position.set(localX, groundHeightAt(localX, localZ) + 0.45, localZ);
+    const groundY = groundHeightAt(localX, localZ);
+    collectible.position.set(localX, groundY + 0.45, localZ);
+    collectible.userData.baseY = groundY; // Rebase-invariant height cache (plan 020 P-4)
     collectible.userData.chunkKey = chunkKey;
     state.collectibles.push(collectible);
     state.scene.add(collectible);
