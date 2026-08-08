@@ -418,8 +418,33 @@
         "025"
       ],
       "title": "Fun: world & late game",
-      "status": "pending",
-      "acceptance": []
+      "status": "complete",
+      "acceptance": [
+        {
+          "id": "025-1",
+          "criterion": "npm test 0 failed x2 . lint 0",
+          "met": true,
+          "evidence": "Full suite 116/116 (108+8 worldfun) twice consecutively at final HEAD (6.0m, 5.9m, workers:3, zero flakes); lint 0 at every slice; build exit 0"
+        },
+        {
+          "id": "025-2",
+          "criterion": "Same-seed reload reproduces terrain; daily board written + pruned",
+          "met": true,
+          "evidence": "worldfun: ?seed=123 heights bit-identical across reload, 124 differs; daily death writes blocky.hiscores.daily.v1 (seed-stamped WORLD_SEED) AND the endless board; seeded stale 20200101/9999u row neither renders nor survives the write; death screen titled TODAY'S BEST"
+        },
+        {
+          "id": "025-3",
+          "criterion": "DISCOVERED, gold, boss beats all spec-verified",
+          "met": true,
+          "evidence": "worldfun: DISCOVERED banner fires after the 1.5gs debounce naming the region under the player (REGIONS 2 on the death line); production-scattered gold collected for +5 with '+5 GOLD!' + full clock reset; titan = 2x warn (1.9s exact) + SOMETHING BIG COMES... + gold crown + inedible arrival + 150u despawn immunity + restart clears (STOP check) + kill pays exactly 3x bounty with the 10-food feast + TITAN DOWN! + no second titan"
+        },
+        {
+          "id": "025-4",
+          "criterion": "plans/README.md updated",
+          "met": true,
+          "evidence": "row 025 TODO -> DONE in the Close commit"
+        }
+      ]
     },
     {
       "id": "B8",

@@ -361,3 +361,118 @@ All five steps landed; suite grew 95 → 102 (+4 tension, +3 audio).
 5. Mobile warn rings run 1.66s at rest (speed-scaled notice) — iPad check.
 6. Hardware: DB9 sticks via ?paddebug=1 — first wiggle claims the pad
    (deliberately not acted on), then play. Both ports, one at a time.
+
+(B7 additions)
+
+7. Family race ritual: everyone taps TODAY'S WORLD on the start overlay
+   (button glows lime; the SEED line gains "· DAILY") — same map for all,
+   deaths rank on TODAY'S BEST. Does the shared-map race land as a thing you
+   actually do together? The toggle reloads the page by design (a world
+   cannot be reseeded mid-session) — does that read as broken to anyone?
+8. Titan check (push a run past 1000u, ~3-4 min of decent play): the
+   SOMETHING BIG COMES... beat + double-length red ring — dread or confusion?
+   The titan then STALKS FOREVER (never streams out) — delightfully menacing
+   or annoying while you grow into eating it? It pays triple + a 10-block
+   feast — worth the wait?
+9. Gold blocks (glowing amber, slightly larger): are they noticed without
+   being told? Do the kids detour for them? 5 points vs a normal 1 — enough
+   to feel special, or should rarity/payout move?
+10. DISCOVERED region banners (~every 300u of fresh travel): charming
+    waypoints or noise? Do the names get used ("meet me in COPPER FLATS")?
+    REGIONS count on the death screen — does anyone chase it?
+11. Determinism party trick: ?seed=123 in the URL is the same world on every
+    device, forever — try it on two screens side by side.
+
+## 2026-08-08 — B7 worker: plan 025 complete (fun: world & late game)
+
+- Batch start 6debd8f (B6 close); rollback ref
+  refs/elves/rollback/audit-coop-2026/b7. All 6 steps landed, no STOPs hit.
+- Step 1 — WORLD_SEED (be1b811): resolved ONCE at constants.js module load,
+  priority ?seed=<int> (int32-wrapped) → daily flag (?daily=1 OR
+  sessionStorage blocky.daily=1) → TERRAIN_SEED default; typeof-location +
+  try/sessionStorage guards keep the Node-importable contract (fairness/toys
+  specs). Consumers swept: terrain hash2 + rock/food LCG streams, clouds
+  stream. STOP-condition grep: TERRAIN_SEED appears only as the constants.js
+  definition + resolution default. dailySeed() = local YYYYMMDD, exported
+  (hiscores reuses it — one date rule). TODAY'S WORLD toggle reuses the KEPT
+  #mode-picker container + .mode-button CSS verbatim (022's guard paid off);
+  pointerdown stopPropagation because the overlay itself starts runs on any
+  press; click persists the flag, strips ?seed/?daily, navigates. SEED line
+  under START. debug.worldSeedInfo().
+- Step 2 — daily board (ca913c8): blocky.hiscores.daily.v1, keyForMode third
+  branch, sortBoard daily = endless distance-first rules; rows stamped
+  seed = WORLD_SEED (the world RUN, not the clock at death — a past-midnight
+  finish self-retires next day); loadHiscores('daily') prunes non-today rows
+  on read and the trimmed write persists the prune. endGame: daily runs
+  record BOTH boards (a daily run is an endless run); the death screen shows
+  the daily ladder titled TODAY'S BEST (renderHiscores boardTitle param).
+- Step 3 — named regions (c5d9437): biomeAt() extracted from computeTint
+  (same octave, TRUE coords); biomeRegion() = 5-bin quantize × 300u
+  (BIOME_WAVELENGTH) cell, name = hash pick (WORLD_SEED mixed — new seed,
+  new name map) from a 12-entry kid table, color = the biome's own tint
+  direction. updateEndlessProgress restructured: the old
+  no-forward-progress early return removed so region tracking runs EVERY
+  frame; REGION_DISCOVER_DEBOUNCE 1.5gs on state.runTime absorbs shoreline
+  bin flicker. First visit per run = DISCOVERED popup + milestone jingle;
+  spawn region pre-seeded (no banner; REGIONS counts from 1); re-entries
+  silent. Death distance line gains "REGIONS n".
+- Step 4 — gold food (1d90057): ONE extra seeded roll per chunk BEFORE the
+  spot loop (roll-all law: alignment + rebuild determinism intact); 8%
+  chance, the same roll re-spread picks WHICH spot; a rejected spot = no
+  gold (rarity honest). Shared emissive amber material (deliberately off the
+  lime glow pulse), scale 1.25, userData.gold. Collect pays 5 with the SAME
+  full clock reset (rationale: gold sweetens points, never a lifeline),
+  "+5 GOLD!" popup + sfx.fanfare('short') — new variant, plan-literal
+  short/full split. Live-probed seed fixtures (real engine, throwaway spec):
+  default seed grows 3 boot-window gold, nearest (23.5, 5.6).
+- Step 4 FOUND+FIXED: the 400u-walk resource spec (endless-stream) failed
+  solo — textures +2 > allowed +1. Root: popup CanvasTextures upload lazily
+  on each pool slot's FIRST visible render; DISCOVERED banners made a second
+  slot debut mid-walk. Fix: initEffects renderer.initTexture()s all 8 at
+  boot — the pool's "all GPU resources exist from here on" comment is now
+  literally true, the spec bound is untouched (no weakening), and the
+  first-use upload hitch that landed exactly on celebratory beats is gone.
+- Step 5 — the titan (6b24cbe): trigger in updateEndlessProgress at the
+  first furthestDistance >= 1000 (outside the progress block — water-blocked
+  placement retries per frame; DISTANCE 1000! chimes first, SOMETHING BIG
+  COMES... is the headline). Boss = grunt at currentEnemyScaleFactor (now
+  exported) × 1.6, 40u along moveVector (stationary fallback: outward
+  radial), isWalkable fan ±90° × 12. The boss flag rides pendingSpawns:
+  warn ×2 ON TOP of 024's speed scaling (1.9s at 1×); markBoss at
+  materialize = gold crown (per-instance cap material + cap mesh 1.3;
+  killable cap flip skips the boss — body yellow signals edibility, the
+  crown is identity). No edibility bypass. killEnemy single path: payout ×3;
+  species drop replaced by a 10-piece feast ring (~6u, evenly-angled
+  jittered pickers through the validated food path); full fanfare; TITAN
+  DOWN! last. updateEnemyStreaming skips ud.boss (kill or run end only);
+  setupNewGame clears flag + roster + pending disc — the plan's
+  leak-across-restart STOP condition is spec-asserted (Restart mid-run →
+  0 bosses, 0 pending, flag false).
+- Step 5 SPEC RACE ROOTED (not waved off): titan-kill failed ~1 in 4. Frame
+  recorder probe: with the boss parked 0.9u away, a min-radius feast roll
+  could graze the SCARF-side render pickup box by ~0.01u → one bite ran the
+  collect path → render scale synced to the tall playerScale → the giant
+  hoovered all 10 ring pieces (+10 score exactly, matching every failure).
+  Fix: boss parked at +5u — inside the 5.76u gameplay contact reach, feast
+  ring beyond ANY render-box reach, scarf pointed away. 6/6 repeat green.
+  Spec comments warn plan-026/H6: unifying the pickup box onto
+  state.playerScale will need a post-kill shrink here instead.
+- The boss occupies one threat slot + one cap slot for as long as it lives
+  (it counts in the DT-4 threat gate and the hard cap 12) — one slot of
+  twelve, judged acceptable; noted for the 026/027 reviewers.
+- New spec file tests/worldfun.spec.js — 8 cases, all through the real sim
+  (game-clock waits, seeded fixtures, zero mocks): seed determinism across
+  reload + divergence; toggle round-trip across its reload (run NOT started
+  by the toggle press); daily double-record + stale-seed prune + TODAY'S
+  BEST; DISCOVERED + REGIONS death line; gold scatter + collect beat; titan
+  warn/immunity/restart-clears; titan kill payout/feast/no-second;
+  ?daily=1 + ?seed-outranks-daily.
+- Docs (b86934e): readme world-identity paragraph (seeds, daily race,
+  regions, gold, titan) + tests listing.
+- Gate at final HEAD: npm test 116/116 (108+8) twice consecutively (6.0m,
+  5.9m, workers:3, ZERO flakes either run); lint 0 at every slice; build
+  exit 0. Balance changes live ONLY in the GAME BALANCE block
+  (REGION_DISCOVER_DEBOUNCE, GOLD_FOOD_POINTS/GOLD_CHUNK_CHANCE, BOSS_* ×7)
+  with rationale comments; BASE_ENEMY_SPEED/RAMP_SPEED_MAX untouched (the
+  titan multiplies SIZE, never speed — the no-enemy-base-speed-change STOP
+  condition holds).
