@@ -57,7 +57,7 @@ which hardened BlockyGame's own pad code for dual-port DB9 adapters).
 | 021 | Docs truth + root CLAUDE.md + Node pinning | P2 | S | 017 | DONE |
 | 022 | Debt/UI/security bundle (16 items incl. driver-granted arrow-edge fix) | P2 | M | 017; item 1 before 026 | DONE — all 15 items + driver-granted H7 arrow fix; no items skipped; `.mode-button` CSS kept per the item-2 guard (026 reuses it) |
 | 023 | Fun 1: blob shadows, survival beats, danger music layer, title warmth | P2 | M | 017 (020 first preferred) | DONE |
-| 024 | Fun 2: enemy species (sprinter/juja), prey supply, reachable combos, speed-aware warns | P2 | M-L | 017, 019, 022.1, 023 | TODO |
+| 024 | Fun 2: enemy species (sprinter/juja), prey supply, reachable combos, speed-aware warns | P2 | M-L | 017, 019, 022.1, 023 | DONE — balance: ENEMY_SPECIES table (sprinter 2.2x / juja 2.6x per-BODY speed on small always-edible spawns; global BASE_ENEMY_SPEED/RAMP_SPEED_MAX untouched per owner rule); rotation 4→8 bands, edible-now share 25%→37.5%; bubble top-up gate counts THREATS only (hunting no longer starves its own prey — DT-4); 2nd kill replacement = prey-band at 18-25u so combo x2 is sprintable at 1x (reach ~20u vs the old 35-50u targets — DT-2); warn rings 0.95s × clamp(playerSpeed/6, 1..2.2) (DT-9); juja drops 2 food, harmless on contact |
 | 025 | Fun 3: daily worlds + ?seed=, named biomes, golden food, 1000u boss | P2 | M-L | 017, 023, 024 | TODO |
 | 026 | Two-player split-screen (owner headline) | P1 | L | 017, 018, 019, 020, 022.1 | TODO |
 | 027 | Test depth: debug.advance, scoring/pause/warn coverage, wall-clock retirement | P2 | M | 017; after 026 | TODO |

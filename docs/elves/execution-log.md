@@ -265,3 +265,64 @@ All five steps landed; suite grew 95 → 102 (+4 tension, +3 audio).
   at every slice (one first-run false alarm: 25 no-undef from untracked
   probe .mjs helpers parked in .elves/runtime — relocated to the session
   scratchpad; committed source was always clean). build exit 0.
+
+## 2026-08-08 — B6 worker: plan 024 complete (fun: species & hunt)
+
+- All 6 steps, no STOP conditions hit. Suite 102 → 108 (+6 species.spec
+  cases, every one through the real sim: debug.spawnSpecies + game-clock
+  waits, no mocks).
+- Step 1 (CAP-2): ENEMY_SPECIES {grunt 1.0, sprinter 2.2 orange, juja 2.6
+  green} in GAME BALANCE; createEnemy(speciesKey) stores species + BASE
+  body/cap colors; the killable un-flip restores the STORED base (plan's
+  maintenance note — no literals), harmless species skip the color flip
+  entirely (juja keeps its green identity; the effects.js aura/scared face
+  still telegraph edibility off ud.killable). speciesSpeed threads exactly
+  the four sites (flee/orbit/chase + 1.25x cap; drift/avoidance stay
+  global). Full suite green pre/post = proven no-op for grunts.
+- Step 2: rotation 4 → 8 bands ['prey','giant','peer','giant','sprinter',
+  'giant','juja','peer'] — edible-NOW share 25% → 37.5%, giants 50% →
+  37.5%. Sprinter band [0.5,0.7]x player (always edible by construction);
+  juja fixed 0.35x. Harmless contact guard + species foodDrop wired.
+- Step 3 (DT-4): bubble top-up TARGET gate counts THREATS only (live via
+  canKillSpecificEnemy; pending discs by materialize size). Hard cap 12
+  still counts every body. Hunting can no longer starve its own prey.
+- Step 4 (DT-2): 2nd kill replacement = PREY-band grunt at 18-25u
+  (KILL_SPAWN_PREY_MIN/MAX), 1st stays the far giant; economy unchanged.
+  debug.pendingSpawnInfo() added. tension.spec music-fill adapted (it
+  postdates the plan and used spawnNewEnemies as a giants-only source):
+  now 4 spawnSpecies giants — same intent, zero prey, streaming silent.
+- Step 5 (DT-9): warn duration = SPAWN_WARN_TIME x clamp(actualPlayerSpeed
+  / SPAWN_WARN_SPEED_REF 6.0, 1.0, 2.2), captured per pending entry; disc
+  pulse phase runs on each entry's own elapsed time.
+- BALANCE-CHANGE SUMMARY for the family playtest:
+  - New knobs: ENEMY_SPECIES (speed 1.0/2.2/2.6, juja harmless, foodDrop
+    4/4/2), SPRINTER_HEIGHT_RANGE [0.5,0.7], JUJA_HEIGHT_FACTOR 0.35,
+    KILL_SPAWN_PREY_MIN/MAX 18/25, SPAWN_WARN_SPEED_REF 6.0.
+  - Combo reach BEFORE: nearest guaranteed killable after a kill ≥35u
+    (bubble), reachable ~20u inside the 4s window at 1x scale-1 (6 u/s
+    through the 1.45s warn+materialize latency, then 4.5 u/s closing on
+    fleeing prey) → x2 arithmetically unreachable. AFTER: guaranteed
+    killable at 18-25u — min-roll sprintable at scale 1, whole band by
+    ~scale 2 (speed 7.1 → reach ~24.5u).
+  - Owner speed rule intact: BASE_ENEMY_SPEED 1.5 / RAMP_SPEED_MAX 1.6
+    untouched. Sprinter chase 3.3 u/s (ramp-max 5.28) vs player 6.0 —
+    measured in-spec ~3.3 u/s closing on a standing player; can never catch
+    a straight-line 1x player (STOP condition checked, not hit).
+  - Warn notice: 1x/scale-1 unchanged 0.95s; 5x multiplier 2.09s; mobile
+    (1.75x base) 1.66s — constant notice in player-travel.
+- Spec engineering notes: sprinter-vs-grunt race runs on the CLASSIC flat
+  arena (probe: the endless +40u lane wedged on a seeded boulder — the
+  endless map, not speed, failed first); prey-supply scene stays ON the
+  spawn mesa (probe: +600 teleport landed mid-lake, all 35-50u placements
+  failed isWalkable); juja food-drop counts in classic (endless
+  spawnCollectible may silently fail placement near rocks/water; eats are
+  neutralized by the 1:1 spawnNearPlayer replacement). Combo spec reads the
+  kill wave INSIDE the first score poll (pendings live 0.95s) and does NOT
+  assert enemies[0]'s band — that would reintroduce the B3 same-frame
+  expiry race.
+- Gate at final HEAD: full runs 107/108, 107/108, 108/108, 108/108 (x2
+  consecutive green). Singletons: endless-stream 400u walk (run 1) and
+  effects.spec:12 pool count (run 2) — the EXACT pair B4's gate logged as
+  the 3-worker H4/H11 load-flake class; each solo-green immediately and
+  green in every subsequent full run; effects.js untouched by this batch.
+  lint 0 at every slice; build exit 0.

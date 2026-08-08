@@ -39,8 +39,13 @@ outside it.
   and makes you taller.
 - **Hunt**: when you're taller than an enemy it turns YELLOW and runs. Touch it
   to defeat it: **+25 points or more** (bigger enemies pay a size bounty), a
-  burst of food… and two larger enemies appear (up to a cap of 12 on the
-  field). Chain kills within 4 seconds for a COMBO multiplier.
+  burst of food… and two enemies appear — one bigger giant far off, one
+  bite-sized runner nearby, close enough to chase down for the combo (cap of
+  12 on the field). Chain kills within 4 seconds for a COMBO multiplier.
+- **Species**: **orange sprinters** are fast — much faster than the blue
+  grunts — but always small enough to eat, so stand your ground and gobble
+  them before they reach you. Little **green jujas** are harmless critters
+  that never hurt you; snack on them for bonus food.
 - **Die**: get caught by a blue enemy or let the collect clock hit zero. Your
   run joins the local **BEST RUNS** top-5 (saved in your browser) — ranked by
   distance, score breaking ties.
