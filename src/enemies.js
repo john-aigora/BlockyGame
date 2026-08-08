@@ -672,8 +672,27 @@ export function updateEnemyStreaming(dt) {
 
     const target = Math.min(ENDLESS_ENEMY_TARGET + state.endlessRampLevel, ENDLESS_ENEMY_CAP);
     bubbleSpawnCooldown -= dt;
-    // Pending warns reserve slots so we do not flood red discs.
-    if (bubbleSpawnCooldown > 0 || state.enemies.length + pendingSpawns.length >= target) return;
+    if (bubbleSpawnCooldown > 0) return;
+    // Hard cap counts EVERY body — live enemies plus reserved warn discs —
+    // so the bubble never floods past ENDLESS_ENEMY_CAP however much prey
+    // is alive (the balance cap spec pins this).
+    if (state.enemies.length + pendingSpawns.length >= ENDLESS_ENEMY_CAP) return;
+    // Prey supply (audit DT-4): the top-up TARGET gate counts THREATS, not
+    // everything. The owner report behind the rotation ("enemies bigger
+    // than me keep appearing, I never get to eat anybody" — constants.js,
+    // SPAWN_SIZE_PATTERN) had a sequel: hunting well STARVED that fix,
+    // because every killable body waiting to be eaten still held a target
+    // slot and switched the rotation off. Now only bodies that can catch
+    // you count; pending discs are judged by the size they will materialize
+    // at (the same height rule as canKillSpecificEnemy).
+    let threats = 0;
+    for (const e of state.enemies) {
+        if (!canKillSpecificEnemy(e)) threats++;
+    }
+    for (const p of pendingSpawns) {
+        if (state.playerScale * 1.0 <= enemyBaseHeight * p.scaleFactor) threats++;
+    }
+    if (threats >= target) return;
     bubbleSpawnCooldown = ENDLESS_SPAWN_INTERVAL;
 
     // Size band rotates deterministically (owner fix: the old always-1.5x rule

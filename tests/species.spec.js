@@ -104,6 +104,52 @@ test('juja contact never ends the game, and a killable juja keeps its green body
   expect(result.smallBody).toBe(0x66BB6A); // Killable, yet species green — flip bypassed
 });
 
+test('hunting cannot starve the prey supply: killable bodies do not block the rotation (DT-4)', async ({ page }) => {
+  // The owner's exact post-hunt state (audit DT-4): the bubble holds SIX
+  // killable bodies — a successful hunt mid-feast, more mouths than the
+  // bubble target of 4. Under the old gate (enemies + pending >= target)
+  // this scene never schedules again: eating well suspended the rotation
+  // that guarantees prey. Under the threat gate, killable bodies hold no
+  // slot, so within 2 x ENDLESS_SPAWN_INTERVAL of streaming time the
+  // rotation resumes — and its first spawn is the opening PREY band.
+  // Everything runs in ONE evaluate (atomic vs the live loop) on the debug
+  // streaming/warn ticks, exactly like the endless-stream rotation spec.
+  await startGame(page);
+  const out = await page.evaluate(() => {
+    const g = window.__game;
+    const d = g.debug;
+    const s = g.state;
+    s.collectTimeLeft = 60;
+    // Fresh slate ON the spawn mesa (guaranteed dry land within 48u — a
+    // player teleport would gamble the 35-50u spawn ring on unscouted
+    // terrain; probed at +600 it was ALL lake and every placement failed).
+    // Run stale boot-time warns to materialize, expel every live enemy past
+    // the 80u ring, despawn them, and restart the rotation.
+    const p = s.player.position;
+    for (let i = 0; i < 40; i++) d.updateSpawnWarnings(0.05);
+    for (const e of s.enemies) e.position.x = p.x + 200;
+    d.updateEnemyStreaming(0); // Despawn pass — the bubble is now empty
+    d.resetEnemyStreaming();
+    for (let i = 0; i < 6; i++) d.spawnSpecies('grunt', p.x + 20 + i * 4, p.z, 0.5); // Killable feast
+    // Two top-up windows: each big dt clears the cooldown, then the warn
+    // pipeline runs 2.0 game-seconds so the scheduled spawn goes live.
+    d.updateEnemyStreaming(1.25);
+    for (let i = 0; i < 40; i++) d.updateSpawnWarnings(0.05);
+    d.updateEnemyStreaming(1.25);
+    for (let i = 0; i < 40; i++) d.updateSpawnWarnings(0.05);
+    const first = s.enemies[6]; // Indices 0-5 are the feast; 6 = first rotation spawn
+    return {
+      count: s.enemies.length,
+      firstIsPreyBand: !!first &&
+        (first.userData.materializeTarget ?? first.scale.y) * 1.2 < s.playerScale
+    };
+  });
+  // Was: starved at 6 forever. Now: the rotation scheduled again (>= 1 new
+  // body; 2 when both windows found land on the first tries).
+  expect(out.count).toBeGreaterThanOrEqual(7);
+  expect(out.firstIsPreyBand).toBe(true); // The resumed rotation opens on prey
+});
+
 test('a juja kill drops exactly its species foodDrop (2 food)', async ({ page }) => {
   // CLASSIC mode on purpose: endless food placement validates spots and can
   // silently fail near rocks/water (spawnCollectible), which would make an
