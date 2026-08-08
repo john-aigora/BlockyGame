@@ -75,6 +75,16 @@
                  local date — the family races the same map. ui.js wires it
                  (sessionStorage flag + reload; seed resolves at module load). -->
             <div id="mode-picker">
+                <!-- Player count (plan 026): couch split-screen entry. The
+                     choice persists in sessionStorage 'blocky.playerCount';
+                     game.js wires the clicks (setPlayerCount) and restores
+                     it at boot. Any pad face button then starts the
+                     remembered mode. -->
+                <button id="one-player-button" class="game-button mode-button mode-selected"
+                    title="Classic solo run">1 PLAYER</button>
+                <button id="two-player-button" class="game-button mode-button"
+                    title="Split-screen couch co-op &mdash; WASD+Space vs Arrows+Slash, or a pad each">2
+                    PLAYERS</button>
                 <button id="daily-toggle" class="game-button mode-button"
                     title="One shared world per day &mdash; race the family on the same map">TODAY'S
                     WORLD</button>

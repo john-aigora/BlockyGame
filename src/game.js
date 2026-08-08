@@ -133,8 +133,29 @@ function init() {
         }
     });
 
+    // Player-count entry (plan 026): the overlay buttons flip the roster
+    // (they must not start the run — the overlay's own pointerdown does
+    // that; stop the press, act on the click — the daily-toggle pattern),
+    // and the choice persists for the session.
+    for (const [button, count] of [[el.onePlayerButton, 1], [el.twoPlayerButton, 2]]) {
+        if (!button) continue;
+        button.addEventListener('pointerdown', (e) => e.stopPropagation());
+        button.addEventListener('click', () => {
+            sfx.click();
+            try { sessionStorage.setItem('blocky.playerCount', String(count)); }
+            catch { /* blocked storage — the choice still applies this session */ }
+            setPlayerCount(count);
+        });
+    }
+
     // 8. Initial Game Setup
     setupNewGame();
+
+    // Remembered roster (plan 026): a reload comes back in the last-chosen
+    // mode — pad A on the overlay then starts it directly.
+    try {
+        if (sessionStorage.getItem('blocky.playerCount') === '2') setPlayerCount(2);
+    } catch { /* blocked storage — boot solo */ }
 
     // 9. Start the Animation Loop
     // This function will be called repeatedly to update and render the game.

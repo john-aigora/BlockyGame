@@ -287,6 +287,35 @@ test('per-player death: spectator chip while the partner plays, then the team de
   expect(boards.chip1).toBe('none'); // The spectator chip died with the run
 });
 
+test('start-overlay entry: 2 PLAYERS flips and persists across reload; 1 PLAYER returns', async ({ page }) => {
+  await expect(page.locator('#one-player-button')).toHaveClass(/mode-selected/);
+  await page.locator('#two-player-button').click();
+  await expect(page.locator('#two-player-button')).toHaveClass(/mode-selected/);
+  await expect(page.locator('#start-overlay')).toBeVisible(); // The press must NOT start a run
+  expect(await page.evaluate(() => window.__game.state.players.length)).toBe(2);
+  expect(await page.evaluate(() => sessionStorage.getItem('blocky.playerCount'))).toBe('2');
+
+  // A reload comes back in the remembered mode.
+  await page.reload();
+  await page.waitForFunction(() => window.__game?.state?.enemies?.length >= 1, null, { timeout: 30000 });
+  expect(await page.evaluate(() => window.__game.state.players.length)).toBe(2);
+  await expect(page.locator('#two-player-button')).toHaveClass(/mode-selected/);
+
+  // START launches the split run with both heroes standing.
+  await page.locator('#start-button').click();
+  await expect(page.locator('#start-overlay')).toBeHidden();
+  expect(await page.evaluate(() => window.__game.state.players.map((p) => !!p.mesh && p.alive)))
+    .toEqual([true, true]);
+
+  // Restart to the overlay; 1 PLAYER restores the solo roster.
+  await page.locator('#restart-game-button').click();
+  await expect(page.locator('#start-overlay')).toBeVisible();
+  await page.locator('#one-player-button').click();
+  await expect(page.locator('#one-player-button')).toHaveClass(/mode-selected/);
+  expect(await page.evaluate(() => window.__game.state.players.length)).toBe(1);
+  expect(await page.evaluate(() => sessionStorage.getItem('blocky.playerCount'))).toBe('1');
+});
+
 test('solo input is untouched: WASD and Arrows both drive the single hero', async ({ page }) => {
   // No startTwoPlayer — the classic merged keyboard must still hold.
   await page.locator('#start-button').click();

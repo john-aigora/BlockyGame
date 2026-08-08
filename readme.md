@@ -69,6 +69,35 @@ outside it.
 - **Extras**: game-speed cycle, two-way zoom, mute (sound effects and the
   chiptune soundtrack are fully synthesized — no audio files).
 
+## Two Players (split-screen)
+
+Pick **2 PLAYERS** on the start overlay (the choice is remembered for the
+session). One shared world, split vertically — **P1 (orange-red) on the
+left, P2 (teal) on the right** — with a hero, score, collect clock, and
+distance each. Enemies hunt whoever is nearest, and whether one is edible
+(yellow) is judged per player on each half of the screen: your half shows
+YOUR truth.
+
+| Control  | P1 (left)         | P2 (right)         |
+|----------|-------------------|--------------------|
+| Move     | **WASD**          | **Arrow keys**     |
+| Jump     | **Space**         | **/** (slash)      |
+| Gamepad  | first pad to move | second pad to move |
+| Pad jump | its **A** button  | its **A** button   |
+
+- **Pads claim seats by moving**: wiggle a stick and that pad owns a seat
+  (first pad takes P1 — unless P1 is already playing on WASD this run, then
+  it politely takes P2). Ghost adapter ports never claim. Unplugging frees
+  the seat.
+- **Pause pauses both** (P / Enter / Start on any pad); speed and zoom are
+  shared too.
+- **Death is personal**: whoever runs out of clock (or gets caught) squashes
+  and spectates — their half follows the survivor under a WAITING chip. When
+  both are down, one death screen shows both runs side by side, and the
+  **team total** (P1 + P2) joins its own local **TEAM RUNS** top-5 — 2P runs
+  never touch the solo boards.
+- Touch drag (mobile) drives P1.
+
 ## Running it locally
 
 Requires Node **20.19+ or 22.12+** (what Vite 8 supports; `package.json`
@@ -122,7 +151,7 @@ src/
 tests/              Playwright specs (smoke, timing, gameover, world, camera,
                     resources, hiscores, audio, balance, touch, effects,
                     endless + endless-stream + endless-polish, gate, gamepad,
-                    fairness, hitbox, tension, toys, species, worldfun)
+                    fairness, hitbox, tension, toys, species, worldfun, coop)
                     + shared helpers
 plans/              the audit + implementation plans this overhaul followed
 ```

@@ -45,6 +45,8 @@ export const el = {
     dailyToggle: null,
     seedValue: null,
     // --- 2P dual-mode elements (plan 026) ---
+    onePlayerButton: null, // Start-overlay roster picker
+    twoPlayerButton: null,
     scoreDisplay: null, // The solo Score row (hidden in 2P)
     coopHud: null, // The two .player-hud columns (hidden solo)
     coopFinal: null, // 2P death-screen columns (hidden solo)
@@ -100,6 +102,8 @@ export function initUI() {
     el.goFlourish = document.getElementById('go-flourish');
     el.dailyToggle = document.getElementById('daily-toggle');
     el.seedValue = document.getElementById('seed-value');
+    el.onePlayerButton = document.getElementById('one-player-button');
+    el.twoPlayerButton = document.getElementById('two-player-button');
     el.scoreDisplay = document.getElementById('score-display');
     el.coopHud = document.getElementById('coop-hud');
     el.coopFinal = document.getElementById('coop-final');
@@ -134,6 +138,9 @@ function coopMode() {
 // per-seat sets. Called by setPlayerCount (game.js) on every roster change.
 export function updateHudMode() {
     const coop = coopMode();
+    // The overlay picker's selected state tracks the live roster.
+    if (el.onePlayerButton) el.onePlayerButton.classList.toggle('mode-selected', !coop);
+    if (el.twoPlayerButton) el.twoPlayerButton.classList.toggle('mode-selected', coop);
     if (el.scoreDisplay) el.scoreDisplay.style.display = coop ? 'none' : '';
     if (el.collectTimerDisplay) el.collectTimerDisplay.style.display = coop ? 'none' : '';
     if (el.distanceDisplay) el.distanceDisplay.style.display = coop ? 'none' : (state.worldMode === 'endless' ? '' : 'none');
