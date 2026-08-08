@@ -1,0 +1,41 @@
+{
+  "schema": "elves-session/v2.3",
+  "run_id": "audit-coop-2026",
+  "created": "2026-08-07",
+  "repo": "/Users/ruthbrown-ennis/fun/BlockyGame",
+  "branch": "feat/audit-coop-2026",
+  "base": "main@128d18e",
+  "plan_path": "docs/elves/run-2026-08-07-plan.md",
+  "survival_guide_path": "docs/elves/survival-guide.md",
+  "execution_log_path": "docs/elves/execution-log.md",
+  "worker_packet_path": "docs/elves/worker-packet.md",
+  "run_mode": "finite",
+  "risk": "standard",
+  "trust_mode": "trusted",
+  "start_head": "b6b3758a9f078aa876b40bdfc365a263aada270e",
+  "cobbler": { "default_for_session": true, "native_first": true },
+  "landing": { "merge_authorized": false, "push_allowed": false, "reason": "LOCAL-ONLY: origin read-only for this account; owner forbade pushing; owner merges after family playtest" },
+  "environment": { "node_path_export": "export PATH=\"$HOME/.local/elves-tools/node/bin:$PATH\"" },
+  "batches": [
+    { "id": "B1", "plans": ["017"], "title": "Baseline repair + CI", "status": "pending", "acceptance": [] },
+    { "id": "B2", "plans": ["018", "021"], "title": "Gamepad reliability + docs/CLAUDE.md", "status": "pending", "acceptance": [] },
+    { "id": "B3", "plans": ["019", "020"], "title": "Fairness + perf pass 1 (019 first, then 020)", "status": "pending", "acceptance": [] },
+    { "id": "B4", "plans": ["022"], "title": "Debt/UI/security bundle", "status": "pending", "acceptance": [] },
+    { "id": "B5", "plans": ["023"], "title": "Fun: survival & readability", "status": "pending", "acceptance": [] },
+    { "id": "B6", "plans": ["024"], "title": "Fun: species & hunt", "status": "pending", "acceptance": [] },
+    { "id": "B7", "plans": ["025"], "title": "Fun: world & late game", "status": "pending", "acceptance": [] },
+    { "id": "B8", "plans": ["026"], "title": "Two-player split-screen (stages A-F)", "status": "pending", "acceptance": [] },
+    { "id": "B9", "plans": ["027"], "title": "Test depth", "status": "pending", "acceptance": [] },
+    { "id": "B10", "plans": ["028"], "title": "Perf pass 2 + final docs re-touch + report", "status": "pending", "acceptance": [] }
+  ],
+  "master_acceptance": [
+    { "id": "M-A1", "criterion": "All plan Done criteria met with evidence, or recorded justified SKIP/BLOCKED per plan STOP rules", "met": false },
+    { "id": "M-A2", "criterion": "lint 0, full suite 0 failed x2, build exit 0 at final HEAD", "met": false },
+    { "id": "M-A3", "criterion": "plans/README.md statuses current; final docs re-touch done", "met": false },
+    { "id": "M-A4", "criterion": "Elves report at /tmp/elves-report-blockygame-<date>.html; branch left unmerged", "met": false },
+    { "id": "M-A5", "criterion": "Plan 018 marked hardware-check-pending-family (human step, never claimed)", "met": false }
+  ],
+  "continuation_guard": { "stop_allowed": false, "reason": "batches pending" },
+  "deferred_hygiene": [],
+  "review_comments": []
+}
