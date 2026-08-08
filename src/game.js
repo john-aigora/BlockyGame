@@ -5,7 +5,7 @@ import {
     SPEED_GROWTH_FACTOR, SPEED_GROWTH_CAP,
     BASE_PLAYER_SPEED, BASE_ENEMY_SPEED, MOBILE_SPEED_MULTIPLIER,
     worldSize, initialFoodDensityArea,
-    enemyStartOffset, MOVEMENT_MODE,
+    enemyStartOffset, CONTINUOUS_MOVEMENT,
     CHUNK_SIZE, REBASE_DISTANCE,
     PLAYER_COLLIDER_HALF_WIDTH, RAMP_DISTANCE, RAMP_SPEED_STEP, RAMP_SPEED_MAX,
     DISTANCE_MILESTONE_STEP,
@@ -107,8 +107,10 @@ function init() {
     setupGamepad();
 
     // Plan 014 spike: `?move=continuous` swaps in the prototype movement
-    // scheme (cursor-steer + boost). Classic mode never reaches this module.
-    if (MOVEMENT_MODE === 'continuous') initContinuousMovement();
+    // scheme (cursor-steer + boost). The standard movement scheme never
+    // loads this module. (This is a MOVEMENT scheme flag — not the world
+    // mode; the retired classic arena is state.worldMode.)
+    if (CONTINUOUS_MOVEMENT) initContinuousMovement();
 
     // Auto-pause when the tab is hidden (the dt clamp already prevents
     // catch-up jumps; this puts the player in a fair, deliberate resume state).
@@ -230,7 +232,7 @@ function setupNewGame() {
     }
     hideMessage();
     resetEffects(); // Park all particles; reset squash/walk transients (plan 015)
-    if (MOVEMENT_MODE === 'continuous') resetContinuousMovement(); // Full energy, default heading (plan 014 spike)
+    if (CONTINUOUS_MOVEMENT) resetContinuousMovement(); // Full energy, default heading (plan 014 spike)
 
     // Every new session — fresh boot or post-death restart — returns to the
     // start overlay; startRun() is the single "a run begins" entry point.
@@ -302,7 +304,7 @@ function update(dt) {
 
     // Player movement and other game updates (ground, light, camera, collectibles)
     if (state.gameActive) {
-        if (MOVEMENT_MODE === 'continuous') {
+        if (CONTINUOUS_MOVEMENT) {
             // Plan 014 spike: cursor-steered constant motion + boost.
             updateContinuousMovement(dt);
         } else if (state.worldMode === 'endless') {
@@ -441,7 +443,7 @@ function jumpLaunchParams() {
 
 export function tryJump() {
     if (state.worldMode !== 'endless') return; // Classic Space = pause, untouched
-    if (MOVEMENT_MODE === 'continuous') return; // The spike owns Space (boost) — no jump there
+    if (CONTINUOUS_MOVEMENT) return; // The spike owns Space (boost) — no jump there
     if (!state.gameActive || state.isPaused || state.onStartScreen) return;
     if (state.jumpAirborne) return; // No double-jump
     const { gravity, velocity } = jumpLaunchParams();

@@ -1,4 +1,4 @@
-import { MAX_DRAG_DISTANCE, DEAD_ZONE_RADIUS, MOVEMENT_MODE, GAMEPAD_DEADZONE, GAMEPAD_STICK_CURVE } from './constants.js';
+import { MAX_DRAG_DISTANCE, DEAD_ZONE_RADIUS, CONTINUOUS_MOVEMENT, GAMEPAD_DEADZONE, GAMEPAD_STICK_CURVE } from './constants.js';
 import { state } from './state.js';
 import { togglePause, startRun, resetGame, cycleSpeed, speedUp, speedDown, tryJump } from './game.js';
 import { zoomIn, zoomOut } from './world.js';
@@ -360,7 +360,7 @@ export function pollGamepad() {
 
     // Classic: A mirrors Space (pause). Endless: A is jump. Continuous: A is
     // boost (held — see gamepadBoostHeld), not an edge action.
-    if (MOVEMENT_MODE === 'continuous') {
+    if (CONTINUOUS_MOVEMENT) {
         // boost is level-held, not edge; nothing here
     } else if (state.worldMode === 'endless') {
         if (buttonEdge(gp, b.a)) tryJump();
@@ -562,7 +562,7 @@ export function onKeyDown(event) {
     // exact same pattern as the spike. Classic keeps Space = pause.
     if (key === ' ' || key === 'space') {
         event.preventDefault(); // Prevent page scroll
-        if (MOVEMENT_MODE === 'continuous') return; // Boost, not pause
+        if (CONTINUOUS_MOVEMENT) return; // Boost, not pause
         if (state.worldMode === 'endless') {
             if (!isRepeat) tryJump(); // Fresh presses only — no held-key hop strobe
             return;
@@ -570,7 +570,7 @@ export function onKeyDown(event) {
         if (!isRepeat) togglePause();
         return;
     }
-    if ((MOVEMENT_MODE === 'continuous' || state.worldMode === 'endless') && key === 'p') {
+    if ((CONTINUOUS_MOVEMENT || state.worldMode === 'endless') && key === 'p') {
         if (!isRepeat) togglePause();
         return;
     }

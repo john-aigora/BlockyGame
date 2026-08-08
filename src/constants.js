@@ -210,9 +210,15 @@ export const JUMP_AIRTIME_GROWTH = 0.07; // Extra airtime per unit scale above 1
 export const JUMP_GRAVITY = (8 * JUMP_APEX_HEIGHT) / (JUMP_AIRTIME * JUMP_AIRTIME);
 export const JUMP_VELOCITY = (JUMP_GRAVITY * JUMP_AIRTIME) / 2;
 
-// --- Movement mode flag (plan 014 design spike) ---
+// --- Continuous-movement flag (plan 014 design spike) ---
 // `?move=continuous` opts into the Little Big Snake-style prototype
 // (src/movement-continuous.js). Any other value — including no param at all —
-// selects 'classic', whose behavior is untouched by the spike.
-export const MOVEMENT_MODE =
-    new URLSearchParams(location.search).get('move') === 'continuous' ? 'continuous' : 'classic';
+// keeps the standard direct-control scheme, untouched by the spike.
+// Named CONTINUOUS_MOVEMENT (audit D-3): the old movement-mode string enum's
+// 'classic' value collided with the retired classic WORLD mode
+// (state.worldMode) — a completely different axis — exactly where future
+// work reads both.
+// The typeof guard keeps this module importable from Node-side Playwright
+// specs (no `location` there; the flag simply reads false).
+export const CONTINUOUS_MOVEMENT = typeof location !== 'undefined' &&
+    new URLSearchParams(location.search).get('move') === 'continuous';
