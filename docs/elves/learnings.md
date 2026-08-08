@@ -1,8 +1,9 @@
 # Project Learnings
 
-> Durable memory across Elves runs for BlockyGame. Read after the survival guide and
-> `.elves-session.json`, before the plan and execution log. Promote only reusable, stable,
-> actionable, specific lessons. Batch status and one-off debugging belong in the execution log.
+> Durable repo truth now lives in /CLAUDE.md; this file keeps run-specific lessons.
+> Read after the survival guide and `.elves-session.json`, before the plan and
+> execution log. Promote only reusable, stable, actionable, specific lessons. Batch
+> status and one-off debugging belong in the execution log.
 
 ---
 
@@ -26,7 +27,7 @@
 ## Product and Domain Invariants
 
 - [2026-07-25] Game-over message text must always contain "GAME OVER" (smoke tests + plan 004/008 assert on it).
-- [2026-07-25] The world is a torus (±100 wrap on X/Z). ALL entity-to-entity direction/distance math must go through `src/worldmath.js` (post-plan-005). Raw `subVectors`/`distanceTo` on world positions is the recurring bug class.
+- [2026-07-25, corrected 2026-08-08] The shipping world (endless) is a flat infinite plane with a floating origin; the retired classic arena was a ±100 torus. ALL entity-to-entity direction/distance math still routes through `src/worldmath.js` (mode dispatch). Raw `subVectors`/`distanceTo` on world positions is the recurring bug class.
 - [2026-07-25] Enemy body material must be per-instance (killable color flips per enemy); sharing it repaints every enemy at once (plan 007 documents this trap).
 - [2026-07-25] Kill-indicator flash must stay ≤3 flashes/sec (photosensitivity, WCAG 2.3.1); plan 007 sets 1 Hz.
 
@@ -40,4 +41,4 @@
 
 ## Retired Learnings
 
-- (none yet)
+- [retired 2026-08-08] "The world is a torus (±100 wrap on X/Z). ALL entity-to-entity direction/distance math must go through `src/worldmath.js` (post-plan-005)." — superseded by the classic retirement (87771ab); the torus is true only of the retired classic mode. The worldmath routing rule survives, corrected, under Product and Domain Invariants.
