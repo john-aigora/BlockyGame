@@ -25,7 +25,14 @@
       { "id": "017-5", "criterion": "git status shows only in-scope files changed", "met": true, "evidence": "git diff --stat vs batch start: eslint/playwright configs, 5 in-scope specs, src/main.js (1 debug entry), readme.md test-count line, ci.yml, plans/README.md row + run docs" },
       { "id": "017-6", "criterion": "plans/README.md row updated", "met": true, "evidence": "plan 017 row TODO → DONE in status table" }
     ] },
-    { "id": "B2", "plans": ["018", "021"], "title": "Gamepad reliability + docs/CLAUDE.md", "status": "pending", "acceptance": [] },
+    { "id": "B2", "plans": ["018", "021"], "title": "Gamepad reliability + docs/CLAUDE.md", "status": "blocked", "blocked_reason": "018 code+tests landed and self-green; full-suite gate red 5/5 on pre-existing balance.spec.js:42 combo race (solo ~50% fail on BOTH HEAD and 4c07c00 code; full suite: baseline green 79/79 same hour, HEAD red — +4 gamepad tests re-tiled the 3-worker schedule). Fix is out of B2 scope (balance.spec/enemies collision ordering — 019/027 territory). 021 not started per gate. See execution log 2026-08-08 B2.", "acceptance": [
+      { "id": "018-1", "criterion": "npm run lint 0; npm test 0 failed", "met": false, "evidence": "lint 0 at final HEAD; npm test 82/83 x5 (only balance combo, pre-existing race — full evidence in execution log); gamepad.spec 10/10" },
+      { "id": "018-2", "criterion": "All 4 new scenario tests exist and pass", "met": true, "evidence": "ghost-first, idle-standard-vs-live-DI, lock hand-off, no-cross-pad-edges in tests/gamepad.spec.js — 10/10 solo, and all 4 fail against 4c07c00 input.js (non-vacuous)" },
+      { "id": "018-3", "criterion": "score += 0.25 inside the score > 0 guard", "met": true, "evidence": "src/input.js:99 `if (score > 0 && gp.mapping === 'standard') score += 0.25;`" },
+      { "id": "018-4", "criterion": "activeGamepad scans before honoring the lock", "met": true, "evidence": "scan-all loop first; bestScore > 0.15 adopts + re-points lock; lock only idle fallback (commit 5c86b53)" },
+      { "id": "018-5", "criterion": "plans/README.md row updated with hardware-check-pending note", "met": true, "evidence": "row: DONE — hardware check pending family; full-suite criterion BLOCKED note" },
+      { "id": "021-0", "criterion": "Plan 021 (all criteria)", "met": false, "evidence": "NOT STARTED — batch gate '018 complete and suite green' unmet; read-only prep findings preserved in .elves/runtime/worker-progress-b2.md" }
+    ] },
     { "id": "B3", "plans": ["019", "020"], "title": "Fairness + perf pass 1 (019 first, then 020)", "status": "pending", "acceptance": [] },
     { "id": "B4", "plans": ["022"], "title": "Debt/UI/security bundle", "status": "pending", "acceptance": [] },
     { "id": "B5", "plans": ["023"], "title": "Fun: survival & readability", "status": "pending", "acceptance": [] },

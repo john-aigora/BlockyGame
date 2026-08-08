@@ -44,3 +44,28 @@
   claims read-only; .gitignore now covers .claude/ and .elves/.
 - Banked to deferred hygiene: H1 stranded corrupt-storage spec, H2 ranking
   discrimination seed, H3 camera:26 race, H4 settle consistency (drain in B9).
+
+## 2026-08-08 — B2 worker: 018 landed, batch BLOCKED before 021
+
+- Plan 018 shipped (5c86b53, f486a8d, e288660, a27cd67): activity-gated
+  standard-mapping bias, rescan-first `activeGamepad` (activity outranks the
+  lock), per-pad edge state (Map by `gamepad.index`, hand-off seeds not
+  fires), `installMockPads` multi-pad harness in helpers, 4 DB9-adapter
+  regression tests (each proven red against pre-fix input.js), readme Pad
+  DB9 line + learnings Known Trap. Gamepad spec 10/10; lint 0.
+- HARDWARE CHECK PENDING FAMILY: verify on real sticks via `?paddebug=1` —
+  both adapter ports, one at a time, should each drive the player after one
+  wiggle. Never claimed done.
+- BLOCKED: `npm test` red 5/5 attempts (82/83 — only balance.spec.js:42
+  combo). Evidence: solo 10-rep A/B ~50% fail on BOTH HEAD and 4c07c00 code
+  (latent race, pre-existing); full-suite A/B: 4c07c00 green 79/79 same
+  machine/hour, HEAD red 5/5 → the +4 gamepad tests re-tile the 3-worker
+  schedule and the latent race now lands red under load. Instrumented probes:
+  at teleport, enemies[0] is small (sy 9-13), fully materialized, killable
+  and fleeing; every enemy satisfies wouldKill — yet ~half of reps die on
+  the teleport frame with score unchanged (suspect: stale `killable`/AABB
+  frame-order race in the collision path). Fix lives in balance.spec.js
+  and/or enemies.js-game.js ordering — OUT OF B2 SCOPE (019/027 territory).
+- Per packet STOP rule: stopped before 021 (gate "suite green" unmet). No
+  test weakened; no lottery reruns claimed as green. Driver decides: patch
+  the combo choreography under 027/019 authority, then 021 can run.

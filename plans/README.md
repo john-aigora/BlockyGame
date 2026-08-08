@@ -51,7 +51,7 @@ which hardened BlockyGame's own pad code for dual-port DB9 adapters).
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
 | 017 | Baseline repair: green lint+tests, failure artifacts, CI | P1 | M | — (GATES ALL) | DONE |
-| 018 | Gamepad reliability: rescan-first selection, honest scoring, per-pad edges | P1 | M | 017 | TODO |
+| 018 | Gamepad reliability: rescan-first selection, honest scoring, per-pad edges | P1 | M | 017 | DONE — code+tests landed, gamepad spec 10/10, hardware check pending family; full-suite criterion BLOCKED by pre-existing balance.spec.js:42 combo race (exposed by schedule shift; see execution log 2026-08-08 B2) |
 | 019 | Fairness pass: honest hitboxes, truthful arrows, input integrity | P1 | M | 017 | TODO |
 | 020 | Perf pass 1: perfInfo hook, shadow diet, culling, hot-loop hygiene, mobile tier | P1 | M | 017 | TODO |
 | 021 | Docs truth + root CLAUDE.md + Node pinning | P2 | S | 017 | TODO |
