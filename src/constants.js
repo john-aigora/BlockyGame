@@ -256,6 +256,7 @@ export const PEER_HEIGHT_RANGE = [0.95, 1.25]; // peer band: x player height (ed
 export const SPRINTER_HEIGHT_RANGE = [0.5, 0.7]; // sprinter band: x player height — ALWAYS edible (fast but killable: the danger is it reaches you, the answer is you eat it — plan 024)
 export const JUJA_HEIGHT_FACTOR = 0.35; // juja band: x player height, fixed — unmistakably a critter, never a wall
 export const ENDLESS_ENEMY_CAP = 12; // Hard endless population cap (ramp target never exceeds it)
+export const ENDLESS_ENEMY_CAP_COOP = 16; // 2P hard cap (plan 026): two per-player bubbles need headroom over the solo 12, but 2x12 would double the frame's enemy cost AND mob whichever hero the pathing funnels toward — 16 keeps coop pressure per player slightly UNDER solo (shared attention is the real difficulty)
 // Chainable kill replacements (plan 024, audit DT-2): combo reach at 1x is
 // ~18-20u (a 6 u/s sprint through the 1.45s warn+materialize latency, then
 // running down 4.5 u/s of closing speed inside the 4s window) — the old

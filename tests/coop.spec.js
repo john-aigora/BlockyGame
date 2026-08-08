@@ -122,6 +122,70 @@ test('jump keys split per seat: Space hops P1, Slash hops P2', async ({ page }) 
   expect(air[1]).toBe(true);
 });
 
+test('terrain and food stream around BOTH heroes 600u apart (union window)', async ({ page }) => {
+  test.setTimeout(90000);
+  await startTwoPlayerGame(page);
+  await clearThreats(page);
+  await page.evaluate(() => {
+    const s = window.__game.state;
+    s.players[0].mesh.position.x = 300; // P1 east...
+    s.players[1].mesh.position.x = -300; // ...P2 west — disjoint windows
+  });
+  // The union window builds out around both anchors (2 chunks/frame).
+  await page.waitForFunction(() => window.__game.debug.terrainInfo().queued === 0, null, { timeout: 60000 });
+  const info = await page.evaluate(() => {
+    const g = window.__game;
+    const s = g.state;
+    const chunkOf = (p) => `${Math.floor((p.mesh.position.x + s.worldOrigin.x) / 32)},${Math.floor((p.mesh.position.z + s.worldOrigin.z) / 32)}`;
+    const foodNear = (p) => s.collectibles.filter((c) =>
+      Math.hypot(c.position.x - p.mesh.position.x, c.position.z - p.mesh.position.z) < 60).length;
+    return {
+      keys: g.debug.terrainInfo().activeKeys,
+      activeChunks: g.debug.terrainInfo().activeChunks,
+      p1Chunk: chunkOf(s.players[0]),
+      p2Chunk: chunkOf(s.players[1]),
+      p1Food: foodNear(s.players[0]),
+      p2Food: foodNear(s.players[1]),
+      alive: s.players.map((p) => p.alive)
+    };
+  });
+  expect(info.alive).toEqual([true, true]); // The wait ended with both standing
+  expect(info.keys).toContain(info.p1Chunk); // Ground under P1's feet...
+  expect(info.keys).toContain(info.p2Chunk); // ...AND under P2's, 600u away
+  expect(info.p1Food).toBeGreaterThan(0); // Seeded chunk food grew near both
+  expect(info.p2Food).toBeGreaterThan(0);
+  expect(info.activeChunks).toBeGreaterThanOrEqual(90); // Two nearly-disjoint 7x7+ windows
+});
+
+test('rebase fires on the players\' midpoint and shifts both by the SAME delta', async ({ page }) => {
+  await startTwoPlayerGame(page);
+  await clearThreats(page);
+  const before = await page.evaluate(() => {
+    const s = window.__game.state;
+    s.players[0].mesh.position.x = 2400; // Midpoint (2400+1800)/2 = 2100 > 2048
+    s.players[1].mesh.position.x = 1800;
+    return { origin: s.worldOrigin.x };
+  });
+  expect(before.origin).toBe(0);
+  await waitGameSeconds(page, 0.3); // The next update frame rebases
+  const after = await page.evaluate(() => {
+    const s = window.__game.state;
+    return {
+      origin: s.worldOrigin.x,
+      p1x: s.players[0].mesh.position.x,
+      p2x: s.players[1].mesh.position.x,
+      furthest: s.furthestDistance
+    };
+  });
+  expect(after.origin).toBe(2112); // round(2100/32)*32 — one shared shift
+  // Both heroes moved by exactly that delta (the world-integrity STOP probe):
+  expect(after.p1x).toBeCloseTo(2400 - 2112, 5);
+  expect(after.p2x).toBeCloseTo(1800 - 2112, 5);
+  // True positions (local + origin) — and so the distance record — undented.
+  expect(after.furthest).toBeGreaterThanOrEqual(2399);
+  expect(after.furthest).toBeLessThan(2500);
+});
+
 test('solo input is untouched: WASD and Arrows both drive the single hero', async ({ page }) => {
   // No startTwoPlayer — the classic merged keyboard must still hold.
   await page.locator('#start-button').click();

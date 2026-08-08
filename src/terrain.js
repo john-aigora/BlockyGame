@@ -134,9 +134,35 @@ const meshPool = []; // Released chunk meshes, buffers reused by re-displacing
 const rockPool = []; // Released boulder groups (4 box children each)
 let queue = []; // Pending chunk builds: { key, cx, cz }
 const pending = new Set(); // Keys in the queue (dupe guard)
-let lastScanCx = null, lastScanCz = null;
+let lastScanSignature = null; // The anchor chunk set of the last window scan
 let waterClock = 0;
 let streaming = false; // True while endless mode is the live environment
+
+// Streaming anchors (plan 026): every LIVING player is an anchor — the
+// active set is the UNION of each anchor's window. With all players dead
+// (the frozen death-screen world) the fallback anchor is seat 0's corpse,
+// which is exactly the old single-player behavior. Scratch array — rebuilt
+// per frame, never allocated per frame beyond the entries.
+const anchorScratch = [];
+
+function currentAnchors() {
+    anchorScratch.length = 0;
+    for (const player of state.players) {
+        if (!player.alive || !player.mesh) continue;
+        anchorScratch.push({
+            cx: Math.floor((player.mesh.position.x + state.worldOrigin.x) / CHUNK_SIZE),
+            cz: Math.floor((player.mesh.position.z + state.worldOrigin.z) / CHUNK_SIZE)
+        });
+    }
+    if (anchorScratch.length === 0 && state.players[0].mesh) {
+        const p = state.players[0].mesh.position;
+        anchorScratch.push({
+            cx: Math.floor((p.x + state.worldOrigin.x) / CHUNK_SIZE),
+            cz: Math.floor((p.z + state.worldOrigin.z) / CHUNK_SIZE)
+        });
+    }
+    return anchorScratch;
+}
 
 // Debug counters (terrainInfo) — pool discipline is testable.
 let buildCount = 0;
@@ -326,6 +352,8 @@ export function setTerrainActive(on) {
 // New endless run: release everything (a previous run may have wandered
 // thousands of units away), then synchronously build the 3x3 under the
 // spawn so the title scene never shows a hole beneath the player.
+const SPAWN_ANCHOR = [{ cx: 0, cz: 0 }]; // Every run starts at true (0,0)
+
 export function resetTerrainForNewRun() {
     if (!terrainRoot) return;
     for (const chunk of active.values()) releaseChunk(chunk);
@@ -333,11 +361,10 @@ export function resetTerrainForNewRun() {
     activeByInt.clear();
     queue = [];
     pending.clear();
-    lastScanCx = null;
-    lastScanCz = null;
-    scanWindow(0, 0);
+    lastScanSignature = null; // First updateTerrain re-scans for the live roster
+    scanWindow(SPAWN_ANCHOR);
     // Build the innermost ring immediately; the rest streams in.
-    processQueue(0, 0, 9);
+    processQueue(SPAWN_ANCHOR, 9);
     if (waterMesh) {
         waterMesh.position.set(0, WATER_LEVEL, 0);
         // Depth tint for the spawn neighborhood (the last run may have left
@@ -352,21 +379,42 @@ export function resetTerrainForNewRun() {
 
 // --- Per-frame streaming (called from the animate loop, endless only) ---
 export function updateTerrain(dt) {
-    if (!streaming || !state.player) return;
-    const p = state.player.position;
-    const cx = Math.floor((p.x + state.worldOrigin.x) / CHUNK_SIZE);
-    const cz = Math.floor((p.z + state.worldOrigin.z) / CHUNK_SIZE);
-    if (cx !== lastScanCx || cz !== lastScanCz) scanWindow(cx, cz);
-    processQueue(cx, cz, CHUNK_BUILDS_PER_FRAME);
+    if (!streaming || !state.players[0].mesh) return;
+    const anchors = currentAnchors();
+    if (anchors.length === 0) return;
+    // Re-scan only when some anchor changed chunks (the solo single-anchor
+    // change check, generalized to the anchor SET).
+    let signature = '';
+    for (const a of anchors) signature += a.cx + ',' + a.cz + '|';
+    if (signature !== lastScanSignature) {
+        lastScanSignature = signature;
+        scanWindow(anchors);
+    }
+    processQueue(anchors, CHUNK_BUILDS_PER_FRAME);
 
-    // Water follows the player in WATER_SNAP steps (true-coordinate grid, so
-    // a rebase changes nothing); crossing a step re-tints the depth colors
-    // for the new footprint. The plane is 560 wide and fog-faded long before
-    // its edge, so the 12-unit position step is invisible — what IS visible
-    // is the depth pattern, which stays world-fixed this way.
+    // Water follows the LIVING players' midpoint in WATER_SNAP steps (the
+    // midpoint of one player is the player — the exact solo behavior; in 2P
+    // the 560-wide plane covers both halves out to ~280u of separation each
+    // side, far beyond the fog). True-coordinate grid, so a rebase changes
+    // nothing; crossing a step re-tints the depth colors for the new
+    // footprint — world-fixed between steps, zero per-frame cost.
     waterClock += dt;
-    const trueX = p.x + state.worldOrigin.x;
-    const trueZ = p.z + state.worldOrigin.z;
+    let mx = 0, mz = 0, living = 0;
+    for (const player of state.players) {
+        if (!player.alive || !player.mesh) continue;
+        mx += player.mesh.position.x;
+        mz += player.mesh.position.z;
+        living++;
+    }
+    if (living === 0) {
+        mx = state.players[0].mesh.position.x;
+        mz = state.players[0].mesh.position.z;
+    } else {
+        mx /= living;
+        mz /= living;
+    }
+    const trueX = mx + state.worldOrigin.x;
+    const trueZ = mz + state.worldOrigin.z;
     const snapX = Math.round(trueX / WATER_SNAP) * WATER_SNAP;
     const snapZ = Math.round(trueZ / WATER_SNAP) * WATER_SNAP;
     if (snapX !== waterSnapTrueX || snapZ !== waterSnapTrueZ) {
@@ -378,41 +426,53 @@ export function updateTerrain(dt) {
     waterMesh.material.emissiveIntensity = 0.08 + 0.045 * Math.sin(waterClock * 1.1);
 }
 
-// Scan the window around chunk (cx, cz): release far chunks, queue missing.
-function scanWindow(cx, cz) {
-    lastScanCx = cx;
-    lastScanCz = cz;
+// Chebyshev distance from a chunk coordinate to the nearest anchor.
+function anchorDistance(anchors, cx, cz) {
+    let best = Infinity;
+    for (const a of anchors) {
+        const d = Math.max(Math.abs(cx - a.cx), Math.abs(cz - a.cz));
+        if (d < best) best = d;
+    }
+    return best;
+}
+
+// Scan the UNION window of all anchors: release chunks outside EVERY
+// anchor's release ring, queue every anchor's missing window chunks (the
+// pending set dedupes overlap between anchors).
+function scanWindow(anchors) {
     for (const chunk of active.values()) {
-        if (Math.max(Math.abs(chunk.cx - cx), Math.abs(chunk.cz - cz)) > CHUNK_RELEASE_RADIUS) {
+        if (anchorDistance(anchors, chunk.cx, chunk.cz) > CHUNK_RELEASE_RADIUS) {
             active.delete(chunk.key);
             activeByInt.delete(chunkIntKey(chunk.cx, chunk.cz));
             releaseChunk(chunk);
         }
     }
-    for (let dz = -CHUNK_WINDOW_RADIUS; dz <= CHUNK_WINDOW_RADIUS; dz++) {
-        for (let dx = -CHUNK_WINDOW_RADIUS; dx <= CHUNK_WINDOW_RADIUS; dx++) {
-            const kx = cx + dx, kz = cz + dz;
-            const key = kx + ',' + kz;
-            if (!active.has(key) && !pending.has(key)) {
-                pending.add(key);
-                queue.push({ key, cx: kx, cz: kz });
+    for (const a of anchors) {
+        for (let dz = -CHUNK_WINDOW_RADIUS; dz <= CHUNK_WINDOW_RADIUS; dz++) {
+            for (let dx = -CHUNK_WINDOW_RADIUS; dx <= CHUNK_WINDOW_RADIUS; dx++) {
+                const kx = a.cx + dx, kz = a.cz + dz;
+                const key = kx + ',' + kz;
+                if (!active.has(key) && !pending.has(key)) {
+                    pending.add(key);
+                    queue.push({ key, cx: kx, cz: kz });
+                }
             }
         }
     }
 }
 
-// Build up to `budget` queued chunks, nearest to (cx, cz) first.
-function processQueue(cx, cz, budget) {
+// Build up to `budget` queued chunks, nearest to ANY anchor first.
+function processQueue(anchors, budget) {
     while (budget > 0 && queue.length > 0) {
         let best = 0;
         let bestD = Infinity;
         for (let i = 0; i < queue.length; i++) {
-            const d = Math.max(Math.abs(queue[i].cx - cx), Math.abs(queue[i].cz - cz));
+            const d = anchorDistance(anchors, queue[i].cx, queue[i].cz);
             if (d < bestD) { bestD = d; best = i; }
         }
         const entry = queue.splice(best, 1)[0];
         pending.delete(entry.key);
-        if (bestD > CHUNK_RELEASE_RADIUS) continue; // The player left it behind — drop, don't build
+        if (bestD > CHUNK_RELEASE_RADIUS) continue; // Every player left it behind — drop, don't build
         buildChunk(entry.key, entry.cx, entry.cz);
         budget--;
     }

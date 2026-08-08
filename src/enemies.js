@@ -9,7 +9,7 @@ import {
     SPAWN_MATERIALIZE_TIME, SPAWN_MATERIALIZE_START_SCALE,
     SPAWN_WARN_TIME, SPAWN_WARN_RADIUS, SPAWN_WARN_SPEED_REF,
     ENEMY_COLLIDER_HALF_WIDTH, ENEMY_WEDGE_TIME, ENEMY_DETOUR_TIME,
-    ENDLESS_ENEMY_TARGET, ENDLESS_ENEMY_CAP, ENEMY_DESPAWN_RADIUS,
+    ENDLESS_ENEMY_TARGET, ENDLESS_ENEMY_CAP, ENDLESS_ENEMY_CAP_COOP, ENEMY_DESPAWN_RADIUS,
     ENDLESS_SPAWN_MIN, ENDLESS_SPAWN_MAX, ENDLESS_SPAWN_INTERVAL, RAMP_HEIGHT_STEP,
     PLAYER_COLLIDER_HALF_WIDTH, ENEMY_SPECIES,
     KILL_SPAWN_PREY_MIN, KILL_SPAWN_PREY_MAX,
@@ -241,9 +241,15 @@ export function scheduleEnemySpawn(spawnX, spawnZ, scaleFactor, speciesKey = 'gr
     // Speed-aware notice (plan 024, audit DT-9): warn duration scales with
     // the CURRENT player speed so notice is constant in player-travel, not
     // seconds. Clamped [1.0, 2.2] — never shorter than the classic 0.95s,
-    // never a stale disc parade. Captured per entry at schedule time.
+    // never a stale disc parade. Captured per entry at schedule time. In 2P
+    // the FASTEST living hero sets the clock (plan 026): notice must hold
+    // for whoever can cover the most ground toward the disc.
+    let fastest = 0;
+    for (const pl of state.players) {
+        if (pl.alive && pl.actualSpeed > fastest) fastest = pl.actualSpeed;
+    }
     let warnTime = SPAWN_WARN_TIME * Math.min(2.2, Math.max(1.0,
-        (state.actualPlayerSpeed ?? SPAWN_WARN_SPEED_REF) / SPAWN_WARN_SPEED_REF));
+        (fastest || SPAWN_WARN_SPEED_REF) / SPAWN_WARN_SPEED_REF));
     // The titan telegraphs LONG (plan 025): 2x on top of the speed scaling —
     // dread needs time to land, and the thing it announces is worth it.
     if (boss) warnTime *= BOSS_WARN_MULT;
@@ -805,6 +811,8 @@ function moveEnemyWithCollision(enemyGroup, movement, dt) {
 // throttled materialize at a time on land, ENDLESS_SPAWN_MIN..MAX out.
 let bubbleSpawnCooldown = 0;
 let bubbleSpawnCounter = 0; // Drives the SPAWN_SIZE_PATTERN rotation
+const threatCountScratch = [0, 0]; // Per-seat threat tallies (plan 026) — reused every gate pass
+const pendingPosScratch = { x: 0, z: 0 }; // Position shim for nearestLivingPlayer on warn discs
 
 export function resetEnemyStreaming() {
     bubbleSpawnCooldown = 0;
@@ -830,16 +838,18 @@ export function updateEnemyStreaming(dt) {
         }
     }
 
-    const target = Math.min(ENDLESS_ENEMY_TARGET + state.endlessRampLevel, ENDLESS_ENEMY_CAP);
+    const perPlayerTarget = Math.min(ENDLESS_ENEMY_TARGET + state.endlessRampLevel, ENDLESS_ENEMY_CAP);
     bubbleSpawnCooldown -= dt;
     if (bubbleSpawnCooldown > 0) return;
     // Hard cap counts EVERY body — live enemies plus reserved warn discs —
-    // so the BUBBLE never floods past ENDLESS_ENEMY_CAP however much prey
-    // is alive (the balance cap spec pins this). One sanctioned exception
-    // lives outside this function: the once-per-run titan (game.js
-    // tryScheduleBoss) may briefly make it 13 at a saturated bubble — the
-    // landmark beat must fire; attrition restores the cap (B7 rev ADV-3).
-    if (state.enemies.length + pendingSpawns.length >= ENDLESS_ENEMY_CAP) return;
+    // so the BUBBLE never floods past the cap however much prey is alive
+    // (the balance cap spec pins this). 2P runs the COOP cap (plan 026):
+    // two bubbles, one roster. One sanctioned exception lives outside this
+    // function: the once-per-run titan (game.js tryScheduleBoss) may
+    // briefly exceed it at a saturated bubble — the landmark beat must
+    // fire; attrition restores the cap (B7 rev ADV-3).
+    const populationCap = state.players.length >= 2 ? ENDLESS_ENEMY_CAP_COOP : ENDLESS_ENEMY_CAP;
+    if (state.enemies.length + pendingSpawns.length >= populationCap) return;
     // Prey supply (audit DT-4): the top-up TARGET gate counts THREATS, not
     // everything. The owner report behind the rotation ("enemies bigger
     // than me keep appearing, I never get to eat anybody" — constants.js,
@@ -848,27 +858,43 @@ export function updateEnemyStreaming(dt) {
     // slot and switched the rotation off. Now only bodies that can catch
     // you count; pending discs are judged by the size they will materialize
     // at (the same height rule as canKillSpecificEnemy).
-    let threats = 0;
+    // PER PLAYER (plan 026): each living hero maintains their own bubble —
+    // a threat (or pending disc) belongs to its NEAREST living player, and
+    // each seat's threat count gates each seat's top-up independently.
+    threatCountScratch[0] = 0;
+    threatCountScratch[1] = 0;
     for (const e of state.enemies) {
-        if (!canKillSpecificEnemy(e)) threats++;
+        const owner = nearestLivingPlayer(e.position);
+        if (owner && !canKillSpecificEnemy(e, owner)) threatCountScratch[owner.seat]++;
     }
     for (const p of pendingSpawns) {
-        if (state.playerScale * 1.0 <= enemyBaseHeight * p.scaleFactor) threats++;
+        pendingPosScratch.x = p.x;
+        pendingPosScratch.z = p.z;
+        const owner = nearestLivingPlayer(pendingPosScratch);
+        if (owner && owner.scale * 1.0 <= enemyBaseHeight * p.scaleFactor) threatCountScratch[owner.seat]++;
     }
-    if (threats >= target) return;
+    // Pick the hungriest under-target bubble (alternating tie-break via the
+    // rotation counter so neither seat starves the other).
+    let spawnAnchor = null;
+    const seatOffset = bubbleSpawnCounter % 2;
+    for (let n = 0; n < state.players.length; n++) {
+        const player = state.players[(n + seatOffset) % state.players.length];
+        if (!player.alive || !player.mesh) continue;
+        if (threatCountScratch[player.seat] >= perPlayerTarget) continue;
+        if (!spawnAnchor || threatCountScratch[player.seat] < threatCountScratch[spawnAnchor.seat]) {
+            spawnAnchor = player;
+        }
+    }
+    if (!spawnAnchor) return;
     bubbleSpawnCooldown = ENDLESS_SPAWN_INTERVAL;
 
     // Size band rotates deterministically (owner fix: the old always-1.5x rule
     // regenerated the bubble pre-grown — "I never get to eat anybody"). Giants
-    // keep the classic rule + ramp; prey/peer scale to the player's CURRENT
-    // height so a hunt target is always on its way. Species bands (plan 024):
-    // sprinter is small and ALWAYS edible — fast but killable (the danger is
-    // it reaches you, the answer is you eat it); juja is a fixed-size
-    // harmless critter, bonus food on legs.
-    // Bubble anchor (plan 026): the first living player carries the bubble
-    // for now — Stage D grows this into per-player bubbles under the coop cap.
-    const spawnAnchor = state.players.find((p) => p.alive && p.mesh);
-    if (!spawnAnchor) return;
+    // keep the classic rule + ramp; prey/peer scale to the ANCHOR player's
+    // CURRENT height so a hunt target is always on its way. Species bands
+    // (plan 024): sprinter is small and ALWAYS edible — fast but killable
+    // (the danger is it reaches you, the answer is you eat it); juja is a
+    // fixed-size harmless critter, bonus food on legs.
     const band = SPAWN_SIZE_PATTERN[bubbleSpawnCounter % SPAWN_SIZE_PATTERN.length];
     let scaleFactor;
     let speciesKey = 'grunt';
