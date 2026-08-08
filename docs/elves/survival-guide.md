@@ -39,16 +39,16 @@
 
 ## Next action
 
-- **NOW**: B2b worker — plan 021 alone (docs truth + CLAUDE.md). Preserve
-  018's readme DB9 line; ADD one sentence to the readme hardware note: the
-  FIRST button press on a not-yet-active pad claims it and is deliberately
-  swallowed — wiggle/press once, then play (B2+B3 review advisory 5).
-- Then B4 (022) with driver-granted extra: behind-camera arrow edge push uses
-  a fixed NDC 1000 which corner-quantizes bearings — scale by
-  `1.001 / max(|x|,|y|)` instead to keep the true edge point (review adv. 3).
+- **NOW**: B4 worker — plan 022 (15-item bundle) + driver-granted extra H7:
+  behind-camera arrow edge push uses a fixed NDC 1000 which corner-quantizes
+  bearings — scale by `1.001 / max(|x|,|y|)` instead (keeps the true edge
+  point). B2b (021, done) skipped its own review — FOLD B2b+B4 into one
+  review window (eb4e51d..B4-close) after B4 lands.
 - Then B5 (023) → B6 (024) → B7 (025) → B8 (026) → B9 (027) → B10 (028).
 - Loop per batch: worker → driver verify → fresh review → reconcile
   (Review-phase commit) → guide/log update → next batch.
+- At TERMINAL readiness: flip B2's historical 018-1 acceptance row to met:true
+  (suite green at final HEAD is the proof; resolution note already in session).
 
 ## Deferred hygiene
 
