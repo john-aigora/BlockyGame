@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openGame, installMockPads, waitGameSeconds } from './helpers.js';
+import { openGame, installMockPads, waitGameSeconds, waitForGameOver, hudFor } from './helpers.js';
 
 // Two-player split-screen (plan 026). The roster flips via
 // debug.startTwoPlayer() on the start overlay (the Stage F entry buttons
@@ -184,6 +184,107 @@ test('rebase fires on the players\' midpoint and shifts both by the SAME delta',
   // True positions (local + origin) — and so the distance record — undented.
   expect(after.furthest).toBeGreaterThanOrEqual(2399);
   expect(after.furthest).toBeLessThan(2500);
+});
+
+test('2P HUD: per-seat columns replace the solo row and track their own runs', async ({ page }) => {
+  await startTwoPlayerGame(page);
+  await clearThreats(page);
+  await expect(page.locator('#coop-hud')).toBeVisible();
+  await expect(page.locator('#score-display')).toBeHidden(); // The solo row yields...
+  await expect(page.locator('#collect-timer-display')).toBeHidden();
+  await expect(page.locator('#distance-display')).toBeHidden();
+  await expect(page.locator('#time-display')).toBeVisible(); // ...the shared clock stays
+  const p1Hud = hudFor(page, 0);
+  const p2Hud = hudFor(page, 1);
+  await expect(p1Hud.score).toHaveText('0');
+  await expect(p2Hud.score).toHaveText('0');
+
+  // P2 eats (teleport onto their nearest food): THEIR column pays, P1's
+  // stays put — score attribution is per seat.
+  await page.evaluate(() => {
+    const s = window.__game.state;
+    const p = s.players[1].mesh.position;
+    let best = null;
+    let bd = Infinity;
+    for (const c of s.collectibles) {
+      const d = Math.hypot(c.position.x - p.x, c.position.z - p.z);
+      if (d < bd) { bd = d; best = c; }
+    }
+    p.x = best.position.x;
+    p.z = best.position.z;
+  });
+  await expect(p2Hud.score).not.toHaveText('0', { timeout: 30000 });
+  await expect(p1Hud.score).toHaveText('0');
+
+  // Back to solo: the classic id row returns, the columns retire.
+  await page.locator('#restart-game-button').click();
+  await expect(page.locator('#start-overlay')).toBeVisible();
+  await page.evaluate(() => window.__game.debug.setPlayerCount(1));
+  await expect(page.locator('#coop-hud')).toBeHidden();
+  await expect(page.locator('#score-display')).toBeVisible();
+});
+
+test('per-player death: spectator chip while the partner plays, then the team death screen + coop board', async ({ page }) => {
+  test.setTimeout(150000);
+  await startTwoPlayerGame(page);
+  await clearThreats(page);
+  // Seed the SOLO ladders — a 2P run must never touch them (plan 026).
+  await page.evaluate(() => {
+    localStorage.setItem('blocky.hiscores.endless.v1',
+      JSON.stringify([{ score: 11, distance: 22, date: '2026-01-01' }]));
+  });
+  // Tellable columns: different scores, and P2 carries the distance record.
+  await page.evaluate(() => {
+    const s = window.__game.state;
+    s.players[0].score = 3;
+    s.players[1].score = 9;
+    s.players[1].mesh.position.x = 40;
+  });
+  await waitGameSeconds(page, 0.3); // The distance frame registers 40u
+
+  // P2's collect clock expires — THEIR death only: the run continues.
+  await page.evaluate(() => { window.__game.state.players[1].collectTimeLeft = 0.05; });
+  await page.waitForFunction(() => window.__game.state.players[1].alive === false, null, { timeout: 60000 });
+  const mid = await page.evaluate(() => ({
+    gameActive: window.__game.state.gameActive,
+    p1Alive: window.__game.state.players[0].alive,
+    messageBox: getComputedStyle(document.getElementById('message-box')).display,
+    chip0: getComputedStyle(document.querySelector('.waiting-chip[data-seat="0"]')).display,
+    chip1: getComputedStyle(document.querySelector('.waiting-chip[data-seat="1"]')).display
+  }));
+  expect(mid.gameActive).toBe(true); // P1 plays on
+  expect(mid.p1Alive).toBe(true);
+  expect(mid.messageBox).toBe('none'); // No death screen while one stands
+  expect(mid.chip1).not.toBe('none'); // The fallen half waits...
+  expect(mid.chip0).toBe('none'); // ...the living half doesn't
+
+  // P1 falls too — NOW the run ends, with both columns on one screen.
+  await page.evaluate(() => { window.__game.state.players[0].collectTimeLeft = 0.05; });
+  await waitForGameOver(page);
+  await expect(page.locator('#death-title')).toHaveText('GAME OVER');
+  await expect(page.locator('#coop-final')).toBeVisible();
+  await expect(page.locator('#coop-p1-score')).toHaveText('3');
+  await expect(page.locator('#coop-p2-score')).toHaveText('9');
+  await expect(page.locator('#coop-team-score')).toHaveText('12');
+  await expect(page.locator('#hiscore-slot')).toContainText('TEAM RUNS');
+  await expect(page.locator('#hiscore-slot')).toContainText('12 pts');
+
+  const boards = await page.evaluate(() => ({
+    coop: JSON.parse(localStorage.getItem('blocky.hiscores.coop.v1')),
+    endless: JSON.parse(localStorage.getItem('blocky.hiscores.endless.v1')),
+    daily: localStorage.getItem('blocky.hiscores.daily.v1'),
+    classic: localStorage.getItem('blocky.hiscores.v1'),
+    chip1: getComputedStyle(document.querySelector('.waiting-chip[data-seat="1"]')).display
+  }));
+  expect(boards.coop).toHaveLength(1); // The team run recorded...
+  expect(boards.coop[0].p1Score).toBe(3);
+  expect(boards.coop[0].p2Score).toBe(9);
+  expect(boards.coop[0].teamScore).toBe(12);
+  expect(boards.coop[0].maxDistance).toBeGreaterThanOrEqual(40);
+  expect(boards.endless).toEqual([{ score: 11, distance: 22, date: '2026-01-01' }]); // ...solo ladders untouched
+  expect(boards.daily).toBeNull();
+  expect(boards.classic).toBeNull();
+  expect(boards.chip1).toBe('none'); // The spectator chip died with the run
 });
 
 test('solo input is untouched: WASD and Arrows both drive the single hero', async ({ page }) => {

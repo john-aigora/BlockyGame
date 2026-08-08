@@ -1051,6 +1051,14 @@ export function shiftActiveParticles(dx, dz) {
     }
 }
 
+// The kill-aura's current breathing intensity (plan 026): the per-viewer
+// color passes (enemies.js applyEdibilityTint) reuse the exact pulse the
+// solo aura runs on, deterministic within a frame — both halves breathe
+// the same value, so cross-pass writes can never flicker.
+export function auraPulseIntensity() {
+    return 0.35 + 0.25 * Math.sin(clock * 4);
+}
+
 // Debug/test introspection (read-only) — wired into window.__game by main.js.
 export function effectsInfo() {
     return {

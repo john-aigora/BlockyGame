@@ -7,7 +7,7 @@ import {
 } from './constants.js';
 import { state } from './state.js';
 import { canKillSpecificEnemy } from './enemies.js';
-import { recordScore, loadHiscores } from './hiscores.js';
+import { recordScore, recordCoopScore, loadHiscores } from './hiscores.js';
 import { torusDistance } from './worldmath.js';
 import { unlockAudio, sfx, music, isMuted, setMuted, audioState } from './audio.js';
 import { onPlayerDeath, onNewBest, spawnTextPopup } from './effects.js';
@@ -43,8 +43,32 @@ export const el = {
     muteButton: null,
     goFlourish: null,
     dailyToggle: null,
-    seedValue: null
+    seedValue: null,
+    // --- 2P dual-mode elements (plan 026) ---
+    scoreDisplay: null, // The solo Score row (hidden in 2P)
+    coopHud: null, // The two .player-hud columns (hidden solo)
+    coopFinal: null, // 2P death-screen columns (hidden solo)
+    coopP1Score: null,
+    coopP2Score: null,
+    coopP1Distance: null,
+    coopP2Distance: null,
+    coopTeamScore: null,
+    coopFinalRegions: null,
+    // Per-seat element sets, indexed by seat.
+    seatVignettes: [null, null],
+    seatKills: [null, null],
+    seatCombos: [null, null],
+    seatWaits: [null, null],
+    hudScores: [null, null],
+    hudDistances: [null, null],
+    hudCollects: [null, null],
+    hudCollectDisplays: [null, null]
 };
+
+// One seat's element out of a data-seat pair.
+function bySeat(selector, seat) {
+    return document.querySelector(`${selector}[data-seat="${seat}"]`);
+}
 
 export function initUI() {
     el.score = document.getElementById('score');
@@ -76,8 +100,57 @@ export function initUI() {
     el.goFlourish = document.getElementById('go-flourish');
     el.dailyToggle = document.getElementById('daily-toggle');
     el.seedValue = document.getElementById('seed-value');
+    el.scoreDisplay = document.getElementById('score-display');
+    el.coopHud = document.getElementById('coop-hud');
+    el.coopFinal = document.getElementById('coop-final');
+    el.coopP1Score = document.getElementById('coop-p1-score');
+    el.coopP2Score = document.getElementById('coop-p2-score');
+    el.coopP1Distance = document.getElementById('coop-p1-distance');
+    el.coopP2Distance = document.getElementById('coop-p2-distance');
+    el.coopTeamScore = document.getElementById('coop-team-score');
+    el.coopFinalRegions = document.getElementById('coop-final-regions');
+    for (const seat of [0, 1]) {
+        el.seatVignettes[seat] = bySeat('.danger-vignette', seat);
+        el.seatKills[seat] = bySeat('.kill-indicator', seat);
+        el.seatCombos[seat] = bySeat('.combo-chip', seat);
+        el.seatWaits[seat] = bySeat('.waiting-chip', seat);
+        const hud = bySeat('.player-hud', seat);
+        el.hudScores[seat] = hud ? hud.querySelector('.hud-score') : null;
+        el.hudDistances[seat] = hud ? hud.querySelector('.hud-distance') : null;
+        el.hudCollects[seat] = hud ? hud.querySelector('.hud-collect-time') : null;
+        el.hudCollectDisplays[seat] = hud ? hud.querySelector('.hud-collect-display') : null;
+    }
     initMuteToggle();
     initDailyToggle();
+}
+
+// True while the live layout is the two-half coop screen.
+function coopMode() {
+    return state.players.length >= 2;
+}
+
+// --- Dual-mode HUD flip (plan 026) ---
+// Solo shows the classic id elements exactly as always; 2P swaps in the
+// per-seat sets. Called by setPlayerCount (game.js) on every roster change.
+export function updateHudMode() {
+    const coop = coopMode();
+    if (el.scoreDisplay) el.scoreDisplay.style.display = coop ? 'none' : '';
+    if (el.collectTimerDisplay) el.collectTimerDisplay.style.display = coop ? 'none' : '';
+    if (el.distanceDisplay) el.distanceDisplay.style.display = coop ? 'none' : (state.worldMode === 'endless' ? '' : 'none');
+    if (el.coopHud) el.coopHud.style.display = coop ? 'flex' : 'none';
+    if (el.dangerVignette) el.dangerVignette.style.opacity = '0';
+    for (const seat of [0, 1]) {
+        if (el.seatVignettes[seat]) {
+            el.seatVignettes[seat].style.display = coop ? 'block' : 'none';
+            el.seatVignettes[seat].style.opacity = '0';
+        }
+        // KILL!/combo/waiting are frame/event-driven — a mode flip parks them.
+        if (el.seatKills[seat]) el.seatKills[seat].style.display = 'none';
+        if (el.seatCombos[seat]) el.seatCombos[seat].style.display = 'none';
+        if (el.seatWaits[seat]) el.seatWaits[seat].style.display = 'none';
+    }
+    if (el.killIndicator && coop) el.killIndicator.style.display = 'none';
+    if (el.comboChip && coop) el.comboChip.style.display = 'none';
 }
 
 // --- TODAY'S WORLD toggle + seed line (plan 025) ---
@@ -131,7 +204,8 @@ export function updateModeHud() {
     const endless = state.worldMode === 'endless';
     if (el.endlessHint) el.endlessHint.style.display = endless ? '' : 'none';
     if (el.distanceDisplay) {
-        el.distanceDisplay.style.display = endless ? '' : 'none';
+        // The solo distance row also yields to the per-seat columns in 2P.
+        el.distanceDisplay.style.display = endless && !coopMode() ? '' : 'none';
     }
 }
 
@@ -239,7 +313,8 @@ export function resetDistanceDisplay() {
     lastDistanceShown = -1;
     updateDistanceDisplay(); // furthestDistance was just reset — writes "0"
     if (el.distanceDisplay) {
-        el.distanceDisplay.style.display = state.worldMode === 'endless' ? '' : 'none';
+        // Solo row only — 2P shows the per-seat columns instead (plan 026).
+        el.distanceDisplay.style.display = state.worldMode === 'endless' && !coopMode() ? '' : 'none';
     }
 }
 
@@ -293,9 +368,24 @@ export function resetTimeDisplay() {
 // Endless deaths also show how far the run pushed.
 export function showDeathScreen(reason, hiscores = [], rank = -1, boardTitle = 'BEST RUNS') {
     el.deathReason.textContent = reason;
+    const coop = coopMode();
+    // 2P: the two columns + team line replace the solo score/distance lines.
+    if (el.finalScore.parentElement) {
+        el.finalScore.parentElement.style.display = coop ? 'none' : '';
+    }
+    if (el.coopFinal) el.coopFinal.style.display = coop ? '' : 'none';
+    if (coop) {
+        const [p1, p2] = state.players;
+        el.coopP1Score.textContent = p1.score;
+        el.coopP2Score.textContent = p2.score;
+        el.coopP1Distance.textContent = Math.floor(p1.distanceBest);
+        el.coopP2Distance.textContent = Math.floor(p2.distanceBest);
+        el.coopTeamScore.textContent = p1.score + p2.score;
+        if (el.coopFinalRegions) el.coopFinalRegions.textContent = state.regionsVisited.size || 1;
+    }
     el.finalScore.textContent = state.score;
     if (el.finalDistanceLine) {
-        if (state.worldMode === 'endless') {
+        if (!coop && state.worldMode === 'endless') {
             el.finalDistance.textContent = Math.floor(state.furthestDistance);
             // REGIONS visited (plan 025): the run's exploration stat beside
             // its distance — counts from 1 (the spawn region).
@@ -334,12 +424,15 @@ function renderHiscores(list, rank, boardTitle = 'BEST RUNS') {
     ol.className = 'hiscore-list';
     list.forEach((entry, i) => {
         const li = document.createElement('li');
-        // Endless rows lead with DISTANCE — the mode's real currency and now
+        // Coop rows lead with the TEAM total (their ranking key — plan 026);
+        // endless rows lead with DISTANCE — the mode's real currency and now
         // its ranking key (hiscores.js) — with the score alongside; classic
         // rows are untouched (score-ranked, score-first).
-        li.textContent = entry.distance !== undefined
-            ? `${entry.distance}u — ${entry.score} pts — ${entry.date}`
-            : `${entry.score} — ${entry.date}`;
+        li.textContent = entry.teamScore !== undefined
+            ? `${entry.teamScore} pts — ${entry.maxDistance}u — ${entry.date}`
+            : entry.distance !== undefined
+                ? `${entry.distance}u — ${entry.score} pts — ${entry.date}`
+                : `${entry.score} — ${entry.date}`;
         if (i === rank) li.classList.add('is-new');
         ol.appendChild(li);
     });
@@ -352,18 +445,24 @@ function renderHiscores(list, rank, boardTitle = 'BEST RUNS') {
 // remove/reflow/add dance as the score pop. enemies.js shows it on chained
 // kills; timers.js hides it when the window expires; death and new games
 // reset it here.
-export function showComboChip(count) {
-    if (!el.comboChip) return;
-    el.comboChip.textContent = `COMBO x${count}`;
-    el.comboChip.style.display = 'block';
-    el.comboChip.classList.remove('combo-pop');
-    void el.comboChip.offsetWidth; // Forces a reflow so the animation restarts
-    el.comboChip.classList.add('combo-pop');
+export function showComboChip(count, player = state.players[0]) {
+    // 2P: the chip pops under the KILLER's own half (plan 026).
+    const chip = coopMode() ? el.seatCombos[player.seat] : el.comboChip;
+    if (!chip) return;
+    chip.textContent = `COMBO x${count}`;
+    chip.style.display = 'block';
+    chip.classList.remove('combo-pop');
+    void chip.offsetWidth; // Forces a reflow so the animation restarts
+    chip.classList.add('combo-pop');
 }
 
-export function hideComboChip() {
-    if (el.comboChip && el.comboChip.style.display !== 'none') {
-        el.comboChip.style.display = 'none';
+export function hideComboChip(player = null) {
+    // No player: every chip (death/reset). A player: just their seat's.
+    const chips = player && coopMode()
+        ? [el.seatCombos[player.seat]]
+        : [el.comboChip, el.seatCombos[0], el.seatCombos[1]];
+    for (const chip of chips) {
+        if (chip && chip.style.display !== 'none') chip.style.display = 'none';
     }
 }
 
@@ -410,6 +509,17 @@ export function killPlayer(player, reason) {
     onPlayerDeath(player); // Squash flat + burst for THIS hero only
     sfx.death();
     rumble(180, 0.7, player.seat); // The fallen hero's own pad takes the hit
+    // Spectator mode (plan 026): their half switches to the partner cam
+    // (world.js renderFrame) under the WAITING chip; resetIndicators (via
+    // endGame/setupNewGame) retires the chip with the run.
+    if (el.seatWaits[player.seat]) el.seatWaits[player.seat].style.display = 'block';
+    // Their half's transient overlays go dark — nothing to fight the chip.
+    if (el.seatKills[player.seat]) el.seatKills[player.seat].style.display = 'none';
+    hideComboChip(player);
+    if (el.seatVignettes[player.seat]) {
+        el.seatVignettes[player.seat].__lastCss = null;
+        el.seatVignettes[player.seat].style.opacity = '0';
+    }
 }
 
 export function endGame(reason, dyingPlayer = state.players[0]) {
@@ -425,15 +535,26 @@ export function endGame(reason, dyingPlayer = state.players[0]) {
     rumble(180, 0.7, dyingPlayer.seat); // Stronger death pulse when the pad can rumble
     onPlayerDeath(dyingPlayer); // Squash flat + orange-red burst (pool), behind the beat
     // Per-mode boards: the death screen shows the ladder of the mode that
-    // just ended, and endless runs never pollute the classic top-5.
-    let { list, rank } = recordScore(state.score, state.worldMode, state.furthestDistance);
-    let boardTitle = 'BEST RUNS';
-    if (DAILY_WORLD && state.worldMode === 'endless') {
-        // A daily run IS an endless run — the solo board above already
-        // recorded it. It ALSO ranks on today's world's own ladder, and
-        // THAT is the board the death screen shows (the family race).
-        ({ list, rank } = recordScore(state.score, 'daily', state.furthestDistance));
-        boardTitle = "TODAY'S BEST";
+    // just ended, and endless runs never pollute the classic top-5. A 2P
+    // run records ONLY the coop team board (plan 026) — never the solo
+    // endless/daily ladders (different game, different ladder).
+    let list;
+    let rank;
+    let boardTitle;
+    if (coopMode()) {
+        ({ list, rank } = recordCoopScore(
+            state.players[0].score, state.players[1].score, state.furthestDistance));
+        boardTitle = 'TEAM RUNS';
+    } else {
+        ({ list, rank } = recordScore(state.score, state.worldMode, state.furthestDistance));
+        boardTitle = 'BEST RUNS';
+        if (DAILY_WORLD && state.worldMode === 'endless') {
+            // A daily run IS an endless run — the solo board above already
+            // recorded it. It ALSO ranks on today's world's own ladder, and
+            // THAT is the board the death screen shows (the family race).
+            ({ list, rank } = recordScore(state.score, 'daily', state.furthestDistance));
+            boardTitle = "TODAY'S BEST";
+        }
     }
     deathScreenTimer = setTimeout(() => {
         deathScreenTimer = null;
@@ -557,18 +678,34 @@ export function updateDangerPulse(dt) {
         if (inDanger && !anyKillable) anyHeartbeatDanger = true;
     }
 
-    // Vignette element: seat 0's eased base drives the (single) overlay —
-    // Stage E gives each half its own. Reduced motion: static faint opacity.
-    let shown = state.players[0].dangerOpacity;
-    if (!dangerReducedMotion && shown > 0) {
+    // Vignette element(s): solo drives the classic full-frame overlay from
+    // seat 0; 2P drives each half's own vignette from ITS player. One
+    // shared breath clock — the halves breathe in phase, deliberately.
+    const anyShown = coopMode()
+        ? Math.max(state.players[0].dangerOpacity, state.players[1].dangerOpacity)
+        : state.players[0].dangerOpacity;
+    let breath = 1;
+    if (!dangerReducedMotion && anyShown > 0) {
         dangerBreathClock += dt;
         // 0.4Hz breath riding the eased base; peak stays DANGER_VIGNETTE_MAX
-        shown *= 0.8 + 0.2 * Math.sin(dangerBreathClock * Math.PI * 0.8);
+        breath = 0.8 + 0.2 * Math.sin(dangerBreathClock * Math.PI * 0.8);
     }
-    const css = shown.toFixed(3);
-    if (el.dangerVignette && css !== lastVignetteCss) {
-        lastVignetteCss = css;
-        el.dangerVignette.style.opacity = css;
+    if (coopMode()) {
+        for (const player of state.players) {
+            const vignette = el.seatVignettes[player.seat];
+            if (!vignette) continue;
+            const seatCss = (player.alive ? player.dangerOpacity * breath : 0).toFixed(3);
+            if (vignette.__lastCss !== seatCss) {
+                vignette.__lastCss = seatCss;
+                vignette.style.opacity = seatCss;
+            }
+        }
+    } else {
+        const css = (state.players[0].dangerOpacity * breath).toFixed(3);
+        if (el.dangerVignette && css !== lastVignetteCss) {
+            lastVignetteCss = css;
+            el.dangerVignette.style.opacity = css;
+        }
     }
 
     // Music layer (plan 023 CAP-5) — the ONE setIntensity driver; in 2P the
@@ -603,6 +740,12 @@ export function resetTension() {
     dangerBreathClock = 0;
     lastVignetteCss = null;
     if (el.dangerVignette) el.dangerVignette.style.opacity = '0';
+    for (const vignette of el.seatVignettes) {
+        if (vignette) {
+            vignette.__lastCss = null;
+            vignette.style.opacity = '0';
+        }
+    }
 }
 
 // Hides every enemy indicator — the off-screen arrow pool and the KILL!
@@ -617,10 +760,22 @@ export function resetIndicators() {
         if (indicator.style.display !== 'none') indicator.style.display = 'none';
         indicator.__lastDisplay = 'none'; // Keep the hot-loop write cache honest
     }
-    state.killFlashClock = 0;
-    state.killIndicatorVisible = true;
+    for (const p of state.players) {
+        p.killFlashClock = 0;
+        p.killIndicatorVisible = true;
+    }
     if (el.killIndicator && el.killIndicator.style.display !== 'none') {
         el.killIndicator.style.display = 'none';
+    }
+    for (const seat of [0, 1]) {
+        if (el.seatKills[seat] && el.seatKills[seat].style.display !== 'none') {
+            el.seatKills[seat].style.display = 'none';
+        }
+        // The spectator chips die with the run too (endGame + setupNewGame
+        // both land here — the single reset path).
+        if (el.seatWaits[seat] && el.seatWaits[seat].style.display !== 'none') {
+            el.seatWaits[seat].style.display = 'none';
+        }
     }
 }
 
@@ -645,6 +800,32 @@ export function updateScoreDisplay() {
         void el.score.offsetWidth; // Forces a reflow so the animation restarts
         el.score.classList.add('score-pop');
     }
+    // 2P: each seat's own score column (same pop juice, per column).
+    if (coopMode()) {
+        for (const player of state.players) {
+            const slot = el.hudScores[player.seat];
+            if (!slot) continue;
+            const shown = Number(slot.textContent);
+            if (shown === player.score) continue;
+            slot.textContent = player.score;
+            if (player.score > shown) {
+                slot.classList.remove('score-pop');
+                void slot.offsetWidth;
+                slot.classList.add('score-pop');
+            }
+        }
+    }
+}
+
+// Per-seat DISTANCE readout (2P): each hero's own furthest, written on
+// change from updateEndlessProgress. Solo never calls this.
+export function updateSeatDistanceDisplay(player) {
+    const slot = el.hudDistances[player.seat];
+    if (!slot) return;
+    const shown = Math.floor(player.distanceBest);
+    if (slot.__lastShown === shown) return;
+    slot.__lastShown = shown;
+    slot.textContent = shown;
 }
 
 export function updateCollectTimeDisplay() {
@@ -670,9 +851,34 @@ export function createEnemyIndicators() {
 // under the 3/sec photosensitivity limit (WCAG 2.3.1) and, with the CSS
 // opacity transition removed, an actually visible discrete flash.
 export function updateKillIndicator(dt) {
-    const anyEnemyKillable = state.enemies.some(enemy => canKillSpecificEnemy(enemy));
     // (Music intensity moved to updateDangerPulse — plan 023: it needs the
     // danger scalar too, and one writer beats two fighting ones.)
+    if (coopMode()) {
+        // 2P: each half flashes for ITS viewer's edibility, on that
+        // player's own flash clock (plan 026). 1Hz per element — the same
+        // photosensitivity budget as solo, per half.
+        for (const player of state.players) {
+            const badge = el.seatKills[player.seat];
+            if (!badge) continue;
+            const anyForSeat = player.alive &&
+                state.enemies.some((enemy) => canKillSpecificEnemy(enemy, player));
+            if (anyForSeat) {
+                badge.style.display = 'block';
+                player.killFlashClock += dt;
+                if (player.killFlashClock > 0.5) {
+                    player.killFlashClock = 0;
+                    player.killIndicatorVisible = !player.killIndicatorVisible;
+                }
+                badge.style.opacity = player.killIndicatorVisible ? '1' : '0.35';
+            } else if (badge.style.display !== 'none') {
+                badge.style.display = 'none';
+                player.killFlashClock = 0;
+                player.killIndicatorVisible = true;
+            }
+        }
+        return;
+    }
+    const anyEnemyKillable = state.enemies.some(enemy => canKillSpecificEnemy(enemy));
     if (!el.killIndicator) return;
     if (anyEnemyKillable) {
         el.killIndicator.style.display = 'block';

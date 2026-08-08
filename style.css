@@ -762,6 +762,114 @@ canvas {
     }
 }
 
+/* --- Two-player split-screen (plan 026) --- */
+/* Dual-mode markup: the per-seat clones idle hidden; ui.js shows the set
+   for the live mode (solo keeps the classic id elements untouched). */
+.coop-only {
+    display: none;
+}
+
+/* Per-half KILL!/combo: same look, anchored over each half's center. */
+.kill-indicator[data-seat="0"] {
+    left: 25%;
+}
+
+.kill-indicator[data-seat="1"] {
+    left: 75%;
+}
+
+.combo-chip[data-seat="0"] {
+    left: 25%;
+}
+
+.combo-chip[data-seat="1"] {
+    left: 75%;
+}
+
+/* Per-half danger vignettes: each hugs its own half's frame. */
+.danger-vignette[data-seat="0"] {
+    right: 50%;
+}
+
+.danger-vignette[data-seat="1"] {
+    left: 50%;
+}
+
+/* Spectator chip: quiet banner over a dead hero's half while the partner
+   plays on (their half is showing the partner cam underneath). */
+.waiting-chip {
+    position: absolute;
+    top: 42%;
+    transform: translateX(-50%);
+    z-index: 55;
+    background-color: rgba(0, 0, 0, 0.7);
+    color: #B0BEC5;
+    border: 2px solid #546E7A;
+    border-radius: 5px;
+    padding: 10px 14px;
+    font-size: 0.7em;
+    text-shadow: 2px 2px 2px rgba(0, 0, 0, 0.6);
+}
+
+.waiting-chip[data-seat="0"] {
+    left: 25%;
+}
+
+.waiting-chip[data-seat="1"] {
+    left: 75%;
+}
+
+/* 2P HUD: one column of readouts under each half. */
+#coop-hud {
+    display: flex;
+    justify-content: space-around;
+    align-items: baseline;
+}
+
+.player-hud {
+    flex: 1;
+}
+
+.hud-name {
+    display: inline-block;
+    margin-right: 6px;
+    font-size: 0.9em;
+    color: #FF4500;
+    /* P1 wears the hero orange-red */
+}
+
+.hud-name-p2 {
+    color: #26C6DA;
+    /* P2 wears the partner teal (characters.js P2_BODY_COLOR) */
+}
+
+.hud-collect-display {
+    color: #FFEB3B;
+    /* Same urgency yellow as the solo collect timer */
+}
+
+.hud-collect-display.timer-panic {
+    animation: timer-panic-pulse 1s ease-in-out infinite;
+}
+
+/* 2P death screen: the two heroes' runs side by side. */
+.coop-final-columns {
+    display: flex;
+    justify-content: space-around;
+    gap: 12px;
+    margin: 0 0 8px;
+}
+
+.coop-final-name {
+    font-size: 0.8em;
+    color: #FF4500;
+    margin: 0 0 4px;
+}
+
+.coop-final-name-p2 {
+    color: #26C6DA;
+}
+
 /* Off-Screen Enemy Indicator Styling */
 #offscreen-indicator-container {
     position: fixed;
@@ -821,7 +929,8 @@ canvas {
 
     /* Panic still reads — as a static urgency color, not a pulse. The
        vignette's breathing is likewise disabled in ui.js (static opacity). */
-    #collect-timer-display.timer-panic {
+    #collect-timer-display.timer-panic,
+    .hud-collect-display.timer-panic {
         animation: none;
         color: #FF1744;
     }

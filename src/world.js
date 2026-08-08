@@ -7,10 +7,12 @@ import {
     ATTRACT_ORBIT_PERIOD, ATTRACT_EASE_TIME, CAMERA_TERRAIN_CLEARANCE
 } from './constants.js';
 import { state } from './state.js';
-// Import cycle note: terrain.js imports makeGroundTexture from this module.
-// Both edges are function-references used at call time (never during module
-// evaluation), so the cycle is benign under ES modules.
+// Import cycle note: terrain.js imports makeGroundTexture from this module,
+// and enemies.js imports triggerKillShake while we import its per-viewer
+// paint (plan 026). All edges are function-references used at call time
+// (never during module evaluation), so the cycles are benign under ES modules.
 import { groundHeightAt } from './terrain.js';
+import { applyEdibilityTint } from './enemies.js';
 
 // --- World Creation ---
 // Builds the scene, camera, renderer, lights, and ground plane.
@@ -377,18 +379,26 @@ export function renderFrame() {
     const w = state.gameContainer.clientWidth;
     const h = state.gameContainer.clientHeight;
     const halfW = Math.floor(w / 2);
+    const p1 = state.players[0];
+    // Spectator halves (plan 026 Stage E): a dead hero's half shows the
+    // LIVING partner's camera (under the WAITING chip) until both are down
+    // — then each half freezes on its own last view behind the death screen.
+    const p1View = p1.alive || !p2.alive ? p1 : p2;
+    const p2View = p2.alive || !p1.alive ? p2 : p1;
     scissorActive = true;
     renderer.setScissorTest(true);
     // P1 — LEFT half
     renderer.setViewport(0, 0, halfW, h);
     renderer.setScissor(0, 0, halfW, h);
-    updateFog(state.players[0]);
-    renderer.render(state.scene, state.players[0].camera);
+    updateFog(p1View);
+    applyEdibilityTint(p1View); // This half's colors = this viewer's edibility
+    renderer.render(state.scene, p1View.camera);
     // P2 — RIGHT half
     renderer.setViewport(halfW, 0, w - halfW, h);
     renderer.setScissor(halfW, 0, w - halfW, h);
-    updateFog(p2);
-    renderer.render(state.scene, p2.camera);
+    updateFog(p2View);
+    applyEdibilityTint(p2View);
+    renderer.render(state.scene, p2View.camera);
 }
 
 let scissorActive = false; // True while the last frame rendered split halves

@@ -104,6 +104,19 @@ export async function installMockPads(page, pads = [{}]) {
   }, pads);
 }
 
+// One seat's 2P HUD locators (plan 026). Solo keeps the classic ids
+// (#score, #collect-time, ...) — this helper is for the coop columns only.
+export function hudFor(page, seat) {
+  const hud = page.locator(`.player-hud[data-seat="${seat}"]`);
+  return {
+    hud,
+    score: hud.locator('.hud-score'),
+    distance: hud.locator('.hud-distance'),
+    collectTime: hud.locator('.hud-collect-time'),
+    collectDisplay: hud.locator('.hud-collect-display')
+  };
+}
+
 // Waits until the simulation advances `seconds` more GAME-clock seconds
 // (state.runTime is dt-accumulated in update()). Use this — never a
 // wall-clock waitForTimeout — before asserting on anything the game clock

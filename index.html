@@ -37,15 +37,27 @@
     <div id="game-container">
         <a id="original-link" class="game-button" href="/original.html"
             title="Play the untouched May 2025 build — see how far the models have come">&#8646; ORIGINAL &rsquo;25</a>
-        <div id="danger-vignette"></div>
+        <div id="danger-vignette" class="danger-vignette"></div>
         <div id="go-flourish">GO!</div>
         <!-- KILL!/combo live INSIDE the play frame (audit UI-1): they are
              absolutely positioned and #game-container is their positioned
              ancestor — in #ui-container (static) they anchored to the
-             viewport and floated above the frame. Plan 026 will relocate
-             them per player half; ids stay stable. -->
+             viewport and floated above the frame. DUAL-MODE (plan 026):
+             the id elements are the solo set (ids stable); the data-seat
+             clones below serve the two halves in 2P — ui.js flips which
+             set is live. -->
         <div id="kill-indicator" class="kill-indicator">KILL!</div>
         <div id="combo-chip" class="combo-chip">COMBO x2</div>
+        <div class="danger-vignette coop-only" data-seat="0"></div>
+        <div class="danger-vignette coop-only" data-seat="1"></div>
+        <div class="kill-indicator coop-only" data-seat="0">KILL!</div>
+        <div class="kill-indicator coop-only" data-seat="1">KILL!</div>
+        <div class="combo-chip coop-only" data-seat="0">COMBO x2</div>
+        <div class="combo-chip coop-only" data-seat="1">COMBO x2</div>
+        <!-- Spectator chip (plan 026): a dead hero's half shows the partner
+             cam with this over it, until the run ends for both. -->
+        <div class="waiting-chip coop-only" data-seat="0">WAITING FOR P2</div>
+        <div class="waiting-chip coop-only" data-seat="1">WAITING FOR P1</div>
         <div id="start-overlay">
             <h1>BLOCKY COLLECTOR 3D</h1>
             <p class="tagline">Collect. Grow. Hunt the yellow ones.</p>
@@ -79,6 +91,25 @@
             <p class="final-score">Score: <span id="final-score">0</span></p>
             <p class="final-score" id="final-distance-line" style="display: none">Distance: <span
                     id="final-distance">0</span>u &middot; REGIONS <span id="final-regions">1</span></p>
+            <!-- 2P death columns (plan 026): both heroes' runs side by side
+                 + the team total the coop board ranks by. ui.js fills and
+                 shows this INSTEAD of the two solo lines above on a 2P end. -->
+            <div id="coop-final" style="display: none">
+                <div class="coop-final-columns">
+                    <div class="coop-final-col">
+                        <p class="coop-final-name">P1</p>
+                        <p class="final-score"><span id="coop-p1-score">0</span> pts</p>
+                        <p class="final-score"><span id="coop-p1-distance">0</span>u</p>
+                    </div>
+                    <div class="coop-final-col">
+                        <p class="coop-final-name coop-final-name-p2">P2</p>
+                        <p class="final-score"><span id="coop-p2-score">0</span> pts</p>
+                        <p class="final-score"><span id="coop-p2-distance">0</span>u</p>
+                    </div>
+                </div>
+                <p class="final-score">TEAM <span id="coop-team-score">0</span> pts &middot; REGIONS <span
+                        id="coop-final-regions">1</span></p>
+            </div>
             <div id="hiscore-slot"></div>
             <button id="restart-button">Play Again</button>
             <p class="start-hint">or press Space</p>
@@ -97,10 +128,28 @@
 
     <div id="ui-container">
         <button id="mute-button" class="game-button" aria-pressed="false">&#128266;</button>
-        <div class="ui-element">Score: <span id="score">0</span></div>
+        <div class="ui-element" id="score-display">Score: <span id="score">0</span></div>
         <div class="ui-element" id="distance-display">Distance: <span id="distance">0</span></div>
         <div class="ui-element" id="time-display">Time: <span id="time">0:00</span></div>
         <div class="ui-element" id="collect-timer-display">Collect In: <span id="collect-time">15</span>s</div>
+        <!-- 2P HUD (plan 026): one block per seat, two columns under the two
+             halves. Dual-mode markup — solo keeps the id row above verbatim
+             (specs pin those ids); ui.js swaps which set is visible. The
+             shared TIME readout stays the id element in both modes. -->
+        <div id="coop-hud" style="display: none">
+            <div class="player-hud" data-seat="0">
+                <span class="hud-name">P1</span>
+                <span class="ui-element">Score: <span class="hud-score">0</span></span>
+                <span class="ui-element">Dist: <span class="hud-distance">0</span></span>
+                <span class="ui-element hud-collect-display">Collect In: <span class="hud-collect-time">15</span>s</span>
+            </div>
+            <div class="player-hud" data-seat="1">
+                <span class="hud-name hud-name-p2">P2</span>
+                <span class="ui-element">Score: <span class="hud-score">0</span></span>
+                <span class="ui-element">Dist: <span class="hud-distance">0</span></span>
+                <span class="ui-element hud-collect-display">Collect In: <span class="hud-collect-time">15</span>s</span>
+            </div>
+        </div>
         <div id="instructions">
             <!-- #controls-hint is display:block (audit UI-2) — the old
                  inline span + manual <br> collided with the next line when

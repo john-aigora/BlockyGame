@@ -22,7 +22,7 @@ import { spawnAtPosition, spawnCollectible } from './collectibles.js';
 import { killPlayer, updateScoreDisplay, showComboChip } from './ui.js';
 import { wrapPosition, torusDelta, torusDistance } from './worldmath.js';
 import { sfx } from './audio.js';
-import { onEnemyKilled, spawnScorePopup, spawnTextPopup, spawnBurst } from './effects.js';
+import { onEnemyKilled, spawnScorePopup, spawnTextPopup, spawnBurst, auraPulseIntensity } from './effects.js';
 import { triggerKillShake } from './world.js';
 import { rumble } from './rumble.js';
 
@@ -379,6 +379,39 @@ function markBoss(enemyGroup) {
 // Scratch origin for the materialize burst — never allocated per spawn.
 const materializeOrigin = { x: 0, y: 0, z: 0 };
 
+// --- Per-viewer edibility paint (plan 026 Stage E) ---
+// Called by world.js renderFrame immediately before EACH half renders: every
+// enemy's body/cap color and aura emissive are written for THAT viewer's
+// edibility. Every pass sets ALL enemies, so no restore step exists and no
+// state leaks between halves (the anti-flicker property the plan's STOP
+// condition watches). The transition-driven paint in updateEnemies still
+// runs (it feeds ud.killable for AI/faces/wobble); these passes simply
+// overwrite the colors per half. Solo never calls this — the single view
+// keeps the pure transition-flip path.
+export function applyEdibilityTint(player) {
+    const pulse = auraPulseIntensity(); // Same value for both halves this frame
+    for (const enemyGroup of state.enemies) {
+        const ud = enemyGroup.userData;
+        if (ud.species.harmless) continue; // Juja never flips — green identity
+        const killable = canKillSpecificEnemy(enemyGroup, player);
+        const bodyMesh = ud.bodyMesh;
+        if (bodyMesh) {
+            bodyMesh.material.color.setHex(killable ? 0xFFEB3B : ud.baseBodyColor);
+            if (killable) {
+                bodyMesh.material.emissive.setHex(0xFFEB3B);
+                bodyMesh.material.emissiveIntensity = pulse;
+            } else {
+                bodyMesh.material.emissiveIntensity = 0;
+                bodyMesh.material.emissive.setHex(0x000000);
+            }
+        }
+        // The titan's crown never flips (plan 025): identity over signal.
+        if (ud.capMaterial && !ud.boss) {
+            ud.capMaterial.color.setHex(killable ? KILLABLE_CAP_COLOR : ud.baseCapColor);
+        }
+    }
+}
+
 // --- Enemy Update (called every frame from update()) ---
 // Handles enemy coloring, AI movement (flee/chase/orbit + random drift),
 // avoidance, world wrapping, and collision with the player.
@@ -619,7 +652,7 @@ export function killEnemy(enemyGroup, index, player = state.players[0]) {
     // "strategically defeating enemies" promise, now actually paid.
     player.score += payout;
     updateScoreDisplay();
-    if (player.comboCount > 1) showComboChip(player.comboCount);
+    if (player.comboCount > 1) showComboChip(player.comboCount, player);
 
     // Enemy becomes food — the drop count is species data (plan 024): grunts
     // and sprinters keep the classic 4, the juja snack pays 2. The titan

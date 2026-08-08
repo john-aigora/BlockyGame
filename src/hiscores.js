@@ -10,7 +10,48 @@ import { dailySeed, WORLD_SEED } from './constants.js';
 const KEY = 'blocky.hiscores.v1'; // Classic board — untouched by endless runs
 const KEY_ENDLESS = 'blocky.hiscores.endless.v1'; // Endless board — its own ladder
 const KEY_DAILY = 'blocky.hiscores.daily.v1'; // TODAY'S WORLD board — seed-stamped rows; stale worlds prune on read
+const KEY_COOP = 'blocky.hiscores.coop.v1'; // 2P team board (plan 026) — its own ladder; 2P runs record ONLY here
 const MAX = 5;
+
+// --- Coop (2P) board (plan 026) ---
+// Entry: { p1Score, p2Score, teamScore, maxDistance, date } ranked by
+// teamScore (a TEAM run is the two of them together), maxDistance breaking
+// ties. Separate shape and key — coop never mixes with the solo ladders.
+function sortCoopBoard(list) {
+    list.sort((a, b) => (b.teamScore ?? 0) - (a.teamScore ?? 0) || (b.maxDistance ?? 0) - (a.maxDistance ?? 0));
+    return list;
+}
+
+export function loadCoopScores() {
+    try {
+        const raw = localStorage.getItem(KEY_COOP);
+        const arr = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(arr)) return [];
+        const list = arr.filter((e) => Number.isFinite(e.teamScore));
+        for (const e of list) {
+            e.maxDistance = Number.isFinite(e.maxDistance) ? Math.floor(e.maxDistance) : 0;
+        }
+        return sortCoopBoard(list);
+    } catch { return []; /* private mode / corrupt JSON / disabled storage */ }
+}
+
+export function recordCoopScore(p1Score, p2Score, maxDistance) {
+    const list = loadCoopScores();
+    const entry = {
+        p1Score,
+        p2Score,
+        teamScore: p1Score + p2Score,
+        maxDistance: Math.max(0, Math.floor(maxDistance)),
+        date: new Date().toISOString().slice(0, 10)
+    };
+    list.push(entry);
+    sortCoopBoard(list);
+    const trimmed = list.slice(0, MAX);
+    const rank = trimmed.indexOf(entry);
+    try { localStorage.setItem(KEY_COOP, JSON.stringify(trimmed)); }
+    catch { /* storage may be unavailable; still return the in-memory result */ }
+    return { list: trimmed, rank };
+}
 
 function keyForMode(mode) {
     if (mode === 'daily') return KEY_DAILY;

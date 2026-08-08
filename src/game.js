@@ -24,7 +24,7 @@ import { initClouds, setCloudMode, updateClouds, shiftClouds } from './clouds.js
 import { initEffects, updateEffects, resetEffects, onCollect, onGrowthMilestone, shiftActiveParticles, spawnTextPopup, onJumpTakeoff, onJumpLand } from './effects.js';
 import { keys, moveVector, clearTransientInput, resetSeatActivity, onKeyDown, onKeyUp, setupTouchControls, setupGamepad, pollGamepad } from './input.js';
 import { rumble } from './rumble.js';
-import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension, resetIndicators, showGoFlourish, updateModeHud, updateDistanceDisplay, resetDistanceDisplay, updateTimeDisplay, resetTimeDisplay } from './ui.js';
+import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension, resetIndicators, showGoFlourish, updateModeHud, updateDistanceDisplay, resetDistanceDisplay, updateSeatDistanceDisplay, updateHudMode, updateTimeDisplay, resetTimeDisplay } from './ui.js';
 import { resetCollectClock, tickCollectClock, tickComboClock } from './timers.js';
 import { loadWorldMode } from './hiscores.js';
 import { unlockAudio, sfx, music } from './audio.js';
@@ -168,6 +168,7 @@ function setupNewGame() {
     clearPendingSpawns(); // Drop any red warn discs from the last run
     resetEnemyStreaming(); // A fresh run's first bubble top-up owes no cooldown
     resetDistanceDisplay(); // Zero the HUD and show/hide it per the current mode
+    for (const p of state.players) updateSeatDistanceDisplay(p); // 2P columns re-zero (no-op solo)
     resetTimeDisplay(); // Fresh 0:00 (runTime was reset above)
     applySpeedMultiplier(); // playerScale reset → drop any size speed bonus from the last run
     resetCombo(); // A mid-run restart must not carry a live combo into the new run
@@ -669,7 +670,10 @@ function updateEndlessProgress() {
         // must discover them even when no forward-progress record is set.
         updateRegionDiscovery(player);
         const dist = Math.hypot(p.x + state.worldOrigin.x, p.z + state.worldOrigin.z);
-        if (dist > player.distanceBest) player.distanceBest = dist;
+        if (dist > player.distanceBest) {
+            player.distanceBest = dist;
+            if (state.players.length >= 2) updateSeatDistanceDisplay(player); // Their own column (2P HUD)
+        }
         if (dist > state.furthestDistance) {
             // Distance milestone (stage 3): crossing a DISTANCE_MILESTONE_STEP
             // boundary earns a waypoint chime and a lime "DISTANCE N!" popup
@@ -788,6 +792,7 @@ export function setPlayerCount(count) {
         if (p2 && p2.mesh) state.scene.remove(p2.mesh); // Parked, not disposed (cached above)
     }
     onWindowResize(); // Re-aspect every camera for the new layout
+    updateHudMode(); // Swap the solo id HUD ↔ the per-seat columns (plan 026)
     if (state.onStartScreen) setupNewGame(); // Fresh roster, fresh spawn positions
 }
 
