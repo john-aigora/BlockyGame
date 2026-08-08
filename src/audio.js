@@ -104,6 +104,14 @@ export const sfx = {
     // collect countdown is in its last PANIC_TIME seconds (timers.js drives
     // the cadence off the same shown-integer change that writes the DOM).
     tick: () => blip({ freq: 1150, dur: 0.025, vol: 0.06 }),
+    // Escape beat (plan 023 DT-10): a relieved exhale — a falling sigh
+    // answered by a small rising "we're okay" flick. Two soft sine blips,
+    // pure house style; name stays generic per the plan's maintenance note
+    // (future species reuse it).
+    phew: () => {
+        blip({ freq: 540, endFreq: 320, type: 'sine', dur: 0.18, vol: 0.15 });
+        blip({ freq: 392, endFreq: 660, type: 'sine', dur: 0.2, vol: 0.12, delay: 0.2 });
+    },
     // Danger heartbeat: one low lub-dub per call. The ~72bpm LOOP lives in
     // ui.js on the game clock (dt-driven) — audio stays fire-and-forget
     // one-shots, so pause and death stop the heart by not calling this.

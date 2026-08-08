@@ -1,4 +1,4 @@
-import { INITIAL_CAMERA_Y_OFFSET, INITIAL_CAMERA_Z_OFFSET, initialCollectTime } from './constants.js';
+import { INITIAL_CAMERA_Y_OFFSET, INITIAL_CAMERA_Z_OFFSET, initialCollectTime, SURVIVAL_BEAT_COOLDOWN } from './constants.js';
 
 // Single mutable state object shared by all modules. This repo pattern is
 // deliberate — plain shared-state arcade game, not a framework.
@@ -44,6 +44,8 @@ export const state = {
   comboCount: 0, // Current kill-combo multiplier (0/1 = no combo; capped at COMBO_MAX)
   comboTimeLeft: 0, // Game-clock seconds left in the combo window (ticked in timers.js)
   dangerOpacity: 0, // Eased base opacity of the danger vignette (ui.js drives it toward DANGER_VIGNETTE_MAX)
+  dangerPeak: 0, // Max dangerOpacity since it last drained to ~0 — a real scare's release earns a PHEW! (ui.js)
+  lastSurvivalBeat: -SURVIVAL_BEAT_COOLDOWN, // runTime of the last survival popup; PHEW!/CLOSE ONE! share this rate limit (negative start = the first beat is free)
   heartbeatClock: 0, // Game-clock seconds until the next danger heartbeat (0 = fire on danger entry)
   animationFrameId: null, // requestAnimationFrame handle
 

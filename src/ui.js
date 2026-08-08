@@ -1,11 +1,15 @@
 import * as THREE from 'three';
-import { MAX_ENEMY_INDICATORS, DANGER_RADIUS, DANGER_VIGNETTE_MAX, HEARTBEAT_BPM, DEATH_SCREEN_DELAY } from './constants.js';
+import {
+    MAX_ENEMY_INDICATORS, DANGER_RADIUS, DANGER_VIGNETTE_MAX, HEARTBEAT_BPM, DEATH_SCREEN_DELAY,
+    SURVIVAL_BEAT_COOLDOWN, PHEW_PEAK_MIN, NEAR_MISS_FACTOR,
+    PLAYER_COLLIDER_HALF_WIDTH, ENEMY_COLLIDER_HALF_WIDTH
+} from './constants.js';
 import { state } from './state.js';
 import { canKillSpecificEnemy } from './enemies.js';
 import { recordScore } from './hiscores.js';
 import { torusDistance } from './worldmath.js';
 import { unlockAudio, sfx, music, isMuted, setMuted } from './audio.js';
-import { onPlayerDeath, onNewBest } from './effects.js';
+import { onPlayerDeath, onNewBest, spawnTextPopup } from './effects.js';
 import { rumble } from './rumble.js';
 
 // Cached DOM references, resolved once at init (plan 007) — the hot loop
@@ -310,6 +314,25 @@ export function setTimerPanic(on) {
     el.collectTimerDisplay.classList.toggle('timer-panic', on);
 }
 
+// --- Survival beats (plan 023 DT-10) ---
+// PHEW! (a real scare fully drained away) and CLOSE ONE! (a hunter got
+// within a whisker of contact and the player slipped out) — the survival
+// axis finally celebrates. ONE shared rate limit on the GAME clock: two
+// simultaneous triggers (an escape that was also a near miss) fire once,
+// and neither can ever spam. Popup + sfx only — zero gameplay effect.
+const survivalBeatOrigin = { x: 0, y: 0, z: 0 }; // Scratch — never allocated per beat
+
+function fireSurvivalBeat(text, fillStyle, sound) {
+    if (state.runTime - state.lastSurvivalBeat < SURVIVAL_BEAT_COOLDOWN) return;
+    state.lastSurvivalBeat = state.runTime;
+    const p = state.player.position;
+    survivalBeatOrigin.x = p.x;
+    survivalBeatOrigin.y = p.y + state.playerScale + 0.6; // Above the head (distance-milestone pattern)
+    survivalBeatOrigin.z = p.z;
+    spawnTextPopup(survivalBeatOrigin, text, fillStyle);
+    sound();
+}
+
 // Danger pulse + heartbeat, called each update frame from game.js BEFORE
 // updateEnemies — so a death inside the enemy pass can zero the vignette
 // without this frame re-raising it afterwards. The vignette eases toward
@@ -329,12 +352,43 @@ export function updateDangerPulse(dt) {
         }
         const d = torusDistance(enemyGroup.position, state.player.position);
         if (d < nearest) nearest = d;
+        // CLOSE ONE! near-miss (plan 023): arm when a hunter enters the
+        // whisker band around actual contact, fire when it exits with the
+        // player still alive (a death never reaches here — gameActive gate
+        // above). Materializing spawns can't collide, so they never arm.
+        const ud = enemyGroup.userData;
+        if (ud.materializing === undefined) {
+            const armRadius = NEAR_MISS_FACTOR * (
+                state.playerScale * PLAYER_COLLIDER_HALF_WIDTH +
+                enemyGroup.scale.y * ENEMY_COLLIDER_HALF_WIDTH
+            );
+            if (d < armRadius) {
+                ud.nearMissArmed = true;
+            } else if (ud.nearMissArmed) {
+                ud.nearMissArmed = false;
+                fireSurvivalBeat('CLOSE ONE!', '#FFC107', sfx.tick); // Amber — warning that ended well
+            }
+        } else {
+            ud.nearMissArmed = false;
+        }
     }
     const inDanger = nearest < DANGER_RADIUS;
 
     const target = inDanger ? DANGER_VIGNETTE_MAX : 0;
     state.dangerOpacity += (target - state.dangerOpacity) * (1 - Math.exp(-5 * dt));
     if (!inDanger && state.dangerOpacity < 0.003) state.dangerOpacity = 0; // Settle instead of asymptote
+
+    // PHEW! escape beat (plan 023): the dread system gets a positive
+    // resolution — when a REAL scare (peak above PHEW_PEAK_MIN) has fully
+    // drained away, celebrate the escape once, then re-arm. The peak always
+    // resets at the zero crossing, so one scare can never span two beats.
+    if (state.dangerOpacity > state.dangerPeak) state.dangerPeak = state.dangerOpacity;
+    if (state.dangerOpacity <= 0.01) {
+        if (state.dangerPeak > PHEW_PEAK_MIN) {
+            fireSurvivalBeat('PHEW!', '#8BC34A', sfx.phew); // Soft green — survival's own color
+        }
+        state.dangerPeak = 0;
+    }
     // Reduced motion: static faint opacity (the eased base alone, no breath)
     let shown = state.dangerOpacity;
     if (!dangerReducedMotion && shown > 0) {
@@ -365,6 +419,8 @@ export function updateDangerPulse(dt) {
 export function resetTension() {
     setTimerPanic(false);
     state.dangerOpacity = 0;
+    state.dangerPeak = 0; // A scare must not leak a PHEW! across death / new game
+    state.lastSurvivalBeat = -SURVIVAL_BEAT_COOLDOWN; // Fresh run: first beat is free
     state.heartbeatClock = 0;
     dangerBreathClock = 0;
     lastVignetteCss = null;

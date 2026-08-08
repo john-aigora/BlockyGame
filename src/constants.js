@@ -23,6 +23,12 @@ export const COMBO_WINDOW = 4; // seconds after a kill in which the next kill es
 export const COMBO_MAX = 5; // combo multiplier cap (x1..x5)
 export const MILESTONE_STEP = 1.0; // playerScale interval that fires a growth-milestone celebration
 
+// Survival feedback beats (plan 023 DT-10): the game finally celebrates the
+// SURVIVAL axis — escapes and near-misses — not just acquisition.
+export const SURVIVAL_BEAT_COOLDOWN = 6; // Game-seconds between survival popups (PHEW!/CLOSE ONE! share one clock) — beats stay special, never spam
+export const PHEW_PEAK_MIN = 0.15; // dangerOpacity peak (max 0.22) that must be reached before its release earns a PHEW! — filters mere brushes with the danger radius
+export const NEAR_MISS_FACTOR = 1.5; // CLOSE ONE! arms inside this × (player+enemy collider half-width sum): just outside actual contact, so every fire was a real scare
+
 // Tension systems (awesome pass): make danger and urgency legible.
 export const PANIC_TIME = 5; // Collect-countdown seconds at/below which panic engages (red pulse, tick sfx, food arrow)
 export const DANGER_RADIUS = 9; // A non-killable enemy within this distance = danger (vignette + heartbeat)
