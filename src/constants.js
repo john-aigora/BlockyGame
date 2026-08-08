@@ -38,6 +38,11 @@ export const ATTRACT_EASE_TIME = 0.6; // Seconds the camera takes to swing betwe
 
 // Speed Multiplier Variables
 export const speedMultipliers = [1.0, 1.5, 2.0, 3.0, 5.0, 0.5]; // ADDED 5.0x, re-ordered
+// ONE ladder (audit D-12): the sorted view used by the dedicated
+// faster/slower controls (pad Y/X, keyboard R) is DERIVED from the cycle
+// array above — never hand-write a second copy (game.js carried one and
+// the two orders drifted apart).
+export const SPEED_LADDER = [...speedMultipliers].sort((a, b) => a - b);
 
 // Camera zoom model (bounded two-way zoom; see plan 006)
 export const ZOOM_STEP = 1.25; // Multiplier applied per zoom button click

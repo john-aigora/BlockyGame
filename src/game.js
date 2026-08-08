@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {
-    growthFactor, enemyBaseHeight, speedMultipliers,
+    growthFactor, enemyBaseHeight, speedMultipliers, SPEED_LADDER,
     FOOD_POINTS, ENEMY_HEIGHT_FACTOR, MILESTONE_STEP,
     SPEED_GROWTH_FACTOR, SPEED_GROWTH_CAP,
     BASE_PLAYER_SPEED, BASE_ENEMY_SPEED, MOBILE_SPEED_MULTIPLIER,
@@ -700,14 +700,20 @@ export function cycleSpeed() {
     applySpeedMultiplier();
 }
 
-// Ordered ladder for dedicated faster/slower controls (pad Y/X, keyboard R).
-// The stored array keeps historical order (index 0 = 1.0x) so existing tests
-// and the cycle button stay stable; up/down navigate this sorted view.
-const SPEED_LADDER = [0.5, 1.0, 1.5, 2.0, 3.0, 5.0];
-
+// Ordered ladder for dedicated faster/slower controls (pad Y/X, keyboard R):
+// SPEED_LADDER is DERIVED from speedMultipliers in constants.js (audit D-12
+// — this file used to hand-maintain a second copy in a different order).
+// The stored array keeps historical order (index 0 = 1.0x) so existing
+// tests and the cycle button stay stable; up/down navigate the sorted view.
 function indexForMultiplier(value) {
     const i = speedMultipliers.indexOf(value);
-    return i >= 0 ? i : 0;
+    if (i < 0) {
+        // A ladder value missing from the cycle array means the derivation
+        // above broke — make the miss loud instead of silently jumping to 1x.
+        console.warn(`indexForMultiplier: ${value} not in speedMultipliers — falling back to index 0`);
+        return 0;
+    }
+    return i;
 }
 
 export function speedUp() {
