@@ -185,6 +185,14 @@ export const PEER_HEIGHT_RANGE = [0.95, 1.25]; // peer band: x player height (ed
 export const SPRINTER_HEIGHT_RANGE = [0.5, 0.7]; // sprinter band: x player height — ALWAYS edible (fast but killable: the danger is it reaches you, the answer is you eat it — plan 024)
 export const JUJA_HEIGHT_FACTOR = 0.35; // juja band: x player height, fixed — unmistakably a critter, never a wall
 export const ENDLESS_ENEMY_CAP = 12; // Hard endless population cap (ramp target never exceeds it)
+// Chainable kill replacements (plan 024, audit DT-2): combo reach at 1x is
+// ~18-20u (a 6 u/s sprint through the 1.45s warn+materialize latency, then
+// running down 4.5 u/s of closing speed inside the 4s window) — the old
+// 35-50u targets made x2 arithmetically unreachable without speed buttons.
+// The SECOND kill replacement lands in this band: the chain must be
+// sprintable. The first replacement stays a giant at the classic distance.
+export const KILL_SPAWN_PREY_MIN = 18; // Chainable prey-band replacement lands at least this far...
+export const KILL_SPAWN_PREY_MAX = 25; // ...and at most this far from the player
 export const ENEMY_DESPAWN_RADIUS = 80; // Enemies beyond this distance are removed AND disposed
 export const ENDLESS_SPAWN_MIN = 35; // Bubble spawns land between MIN and MAX units from the player...
 export const ENDLESS_SPAWN_MAX = 50; // ...far enough to materialize unseen, near enough to matter

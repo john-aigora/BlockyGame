@@ -1,7 +1,7 @@
 import { applySpeedMultiplier, speedUp, speedDown, forceWorldMode, perfInfo } from './game.js';
 import { state } from './state.js';
 import { spawnNearPlayer, spawnAtPosition } from './collectibles.js';
-import { spawnNewEnemies, updateEnemyStreaming, resetEnemyStreaming, updateSpawnWarnings, debugSpawnSpecies } from './enemies.js';
+import { spawnNewEnemies, updateEnemyStreaming, resetEnemyStreaming, updateSpawnWarnings, debugSpawnSpecies, pendingSpawnInfo } from './enemies.js';
 import { onTouchStart, onTouchMove, onTouchEndOrCancel, gamepadVector, pollGamepad, isGamepadConnected, gamepadDebugInfo } from './input.js';
 import { sfx, isMuted, audioState, music } from './audio.js';
 import { spawnBurst, spawnScorePopup, effectsInfo } from './effects.js';
@@ -29,6 +29,7 @@ window.__game = {
         // group (a Group cannot cross the page.evaluate serialization).
         spawnSpecies: (key, x, z, scaleFactor) =>
             state.enemies.indexOf(debugSpawnSpecies(key, x, z, scaleFactor)),
+        pendingSpawnInfo, // Plain-data pending-warn queue (plan 024: kill-wave band + warn-time specs)
         resetEnemyStreaming,
         applySpeedMultiplier, // Speed recompute path (balance spec — size speed bonus)
         speedUp,

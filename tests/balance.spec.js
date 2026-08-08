@@ -55,7 +55,26 @@ test('two rapid kills pay more than 2x the single-kill bounty (combo)', async ({
     s.collectibles = [];
   });
   await startGame(page);
-  await page.waitForFunction(() => window.__game.state.score >= 25, null, { timeout: 10000 });
+  // The wave read rides INSIDE the first poll that observes the kill (B3
+  // pattern): pending warns live only 0.95s, and a separate post-wait
+  // evaluate could arrive after they materialize under parallel-suite load.
+  const waveHandle = await page.waitForFunction(() => {
+    const s = window.__game.state;
+    if (s.score < 25) return false;
+    const p = s.player.position;
+    return {
+      wave: window.__game.debug.pendingSpawnInfo().map((w) => ({
+        dist: Math.hypot(w.x - p.x, w.z - p.z),
+        killable: w.scaleFactor * 1.2 < s.playerScale
+      }))
+    };
+  }, null, { timeout: 10000 });
+  // Reachable combos (plan 024, audit DT-2): the kill wave itself now
+  // guarantees the chain — one scheduled replacement is a killable
+  // PREY-band body within KILL_SPAWN_PREY_MAX (25u) of the player. This is
+  // WHY the x2 below is reachable at 1x without any speed changes.
+  const { wave } = await waveHandle.jsonValue();
+  expect(wave.some((w) => w.killable && w.dist <= 25.001)).toBe(true);
 
   // Endless spawns go through a 0.95s warn + 0.5s materialize pipeline
   // (src/enemies.js), so the wave spawned by the first kill is not in

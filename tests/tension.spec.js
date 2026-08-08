@@ -82,14 +82,18 @@ test('survival TIME HUD ticks m:ss on the game clock and celebrates the minute',
 test('music intensity: 0 calm, 2 when dread owns the channel, 1 while prey exists (hunt priority)', async ({ page }) => {
   page.on('pageerror', (err) => { throw new Error(`Page error: ${err.message}`); });
   await openGame(page);
-  // Fill the bubble roster with 4 GIANT warns (the kill-spawn path sizes
-  // them 1.5x the player) BEFORE the run starts: streaming's very first
+  // Fill the bubble roster with 4 formed GIANT grunts (height 1.5x the
+  // scale-1 player -> hunters) BEFORE the run starts: streaming's very first
   // rotation spawn is otherwise a killable PREY ~1s in (SPAWN_SIZE_PATTERN
   // opens on 'prey'), which would poison every "no prey anywhere" state
-  // below. With enemies+pending >= target, streaming stays silent.
+  // below. Plan 024 made spawnNewEnemies unusable as the filler (its second
+  // replacement is now a chainable PREY) and the top-up gate counts THREATS
+  // only — so the fill is spawnSpecies giants: 4 + the boot giant >= the
+  // bubble target of non-killable bodies keeps streaming silent, zero prey.
   await page.evaluate(() => {
-    window.__game.debug.spawnNewEnemies();
-    window.__game.debug.spawnNewEnemies();
+    const g = window.__game;
+    const p = g.state.player.position;
+    for (let i = 0; i < 4; i++) g.debug.spawnSpecies('grunt', p.x + 20 + i * 6, p.z, 1.25);
   });
   await startGame(page);
   await freezeEnemies(page);

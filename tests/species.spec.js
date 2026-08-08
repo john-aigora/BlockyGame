@@ -150,6 +150,39 @@ test('hunting cannot starve the prey supply: killable bodies do not block the ro
   expect(out.firstIsPreyBand).toBe(true); // The resumed rotation opens on prey
 });
 
+test('after one kill, a chainable killable enemy exists within 30u (DT-2)', async ({ page }) => {
+  // A scale-3 hero eats the boot giant (height 1.5 -> killable) through the
+  // real collision branch; the kill wave's SECOND replacement is a
+  // prey-band grunt at KILL_SPAWN_PREY_MIN..MAX (18-25u). Poll until a LIVE
+  // killable body stands within 30u — 25 max plus a breath of flee drift
+  // while it materializes. Streaming spawns land at 35-50u and the wave's
+  // giant is 4.5 tall vs the 3.0 player, so only the chainable prey can
+  // satisfy the poll. Food is cleared so pickups don't grow the player into
+  // side effects mid-scene.
+  await page.evaluate(() => {
+    const s = window.__game.state;
+    s.playerScale = 3;
+    s.player.scale.set(3, 3, 3);
+    s.collectTimeLeft = 60;
+    s.collectibles.forEach((c) => s.scene.remove(c));
+    s.collectibles = [];
+  });
+  await startGame(page);
+  await page.evaluate(() => {
+    const s = window.__game.state;
+    const e = s.enemies[0];
+    s.player.position.set(e.position.x, s.player.position.y, e.position.z);
+  });
+  await page.waitForFunction(() => window.__game.state.score >= 25, null, { timeout: 10000 });
+  await page.waitForFunction(() => {
+    const s = window.__game.state;
+    const p = s.player.position;
+    return s.enemies.some((e) => e.userData.killable === true &&
+      Math.hypot(e.position.x - p.x, e.position.z - p.z) <= 30);
+  }, null, { timeout: 10000 });
+  expect(await page.evaluate(() => window.__game.state.gameActive)).toBe(true);
+});
+
 test('a juja kill drops exactly its species foodDrop (2 food)', async ({ page }) => {
   // CLASSIC mode on purpose: endless food placement validates spots and can
   // silently fail near rocks/water (spawnCollectible), which would make an

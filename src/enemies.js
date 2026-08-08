@@ -11,7 +11,8 @@ import {
     ENEMY_COLLIDER_HALF_WIDTH, ENEMY_WEDGE_TIME, ENEMY_DETOUR_TIME,
     ENDLESS_ENEMY_TARGET, ENDLESS_ENEMY_CAP, ENEMY_DESPAWN_RADIUS,
     ENDLESS_SPAWN_MIN, ENDLESS_SPAWN_MAX, ENDLESS_SPAWN_INTERVAL, RAMP_HEIGHT_STEP,
-    PLAYER_COLLIDER_HALF_WIDTH, ENEMY_SPECIES
+    PLAYER_COLLIDER_HALF_WIDTH, ENEMY_SPECIES,
+    KILL_SPAWN_PREY_MIN, KILL_SPAWN_PREY_MAX
 } from './constants.js';
 import { state } from './state.js';
 import { createCharacter, disposeCharacter, shadeColor, CAP_LIGHTEN } from './characters.js';
@@ -218,6 +219,18 @@ export function scheduleEnemySpawn(spawnX, spawnZ, scaleFactor, speciesKey = 'gr
 export function clearPendingSpawns() {
     for (const p of pendingSpawns) releaseWarnDisc(p.mesh);
     pendingSpawns.length = 0;
+}
+
+// Read-only pending-warn introspection for specs (plan 024 steps 4-5):
+// plain data copies of the queue — never the live entries or their meshes.
+export function pendingSpawnInfo() {
+    return pendingSpawns.map((p) => ({
+        x: p.x,
+        z: p.z,
+        scaleFactor: p.scaleFactor,
+        species: p.species,
+        t: p.t
+    }));
 }
 
 // Floating-origin: warn discs + scheduled coords are local-frame too.
@@ -555,22 +568,36 @@ export function spawnNewEnemies() {
     // with a random deviation of +/- 45 degrees (PI/4 radians).
     const angle1 = Math.random() * Math.PI * 2;
     for (let n = 0; n < count; n++) {
+        // Reachable combos (plan 024, audit DT-2): the FIRST replacement
+        // stays the classic giant at the far spawn distance; the SECOND is a
+        // chainable PREY-band grunt at KILL_SPAWN_PREY_MIN..MAX — close
+        // enough to sprint down inside the 4s combo window at 1x speed (see
+        // the constants' reach math). Net kill economy unchanged: still up
+        // to ENEMIES_PER_KILL spawns per kill, one of them now chainable.
+        const chainable = n === 1;
+        let scaleFactor = newEnemyScaleFactor;
+        let dist = spawnDistance;
+        if (chainable) {
+            const [lo, hi] = PREY_HEIGHT_RANGE;
+            scaleFactor = (state.playerScale * (lo + Math.random() * (hi - lo))) / enemyBaseHeight;
+            dist = KILL_SPAWN_PREY_MIN + Math.random() * (KILL_SPAWN_PREY_MAX - KILL_SPAWN_PREY_MIN);
+        }
         let angle = n === 0
             ? angle1
             : angle1 + Math.PI + (Math.random() - 0.5) * (Math.PI / 2);
-        let spawnX = state.player.position.x + Math.cos(angle) * spawnDistance;
-        let spawnZ = state.player.position.z + Math.sin(angle) * spawnDistance;
+        let spawnX = state.player.position.x + Math.cos(angle) * dist;
+        let spawnZ = state.player.position.z + Math.sin(angle) * dist;
         if (endless) {
             // Land placement: keep the angle intent for the first try, then
             // re-roll around the circle. All-water rings are practically
             // impossible at this world's lake coverage; if it happens the
             // bubble spawner (updateEnemyStreaming) tops the count back up.
-            const radius = newEnemyScaleFactor * ENEMY_COLLIDER_HALF_WIDTH;
+            const radius = scaleFactor * ENEMY_COLLIDER_HALF_WIDTH;
             let placed = isWalkable(spawnX, spawnZ, radius);
             for (let attempt = 0; !placed && attempt < 8; attempt++) {
                 angle = Math.random() * Math.PI * 2;
-                spawnX = state.player.position.x + Math.cos(angle) * spawnDistance;
-                spawnZ = state.player.position.z + Math.sin(angle) * spawnDistance;
+                spawnX = state.player.position.x + Math.cos(angle) * dist;
+                spawnZ = state.player.position.z + Math.sin(angle) * dist;
                 placed = isWalkable(spawnX, spawnZ, radius);
             }
             if (!placed) continue;
@@ -581,7 +608,8 @@ export function spawnNewEnemies() {
             spawnZ = wrapped.z;
         }
         // Red ground flash first — monster appears after SPAWN_WARN_TIME.
-        scheduleEnemySpawn(spawnX, spawnZ, newEnemyScaleFactor);
+        // Species: grunt (scheduleEnemySpawn default) for both replacements.
+        scheduleEnemySpawn(spawnX, spawnZ, scaleFactor);
     }
 }
 
