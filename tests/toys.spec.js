@@ -318,6 +318,64 @@ test('endless jumps on Space and pauses on P', async ({ page }) => {
   expect(await page.evaluate(() => window.__game.state.isPaused)).toBe(false);
 });
 
+test('jump apex scales with player size (exact growth formula) and gravity is locked per arc', async ({ page }) => {
+  // Plan 027 Step 5a: apex(scale 3) / apex(scale 1) must match
+  // (JUMP_APEX_HEIGHT + JUMP_APEX_GROWTH*(3-1)) / JUMP_APEX_HEIGHT ±5%,
+  // sampled from real Space-launched arcs stepped frame-by-frame on the
+  // game clock; and a mid-air scale mutation must NOT touch the locked
+  // per-arc gravity (players[0].jump.gravity — the post-026 field).
+  await bootEndless(page);
+  const r = await page.evaluate(() => {
+    const g = window.__game;
+    const s = g.state;
+    s.enemies.forEach((e) => s.scene.remove(e));
+    s.enemies = [];
+    g.debug.clearPendingSpawns();
+    s.players.forEach((p) => { p.collectTimeLeft = 900; });
+    const jump = s.players[0].jump;
+    // Real bind, real physics: dispatch Space, then step the arc to the
+    // ground sampling the peak offset.
+    const jumpAndSample = () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }));
+      const gravity = jump.gravity; // Locked by tryJump the moment the arc starts
+      let max = 0;
+      let guard = 0;
+      while (jump.airborne && guard++ < 300) {
+        g.debug.advance(1 / 60);
+        if (jump.offset > max) max = jump.offset;
+      }
+      return { max, gravity };
+    };
+    const one = jumpAndSample();
+    s.playerScale = 3;
+    s.player.scale.set(3, 3, 3);
+    g.debug.applySpeedMultiplier();
+    const three = jumpAndSample();
+    // Gravity lock: launch at scale 3, grow mid-arc, gravity must hold.
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: ' ' }));
+    const lockedAtLaunch = jump.gravity;
+    g.debug.advance(5 / 60);
+    s.playerScale = 12; // A huge mid-air growth would warp the arc if gravity re-derived
+    s.player.scale.set(12, 12, 12);
+    g.debug.advance(5 / 60);
+    return {
+      one,
+      three,
+      lockedAtLaunch,
+      lockedAfterMutation: jump.gravity,
+      stillAirborne: jump.airborne // Proves the mutation really happened mid-arc
+    };
+  });
+  expect(r.one.max).toBeGreaterThan(1.3); // Scale-1 apex ballpark (1.55, discretely sampled)
+  expect(r.three.gravity).toBeGreaterThan(r.one.gravity); // Bigger arc, its own physics
+  const ratio = r.three.max / r.one.max;
+  const expected = (1.55 + 0.75 * (3 - 1)) / 1.55; // JUMP_APEX_* growth formula
+  expect(ratio).toBeGreaterThan(expected * 0.95);
+  expect(ratio).toBeLessThan(expected * 1.05);
+  expect(r.stillAirborne).toBe(true);
+  expect(r.lockedAfterMutation).toBe(r.lockedAtLaunch); // Exact: nothing re-derived mid-arc
+});
+
 test('the endless board ranks by distance (score per row) and re-ranks stored lists on read', async ({ page }) => {
   await page.addInitScript(() => {
     // Stored under the OLD score-ranked order: the far 500u run sits below
