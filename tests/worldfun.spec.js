@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { bypassGate } from './helpers.js';
+import { bypassGate, startGame, waitForGameOver } from './helpers.js';
 
 // World identity & late game (plan 025): seeded worlds (?seed= / the DAILY
 // world), the daily board, named biome regions, gold food, and the 1000u
@@ -78,6 +78,42 @@ test("TODAY'S WORLD toggle flips the daily seed on and off across its reload", a
   await page.waitForFunction(() => window.__game?.state?.enemies?.length >= 1, null, { timeout: 30000 });
   expect(await page.evaluate(() => window.__game.debug.worldSeedInfo())).toEqual({ seed: 20260726, daily: false });
   await expect(page.locator('#seed-line')).toHaveText('SEED 20260726');
+});
+
+test("a daily death records BOTH boards, shows TODAY'S BEST, and prunes stale seeds", async ({ page }) => {
+  await bypassGate(page);
+  await page.addInitScript(() => {
+    try {
+      sessionStorage.setItem('blocky.daily', '1');
+      // A stale-world row (another day's seed): must neither render nor
+      // survive the next write — pruned on read.
+      localStorage.setItem('blocky.hiscores.daily.v1', JSON.stringify([
+        { score: 99, distance: 9999, seed: 20200101, date: '2020-01-01' }
+      ]));
+      localStorage.removeItem('blocky.hiscores.endless.v1');
+    } catch { /* storage unavailable — the assertions below would fail loudly */ }
+  });
+  await page.goto('/');
+  await page.waitForFunction(() => window.__game?.state?.enemies?.length >= 1, null, { timeout: 30000 });
+  expect(await page.evaluate(() => window.__game.debug.worldSeedInfo().daily)).toBe(true);
+
+  await startGame(page);
+  // End the run immediately: the collect clock is the fastest legal death.
+  await page.evaluate(() => { window.__game.state.collectTimeLeft = 0.05; });
+  await waitForGameOver(page);
+
+  const boards = await page.evaluate(() => ({
+    daily: JSON.parse(localStorage.getItem('blocky.hiscores.daily.v1')),
+    endless: JSON.parse(localStorage.getItem('blocky.hiscores.endless.v1'))
+  }));
+  const daily = await pageDailySeed(page);
+  expect(boards.endless).toHaveLength(1); // A daily run is an endless run too
+  expect(boards.daily).toHaveLength(1); // The stale 20200101 row was pruned by the record's read
+  expect(boards.daily[0].seed).toBe(daily);
+  expect(boards.daily[0].score).toBe(boards.endless[0].score);
+
+  await expect(page.locator('#hiscore-slot')).toContainText("TODAY'S BEST");
+  await expect(page.locator('#hiscore-slot')).not.toContainText('9999'); // Stale row never renders
 });
 
 test('?daily=1 resolves the daily seed without the toggle', async ({ page }) => {

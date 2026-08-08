@@ -5,11 +5,15 @@
 // Keys are versioned: any future schema change (names, per-mode boards)
 // bumps to .v2 with a migration read of .v1.
 
+import { dailySeed, WORLD_SEED } from './constants.js';
+
 const KEY = 'blocky.hiscores.v1'; // Classic board — untouched by endless runs
 const KEY_ENDLESS = 'blocky.hiscores.endless.v1'; // Endless board — its own ladder
+const KEY_DAILY = 'blocky.hiscores.daily.v1'; // TODAY'S WORLD board — seed-stamped rows; stale worlds prune on read
 const MAX = 5;
 
 function keyForMode(mode) {
+    if (mode === 'daily') return KEY_DAILY;
     return mode === 'endless' ? KEY_ENDLESS : KEY;
 }
 
@@ -20,7 +24,9 @@ function keyForMode(mode) {
 // the entry shape is unchanged (distance was always stored), so the key
 // stays v1 — no bump, no migration read.
 function sortBoard(list, mode) {
-    if (mode === 'endless') {
+    if (mode === 'endless' || mode === 'daily') {
+        // The daily ladder IS an endless ladder — same currency (distance),
+        // just scoped to one day's world.
         list.sort((a, b) => (b.distance ?? 0) - (a.distance ?? 0) || b.score - a.score);
     } else {
         list.sort((a, b) => b.score - a.score);
@@ -36,10 +42,18 @@ export function loadHiscores(mode = 'endless') {
         const raw = localStorage.getItem(keyForMode(mode));
         const arr = raw ? JSON.parse(raw) : [];
         if (!Array.isArray(arr)) return [];
-        const list = arr.filter(e => Number.isFinite(e.score));
-        if (mode === 'endless') {
-            // Defensive normalize: every endless row renders (and ranks by)
-            // its distance — a malformed one reads as 0, never NaN.
+        let list = arr.filter(e => Number.isFinite(e.score));
+        if (mode === 'daily') {
+            // Stale worlds evaporate (plan 025): only rows stamped with
+            // TODAY'S seed rank or render — yesterday's board was a
+            // different map, so comparing distances would be a lie. The
+            // pruned list persists at the next write (recordScore).
+            const today = dailySeed();
+            list = list.filter(e => e.seed === today);
+        }
+        if (mode === 'endless' || mode === 'daily') {
+            // Defensive normalize: every distance-ranked row renders (and
+            // ranks by) its distance — a malformed one reads as 0, never NaN.
             for (const e of list) {
                 e.distance = Number.isFinite(e.distance) ? Math.floor(e.distance) : 0;
             }
@@ -56,7 +70,12 @@ export function loadHiscores(mode = 'endless') {
 export function recordScore(score, mode = 'endless', distance = 0) {
     const list = loadHiscores(mode);
     const entry = { score, date: new Date().toISOString().slice(0, 10) };
-    if (mode === 'endless') entry.distance = Math.max(0, Math.floor(distance));
+    if (mode === 'endless' || mode === 'daily') entry.distance = Math.max(0, Math.floor(distance));
+    // Daily rows carry the world they were RUN ON (the resolved seed), not
+    // the clock at death time: a run finishing just past midnight stamps
+    // yesterday's world and the read-side prune correctly retires it from
+    // the new day's board.
+    if (mode === 'daily') entry.seed = WORLD_SEED;
     list.push(entry);
     sortBoard(list, mode);
     const trimmed = list.slice(0, MAX);

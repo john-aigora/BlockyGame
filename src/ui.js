@@ -282,7 +282,7 @@ export function resetTimeDisplay() {
 // #hiscore-slot hosts the local top-5 leaderboard (plan 009). A rank-0
 // NEW BEST earns confetti bursts behind the box + a victory fanfare.
 // Endless deaths also show how far the run pushed.
-export function showDeathScreen(reason, hiscores = [], rank = -1) {
+export function showDeathScreen(reason, hiscores = [], rank = -1, boardTitle = 'BEST RUNS') {
     el.deathReason.textContent = reason;
     el.finalScore.textContent = state.score;
     if (el.finalDistanceLine) {
@@ -293,7 +293,7 @@ export function showDeathScreen(reason, hiscores = [], rank = -1) {
             el.finalDistanceLine.style.display = 'none';
         }
     }
-    renderHiscores(hiscores, rank);
+    renderHiscores(hiscores, rank, boardTitle);
     el.messageBox.style.display = 'block'; // Make the death screen visible
     if (rank === 0) {
         onNewBest(); // Staggered palette bursts, visible around the box
@@ -305,7 +305,7 @@ export function showDeathScreen(reason, hiscores = [], rank = -1) {
 // rank) is highlighted; rank 0 also earns the NEW BEST! badge. An empty
 // list (storage unavailable AND the run failed to record) leaves the slot
 // empty, which hides it.
-function renderHiscores(list, rank) {
+function renderHiscores(list, rank, boardTitle = 'BEST RUNS') {
     el.hiscoreSlot.innerHTML = '';
     if (list.length === 0) return;
     if (rank === 0) {
@@ -316,7 +316,7 @@ function renderHiscores(list, rank) {
     }
     const title = document.createElement('p');
     title.className = 'hiscore-title';
-    title.textContent = 'BEST RUNS';
+    title.textContent = boardTitle; // "TODAY'S BEST" on a daily-world death (plan 025)
     el.hiscoreSlot.appendChild(title);
     const ol = document.createElement('ol');
     ol.className = 'hiscore-list';
@@ -390,11 +390,19 @@ export function endGame(reason) {
     onPlayerDeath(); // Squash flat + orange-red burst (pool), behind the beat
     // Per-mode boards: the death screen shows the ladder of the mode that
     // just ended, and endless runs never pollute the classic top-5.
-    const { list, rank } = recordScore(state.score, state.worldMode, state.furthestDistance);
+    let { list, rank } = recordScore(state.score, state.worldMode, state.furthestDistance);
+    let boardTitle = 'BEST RUNS';
+    if (DAILY_WORLD && state.worldMode === 'endless') {
+        // A daily run IS an endless run — the solo board above already
+        // recorded it. It ALSO ranks on today's world's own ladder, and
+        // THAT is the board the death screen shows (the family race).
+        ({ list, rank } = recordScore(state.score, 'daily', state.furthestDistance));
+        boardTitle = "TODAY'S BEST";
+    }
     deathScreenTimer = setTimeout(() => {
         deathScreenTimer = null;
         if (state.gameActive || state.onStartScreen) return; // A restart beat us to it
-        showDeathScreen(reason, list, rank);
+        showDeathScreen(reason, list, rank, boardTitle);
     }, DEATH_SCREEN_DELAY * 1000);
 }
 
