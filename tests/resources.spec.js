@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openGame, startGame } from './helpers.js';
+import { openGame, startGame, settleFrames } from './helpers.js';
 
 // Rendering & resource hygiene (plan 007): shared GPU resources (no geometry
 // growth across the food cycle), device pixel ratio applied, and a kill-flash
@@ -11,8 +11,9 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('food spawn/remove cycle does not grow the geometry count', async ({ page }) => {
-  // Let the first frames render so all boot-time geometries are registered.
-  await page.waitForTimeout(300);
+  // Let the first frames render so all boot-time geometries are registered
+  // (registration happens at render — frames, not any clock, are the axis).
+  await settleFrames(page, 3);
 
   // Endless streams chunk geometry on movement; measure after warm-up so the
   // pool is settled (plan 017): run one full spawn/remove cycle, then wait
@@ -25,19 +26,19 @@ test('food spawn/remove cycle does not grow the geometry count', async ({ page }
     s.collectibles = [];
   });
   await page.waitForFunction(() => window.__game.debug.terrainInfo().queued === 0, null, { timeout: 30000 });
-  await page.waitForTimeout(200); // A settled frame registers late geometries
+  await settleFrames(page, 3); // A rendered frame registers late geometries
   const before = await page.evaluate(() => window.__game.state.renderer.info.memory.geometries);
 
   await page.evaluate(() => {
     for (let i = 0; i < 30; i++) window.__game.debug.spawnNearPlayer();
   });
-  await page.waitForTimeout(200); // Render with the 30 extra collectibles
+  await settleFrames(page, 3); // Render with the 30 extra collectibles
   await page.evaluate(() => {
     const s = window.__game.state;
     s.collectibles.forEach((c) => s.scene.remove(c));
     s.collectibles = [];
   });
-  await page.waitForTimeout(200);
+  await settleFrames(page, 3);
 
   const after = await page.evaluate(() => window.__game.state.renderer.info.memory.geometries);
   // Shared geometry: the cycle must not allocate (delta ≤ 1 allows three.js

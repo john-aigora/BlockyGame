@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openGame, startGame, waitGameSeconds } from './helpers.js';
+import { openGame, startGame, waitGameSeconds, settleFrames } from './helpers.js';
 
 // Visual juice (plan 015): the particle engine must be a true pool (no GPU
 // allocation per burst/collect), and the reduced-motion code paths must
@@ -11,7 +11,7 @@ test.beforeEach(async ({ page }) => {
 
 test('50 bursts + 10 collects do not grow the geometry count (pool discipline)', async ({ page }) => {
   await openGame(page);
-  await page.waitForTimeout(300); // Let boot-time geometries register
+  await settleFrames(page, 3); // Boot-time geometries register at render, so wait FRAMES
 
   // Big player: enemies flee, so teleport-collecting can't end the run.
   await page.evaluate(() => {
@@ -46,11 +46,11 @@ test('50 bursts + 10 collects do not grow the geometry count (pool discipline)',
       const food = s.collectibles[0];
       if (food) s.player.position.set(food.position.x, 0, food.position.z);
     });
-    await page.waitForTimeout(100);
+    await waitGameSeconds(page, 0.1); // The collect lands on a game-clock frame
   }
   await waitGameSeconds(page, 1);
   await page.waitForFunction(() => window.__game.debug.terrainInfo().queued === 0, null, { timeout: 30000 });
-  await page.waitForTimeout(200); // A settled frame registers late geometries
+  await settleFrames(page, 3); // A rendered frame registers late geometries
   const { before, scoreBefore } = await page.evaluate(() => ({
     before: window.__game.state.renderer.info.memory.geometries,
     scoreBefore: window.__game.state.score
@@ -62,7 +62,7 @@ test('50 bursts + 10 collects do not grow the geometry count (pool discipline)',
       window.__game.debug.spawnBurst({ x: 0, y: 1, z: 0 }, { count: 30 });
     }
   });
-  await page.waitForTimeout(200); // Render with particles live
+  await settleFrames(page, 3); // Render with particles live (registration is per-frame)
 
   // And the real path: 10 collects via teleporting onto food
   for (let i = 0; i < 10; i++) {
@@ -76,7 +76,7 @@ test('50 bursts + 10 collects do not grow the geometry count (pool discipline)',
       const food = s.collectibles[0];
       if (food) s.player.position.set(food.position.x, 0, food.position.z);
     });
-    await page.waitForTimeout(100);
+    await waitGameSeconds(page, 0.1); // The collect lands on a game-clock frame
   }
   const score = await page.evaluate(() => window.__game.state.score);
   expect(score).toBeGreaterThan(scoreBefore); // The MEASURED collect path (burst + squash) really ran
@@ -87,7 +87,7 @@ test('50 bursts + 10 collects do not grow the geometry count (pool discipline)',
 
 test('score popups are pooled: repeated spawns never grow GPU resources', async ({ page }) => {
   await openGame(page);
-  await page.waitForTimeout(300); // Let boot-time geometries/textures register
+  await settleFrames(page, 3); // Boot-time geometries/textures register at render
 
   // Warmup: cycle the whole 8-sprite ring once so every pooled canvas
   // texture (and the shared sprite geometry) registers with the renderer.
@@ -96,11 +96,14 @@ test('score popups are pooled: repeated spawns never grow GPU resources', async 
       window.__game.debug.spawnScorePopup({ x: i, y: 1, z: 0 }, 25 * (i + 1));
     }
   });
-  await page.waitForTimeout(250); // All 8 render at least one frame
+  await settleFrames(page, 3); // All 8 render at least one frame
   // Boot-time chunk builds may still be completing; sample `before` only
   // once the terrain build queue is empty (plan 017; terrainInfo().queued
-  // is the build-queue-length signal).
+  // is the build-queue-length signal), THEN let a settled frame render so
+  // late registrations land before the snapshot — the same drain-then-
+  // settle order the geometry-pool spec above uses (H4, B1 review).
   await page.waitForFunction(() => window.__game.debug.terrainInfo().queued === 0, null, { timeout: 30000 });
+  await settleFrames(page, 3);
   const before = await page.evaluate(() => ({
     geometries: window.__game.state.renderer.info.memory.geometries,
     textures: window.__game.state.renderer.info.memory.textures
@@ -112,7 +115,7 @@ test('score popups are pooled: repeated spawns never grow GPU resources', async 
       window.__game.debug.spawnScorePopup({ x: i % 5, y: 1, z: 1 }, 100 + i);
     }
   });
-  await page.waitForTimeout(250);
+  await settleFrames(page, 3);
   const after = await page.evaluate(() => ({
     geometries: window.__game.state.renderer.info.memory.geometries,
     textures: window.__game.state.renderer.info.memory.textures
@@ -134,7 +137,18 @@ test('boots and plays cleanly with prefers-reduced-motion', async ({ page }) => 
     const food = s.collectibles[0];
     if (food) s.player.position.set(food.position.x, 0, food.position.z);
   });
-  await page.waitForTimeout(5000); // Play 5s: walk/glow/aura paths all execute
+  // Play 5 GAME seconds: walk/glow/aura paths all execute under the flag.
+  // Death-proofed for the game-clock wait (a huge hero flips every enemy
+  // killable → they flee, which ALSO exercises the aura path; the fat
+  // clock removes collect death), so the wait can never hang on a frozen
+  // death clock.
+  await page.evaluate(() => {
+    const s = window.__game.state;
+    s.playerScale = 6;
+    s.player.scale.set(6, 6, 6);
+    s.players.forEach((p) => { p.collectTimeLeft = 900; });
+  });
+  await waitGameSeconds(page, 5);
   const active = await page.evaluate(() => window.__game.state.gameActive);
-  expect(typeof active).toBe('boolean'); // No pageerror is the real assertion
+  expect(active).toBe(true); // The 5 simulated seconds ran clean to the end
 });

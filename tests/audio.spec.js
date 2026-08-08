@@ -97,12 +97,18 @@ test('music lifecycle: off before start, on during the run, off after death; nev
   await startGame(page);
   expect(await musicActive()).toBe(true);
   await waitForGameOver(page);
+  // GENUINELY wall-clock (plan 027 Step 6): the 0.3s music fadeout runs on
+  // the Web Audio context clock, which no game-clock helper can advance.
+  // eslint-disable-next-line no-restricted-syntax
   await page.waitForTimeout(1000); // let the 0.3s fadeout finish
   expect(await musicActive()).toBe(false);
   // Muted at boot: the scheduler must never start at all.
   await page.addInitScript(() => localStorage.setItem('blocky.muted', '1'));
   await openGame(page);
   await startGame(page);
+  // GENUINELY wall-clock: the music scheduler arms itself on Web Audio /
+  // wall timers — this wait gives it real time to (wrongly) start.
+  // eslint-disable-next-line no-restricted-syntax
   await page.waitForTimeout(300);
   expect(await musicActive()).toBe(false);
 });

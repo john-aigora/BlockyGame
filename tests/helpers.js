@@ -131,9 +131,9 @@ export async function settleFrames(page, count = 2) {
 }
 
 // Waits until the simulation advances `seconds` more GAME-clock seconds
-// (state.runTime is dt-accumulated in update()). Use this — never a
-// wall-clock waitForTimeout — before asserting on anything the game clock
-// drives; the generous wall ceiling exists only for load headroom.
+// (state.runTime is dt-accumulated in update()). Use this — never a fixed
+// wall-clock wait (lint-banned in tests/) — before asserting on anything
+// the game clock drives; the generous wall ceiling is only load headroom.
 export async function waitGameSeconds(page, seconds) {
   const start = await page.evaluate(() => window.__game.state.runTime);
   await page.waitForFunction(
