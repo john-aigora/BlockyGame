@@ -142,3 +142,48 @@
   grok_tips.md → docs/history with header + referrers (a77b7b9).
 - Gate: 92 passed / 0 failed x2 consecutive (4.8m each) + lint 0. B2 flipped
   blocked → resolved in session json (018 in B2, 021 here, race ended in B3).
+
+## 2026-08-08 — B4 worker: plan 022 complete (16/16 items, none skipped)
+
+- One commit per item (9476747..3fb5924). Debt: MOVEMENT_MODE enum → boolean
+  CONTINUOUS_MOVEMENT (D-3; the typeof-location guard added there is what
+  makes constants.js Node-importable — enabling specs to import collider
+  constants); mode-picker corpse out with the live HUD toggles extracted to
+  updateModeHud (D-4; `.mode-button` CSS KEPT per the item guard — 026
+  reuses it); hiscores defaults → endless + saveWorldMode/MODE_KEY deleted
+  outright (D-5; nothing ever read the key back); input forks collapsed to
+  ONE bind set — pad A=jump/B=pause, Space=jump/P=pause everywhere (D-6);
+  write-only playerSpeed + duplicate container ref gone (D-10); collider↔
+  geometry tripwire (debug.heroBodyWidth/enemyBodyWidth + fairness assert)
+  and toys 0.54 literals → imported constant (D-11); SPEED_LADDER derived
+  from speedMultipliers + loud indexForMultiplier miss (D-12); phantom
+  JUMP_GRAVITY/JUMP_VELOCITY deleted (D-13).
+- Correctness: modifier chords bail before every game bind (C-10 — proven
+  red-first: Cmd+F used to cycle speed); wobble settle exp(-11·dt) (C-12);
+  seamDelta routes through torusDeltaComponent and classic reimage now
+  moves pending warn discs too via enemies.reimagePendingSpawns (C-13
+  partial).
+- UI (screenshots in .elves/runtime/): KILL!/combo moved INTO
+  #game-container — the before-shot proves they anchored to the VIEWPORT
+  (kill top=10px vs frame top=60px; combo buried under the ORIGINAL '25
+  link); after: top 46/100px, z-50, 1Hz flash invariant untouched (UI-1).
+  #instructions line-height 1.6 + display:block controls-hint ends the
+  wrapped-line glyph collision at 1280×800 and 800×450 (UI-2).
+- Security: vercel.json created (nosniff + strict-origin-when-cross-origin
+  site-wide; CSP on /original.html + /original/(.*) scoped to the archive's
+  real cdnjs + Google-Fonts deps; archive itself untouched) (SEC-1); gate
+  password single-sourced from src/gate.js — the literal is gone from
+  tests, spec title, readme, and the index.html comment (SEC-3).
+- Driver-granted H7: behind-camera arrow push scales by 1.001/max(|x|,|y|)
+  instead of fixed NDC radius 1000 — only the dominant axis saturates, so
+  the per-axis clamp lands the TRUE edge point; new diagonal fairness case
+  proven red-first (old code corner-pinned it exactly; ~25-30° error class).
+- Gate at final HEAD: suite is now 95 tests (+3, each red-proven or a
+  tripwire). Full runs: 94/95, 95/95, 94/95, 95/95, 95/95 — x2 consecutive
+  green achieved (runs 4-5). The two singleton flakes were DIFFERENT specs
+  (endless-stream water walk; effects pool count), each solo-green
+  immediately after, neither touching batch surfaces in simulation-relevant
+  ways — the known 3-worker load-flake class (95 tests re-tile the schedule
+  again; worker-count policy left to the driver). toys:70 jump also flaked
+  once during item-3 verify (solo + full rerun green 2/2). lint 0 and build
+  exit 0 at final HEAD.
