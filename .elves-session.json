@@ -634,8 +634,69 @@
         "028"
       ],
       "title": "Perf pass 2 + final docs re-touch + report",
-      "status": "pending",
-      "acceptance": []
+      "status": "complete",
+      "acceptance": [
+        {
+          "id": "028-1",
+          "criterion": "Step 0 decision table recorded with numbers; skipped steps justified",
+          "met": true,
+          "evidence": "H10 3-statue rig, 6 scenarios (parked + 60gs travel, solo/2P x 1x/5x), per-frame EMA-reconstructed traces, zero deaths; full table in execution log B10 + raw JSONs in .elves/runtime/b10-rig-*.json; every skip carries its numbers (rows 028-s1..s3)"
+        },
+        {
+          "id": "028-s1",
+          "criterion": "Step 1 incremental water recolor",
+          "met": true,
+          "evidence": "SKIPPED per Step 0 numbers: recolor frames +0.49/+0.54ms (solo 1x/5x) and +0.58/+0.62ms (2P) over quiet, worst absolute recolor frame 2.7ms — criterion was an avg jump >2ms (audit P-3 est. 3-8ms measured 6-16x pessimistic)"
+        },
+        {
+          "id": "028-s2",
+          "criterion": "Step 2 chunk-tint corner interpolation",
+          "met": true,
+          "evidence": "SKIPPED per Step 0 numbers: build frames at 5x +0.37ms (solo, max 2.5) / +0.47ms (2P, max 3.5 at ~2 builds/frame) over quiet — no spike"
+        },
+        {
+          "id": "028-s3",
+          "criterion": "Step 3 instancing (rocks/food/clouds)",
+          "met": true,
+          "evidence": "SKIPPED per Step 0 numbers: 2P steady-state calls 286 parked / 273-324 travel medians < the plan's >400 gate (transient p95/max 406-591 enemy-cluster peaks recorded honestly; enemy meshes, not scenery, dominate them)"
+        },
+        {
+          "id": "028-2",
+          "criterion": "npm test 0 failed x2; visuals verified by screenshots per step",
+          "met": true,
+          "evidence": "150/150 twice at final code state (7.2m + 7.2m, workers 3); no gated step ran, so no per-step visual screenshots owed — the shipped extras are visual no-ops pinned by specs (worldfun key-equality + DISCOVERED e2e; resource-plateau suite)"
+        },
+        {
+          "id": "028-3",
+          "criterion": "perfInfo before/after table in run log",
+          "met": true,
+          "evidence": "Execution log B10: baseline table + after-measurement at 2c74403 (parked scenarios reproduce byte-identically 136/286 calls; travel costs within noise — no regression)"
+        },
+        {
+          "id": "028-4",
+          "criterion": "plans/README.md updated",
+          "met": true,
+          "evidence": "Row 028 DONE with inline skip table (aa2976b); run-section status line added (017-028 all DONE, branch unmerged, 018 hardware check pending family)"
+        },
+        {
+          "id": "H8",
+          "criterion": "Chunk-cull pooled-reacquire hardening (B2+B3 review adv.7 grant)",
+          "met": true,
+          "evidence": "acquireChunkMesh pooled path gates frustumCulled on userData.registered, set by the eager-register onAfterRender flip at first real draw; reset-twice-without-render hole closed with rationale comment (unreachable today); 2c74403"
+        },
+        {
+          "id": "H13",
+          "criterion": "biomeRegion hot-path allocation split (B7 review adv.2 grant)",
+          "met": true,
+          "evidence": "biomeRegionKey identity-only hot path in updateRegionDiscovery + resetRegionTracking; display object built only on discovery commits; 23,961-point key sweep 0 mismatches; micro 34ns vs 111.5ns/call; worldfun pins hot===display keys; 2c74403"
+        },
+        {
+          "id": "B10-docs",
+          "criterion": "Final docs re-touch: readme + CLAUDE.md describe what shipped; drift only",
+          "met": true,
+          "evidence": "Three drift fixes (readme tests listing +spawnwarn, readme deploy vs shipped vercel.json, CLAUDE.md suite ~5->~7 min); all other claims verified against code with no drift (species/daily/titan/2P/controls/balance numbers); aa2976b"
+        }
+      ]
     }
   ],
   "master_acceptance": [

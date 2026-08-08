@@ -703,3 +703,74 @@ All five steps landed; suite grew 95 → 102 (+4 tension, +3 audio).
   prefers clearing.
 - B9 is tests-only: dedicated review SKIPPED in favor of the imminent
   terminal cumulative review (recorded decision, elves proof-budget rule).
+
+## 2026-08-08 — B10 (plan 028): perf pass 2 — measured, all three gated steps SKIPPED on the numbers; H8+H13 shipped; final docs re-touch
+
+- MEASUREMENT DISCIPLINE (Step 0, binding): transient rig spec (H10 law — the
+  pinned 3-giant-statue ring at fixed offsets riding the hero), 1280x800,
+  per-frame instrumented. Per-frame body cost RECONSTRUCTED exactly from the
+  frameMsAvg EMA (sample_k = avg_{k-1} + 20*(avg_k - avg_{k-1})); frames
+  classified quiet / recolor / build by terrainInfo counter deltas. Travel
+  scenarios: 60 game-seconds each, REAL input path (synthetic key events on
+  document), stall-rotate steering (90° when 45 frames move <1.5u — first rig
+  draft marched blind north and parked against the same shoreline in all four
+  scenarios, betrayed by identical 160-162u distances at 1x AND 5x; kept as
+  corroboration, per-event costs match), radial tall-foe push so no scripted
+  march can end in a contact death. Zero deaths in all measured runs. Raw
+  traces: .elves/runtime/b10-rig-{baseline,after,baseline-v1-stalled}.json;
+  rig deleted before the gates.
+- DECISION TABLE (baseline at 2c74403^, all four travel runs 60.2-60.7gs):
+  | scenario | calls med/p95/max | tris | quiet ms | recolor ms (n) | build ms (n) |
+  | parked-solo | 136/136/136 | 48.6k | 0.69 | — | — |
+  | parked-2p | 286/286/286 | 82.5k | 1.09 | — | — |
+  | travel-solo-1x | 139/227/243 | 56.3k | 0.78 | 1.27 max 1.5 (26) | 1.25 max 2.1 (56) |
+  | travel-solo-5x | 121/223/283 | 57.5k | 0.78 | 1.32 max 1.8 (73) | 1.15 max 2.5 (156) |
+  | travel-2p-1x | 324/483/550 | 93.6k | 1.43 | 2.00 max 2.3 (25) | 1.85 max 2.9 (63) |
+  | travel-2p-5x | 273/433/552 | 98.2k | 1.40 | 2.02 max 2.7 (64) | 1.87 max 3.5 (182) |
+- STEP 1 (water recolor) SKIPPED per Step 0 numbers: recolor frames cost
+  +0.49/+0.54ms over quiet solo, +0.58/+0.62ms in 2P — the criterion was an
+  avg jump >2ms; the WORST absolute recolor frame anywhere was 2.7ms total.
+  The audit's 3-8ms burst estimate (P-3) measured 6-16x pessimistic on this
+  hardware: 6,561 verts x 4 noise octaves is sub-millisecond work here.
+- STEP 2 (chunk-tint corner interpolation) SKIPPED per Step 0 numbers: build
+  frames at 5x cost +0.37ms (solo) / +0.47ms (2P) over quiet, worst absolute
+  3.5ms at ~2 builds/frame — no spike (P-12's 1.2-2.6ms estimate roughly
+  right per-burst, but ~20% of a 60fps budget at worst, not a stutter).
+- STEP 3 (instancing) SKIPPED per Step 0 numbers: 2P steady-state calls
+  286 parked / 273-324 travel medians — under the plan's >400 gate (B8's 410
+  was a different scene mix; same game code — B9 was tests-only). Honest
+  caveat recorded: transient P95/max peaks 406-591 when enemy clusters +
+  camera facing align, but the plan gates on steady state, and the
+  L-effort/MED-risk shader-patch ladder is not justified by transients that
+  enemy meshes (not scenery) dominate.
+- H13 SHIPPED (B7 review adv.2 grant): biomeRegion split into biomeRegionKey
+  (identity-only hot path — one short string, no object/name-hash/CSS-color
+  per player per frame from updateRegionDiscovery) + biomeRegion (display,
+  built only on discovery commits / resets / debug). Shared biomeBin keeps
+  one binning rule. Evidence: 23,961-point key-equality sweep 0 mismatches;
+  micro 34ns vs 111.5ns per call (3.3x); worldfun pins hot===display keys
+  permanently; DISCOVERED banner e2e still green.
+- H8 SHIPPED (B2+B3 review adv.7 grant): pooled chunk-mesh re-acquire now
+  gates frustumCulled on mesh.userData.registered (set by the eager-register
+  onAfterRender flip at first real draw). Closes the reset-twice-without-
+  render hole where a never-rendered pooled geometry could re-enter culled
+  and defer GPU registration past the resource-plateau specs' premise.
+  Unreachable today (every reset path renders between builds) — closed with
+  the full why in the comment; un-registered re-acquires simply re-enter the
+  eager path their still-pending flip already implements.
+- AFTER-measurement (same rig, at 2c74403): parked scenarios reproduce
+  byte-identically (136 / 286 calls, tris identical) — the deterministic rig
+  is exact; travel quiet/event costs within noise of baseline (quiet 0.76/
+  0.82/1.37/1.38ms; recolor 1.29-2.01; build 1.08-1.75). No regression.
+- FINAL DOCS RE-TOUCH (021 maintenance note): readme tests listing +spawnwarn
+  (B9 drift); readme deploy step no longer claims "no config file needed"
+  (B4 shipped vercel.json security headers); CLAUDE.md suite ~5 -> ~7 min
+  (150 tests / 3 workers). Verified against code with no drift found: species
+  text, daily-world + seed lines, titan beat, 2P section + controls table,
+  pad X/Y speed mapping, combo window 4s, cap 12, gold 5pts, milestone 250u,
+  distance-first ranking. plans/README: row 028 DONE (skip table inline),
+  run-section status line added (017-028 all DONE, branch unmerged).
+- GATES at final code state (rig deleted, 2c74403+aa2976b): 150/150 twice
+  consecutively (7.2m, 7.3m, workers 3, zero flakes — B9's zero-flake state
+  holds); npm run build exit 0; lint 0. Commits 2c74403 (H13+H8), aa2976b
+  (docs re-touch), Close. No plan STOP condition fired anywhere in B10.
