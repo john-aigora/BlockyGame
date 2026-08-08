@@ -607,7 +607,7 @@ export function killEnemy(enemyGroup, index, player = state.players[0]) {
     disposeCharacter(enemyGroup); // Release the per-instance body material
     state.enemies.splice(index, 1);
     sfx.kill(player.comboCount - 1); // Pitch climbs with the combo
-    rumble(55, 0.45); // Pad kick on kill
+    rumble(55, 0.45, player.seat); // Pad kick on the killer's own pad
 
     // Kill bounty (plan 011): hunting must beat pacifism — the README's
     // "strategically defeating enemies" promise, now actually paid.

@@ -166,6 +166,77 @@ function scanActiveGamepad() {
     return null;
 }
 
+// --- Two-player seat claims (plan 026; battle-paddle port) ---
+// A pad CLAIMS a seat by producing real directional input (deadzoned stick
+// or D-pad non-zero) — silent ghost interfaces (dual DB9 adapters) can
+// never claim. Claims are keyed by gamepad.index (the only stable identity
+// on those adapters — never the id string), persist until disconnect, and
+// the FIRST live pad takes P1 unless P1's keyboard half was used this run
+// (then P2 — the keyboard player keeps their hero); the second live pad
+// takes the other seat. Solo never consults any of this: the single-pad
+// activity-scan path below is untouched.
+const seatClaims = [null, null]; // seat → gamepad.index (null = open)
+const kbSeatActive = [false, false]; // This run used the seat's keyboard half (claim tiebreak)
+
+// New run: nobody has "used the keyboard" yet (game.js setupNewGame).
+export function resetSeatActivity() {
+    kbSeatActive[0] = false;
+    kbSeatActive[1] = false;
+}
+
+function seatForPadIndex(index) {
+    if (seatClaims[0] === index) return 0;
+    if (seatClaims[1] === index) return 1;
+    return -1;
+}
+
+// gamepad.index normally equals the list slot, but the mock harness (and
+// exotic stacks) may not — resolve by scanning.
+function padByIndex(list, index) {
+    if (!list) return null;
+    for (let i = 0; i < list.length; i++) {
+        if (list[i] && list[i].index === index && list[i].connected) return list[i];
+    }
+    return null;
+}
+
+// Deadzoned direction magnitude of THIS pad (stick + D-pad) — the claim test.
+function padDirectionMagnitude(gp) {
+    const ax = gp.axes || [];
+    const stick = applyDeadzone(axisValue(ax, 0), axisValue(ax, 1), GAMEPAD_DEADZONE);
+    const dpad = readDpad(gp);
+    return Math.hypot(stick.x + dpad.x, stick.y + dpad.z);
+}
+
+// Runs every 2P poll: vacate dead claims, seat live claimants.
+function refreshSeatClaims(list) {
+    for (let seat = 0; seat < 2; seat++) {
+        if (seatClaims[seat] != null && !padByIndex(list, seatClaims[seat])) {
+            seatClaims[seat] = null; // Disconnect vacates the seat
+        }
+    }
+    for (let i = 0; i < list.length; i++) {
+        const gp = list[i];
+        if (!gp || !gp.connected) continue;
+        if (seatForPadIndex(gp.index) >= 0) continue; // Already seated
+        if (padDirectionMagnitude(gp) <= 0) continue; // Ghosts never claim
+        let seat = -1;
+        if (seatClaims[0] == null && seatClaims[1] == null) {
+            seat = kbSeatActive[0] ? 1 : 0; // First live pad: P1 unless P1 is a keyboard player this run
+        } else if (seatClaims[0] == null) {
+            seat = 0;
+        } else if (seatClaims[1] == null) {
+            seat = 1;
+        }
+        if (seat >= 0) seatClaims[seat] = gp.index;
+    }
+}
+
+// Read-only snapshot for specs/debug (plain data, never the live arrays).
+export function seatInfo() {
+    return { claims: [...seatClaims], keyboardActive: [...kbSeatActive] };
+}
+
 // D-pad as buttons (standard) or hat axis (DirectInput F310: usually axis 9,
 // sometimes 5/6/7; values are discrete ±1 / ±0.714 / 0).
 // Standard-mapping pads expose D-pad only as buttons 12-15 — never scan
@@ -212,14 +283,13 @@ function readDpad(gp) {
     return { x: 0, z: 0 };
 }
 
-// Unit-length (or zero) move vector from left stick + D-pad. Stick Y is
-// screen-down positive on the standard mapping, matching our world +Z /
-// "S key" convention used by keyboardVector.
-export function gamepadVector() {
-    const gp = activeGamepad();
-    gamepadAxesScratch.x = 0;
-    gamepadAxesScratch.z = 0;
-    if (!gp) return gamepadAxesScratch;
+// Unit-length (or zero) move vector from ONE pad's left stick + D-pad.
+// Stick Y is screen-down positive on the standard mapping, matching our
+// world +Z / "S key" convention used by keyboardVector.
+function computePadVector(gp, out) {
+    out.x = 0;
+    out.z = 0;
+    if (!gp) return out;
 
     const ax = gp.axes || [];
     // Left stick is always axes 0/1 on F310 X and D modes and on standard pads.
@@ -234,13 +304,32 @@ export function gamepadVector() {
         x /= mag;
         z /= mag;
     }
-    gamepadAxesScratch.x = x;
-    gamepadAxesScratch.z = z;
-    return gamepadAxesScratch;
+    out.x = x;
+    out.z = z;
+    return out;
+}
+
+// The ACTIVE pad's vector (solo path + debug HUD).
+export function gamepadVector() {
+    return computePadVector(activeGamepad(), gamepadAxesScratch);
+}
+
+// The vector of the pad CLAIMING this seat (2P path); zero when unseated.
+const seatPadScratch = { x: 0, z: 0 };
+function seatPadVector(seat) {
+    const idx = seatClaims[seat];
+    if (idx == null) {
+        seatPadScratch.x = 0;
+        seatPadScratch.z = 0;
+        return seatPadScratch;
+    }
+    const list = navigator.getGamepads ? navigator.getGamepads() : null;
+    return computePadVector(padByIndex(list, idx), seatPadScratch);
 }
 
 // Re-export for debug callers that already import input.
 export { rumble } from './rumble.js';
+import { setSeatPadResolver } from './rumble.js';
 
 function anyFaceEdge(gp) {
     const b = padButtons(gp);
@@ -295,6 +384,14 @@ export function gamepadDebugInfo() {
 // start / death) because update() early-returns outside a live run.
 export function pollGamepad() {
     padPollCounter++; // New frame — the first activeGamepad() call rescans
+    if (state.players.length >= 2) {
+        // 2P (plan 026): EVERY connected pad polls — seats claim, edge
+        // actions fire per pad (Start pauses both from either pad; A jumps
+        // for the pad's OWN seat). The solo single-active-pad path below is
+        // untouched.
+        pollGamepadSeats();
+        return;
+    }
     const gp = activeGamepad();
     if (!gp) {
         if (prevPadButtonsByIndex.size) prevPadButtonsByIndex.clear();
@@ -394,6 +491,103 @@ export function pollGamepad() {
     snapshotButtons(gp);
 }
 
+// The 2P poll body (plan 026): claims + per-pad edges. Reuses the per-pad
+// edge Map (prevPadButtonsByIndex) — each pad's buttons edge independently,
+// and a fresh pad seeds without firing, exactly like the solo hand-off rule.
+function pollGamepadSeats() {
+    const list = navigator.getGamepads ? navigator.getGamepads() : null;
+    if (!list) {
+        if (prevPadButtonsByIndex.size) prevPadButtonsByIndex.clear();
+        padConnected = false;
+        updatePadHud(null);
+        updatePadDebug(null);
+        return;
+    }
+    refreshSeatClaims(list);
+    let anyPad = null;
+    for (let i = 0; i < list.length; i++) {
+        const gp = list[i];
+        if (!gp || !gp.connected) continue;
+        if (!anyPad) anyPad = gp;
+        // First poll of this pad: seed edge state without firing — a button
+        // already held must not auto-start, jump, or toggle pause.
+        if (!prevPadButtonsByIndex.has(gp.index)) {
+            snapshotButtons(gp);
+            continue;
+        }
+        const b = padButtons(gp);
+
+        // Start overlay: face/start begins the run (either pad).
+        if (state.onStartScreen) {
+            if (anyFaceEdge(gp)) startRun();
+            snapshotButtons(gp);
+            continue;
+        }
+
+        // Death screen: A or Start returns to the start overlay (either pad).
+        if (!state.gameActive) {
+            if (buttonEdge(gp, b.a) || buttonEdge(gp, b.start)) resetGame();
+            snapshotButtons(gp);
+            continue;
+        }
+
+        // Start+Select chord = mid-run restart (priority over single binds).
+        if (buttonPressed(gp, b.start) && buttonPressed(gp, b.back) &&
+            (buttonEdge(gp, b.start) || buttonEdge(gp, b.back))) {
+            sfx.click();
+            resetGame();
+            snapshotButtons(gp);
+            continue;
+        }
+
+        // Start = pause BOTH (plan 026). Select/Back = mute.
+        if (buttonEdge(gp, b.start)) {
+            sfx.click();
+            togglePause();
+        }
+        if (buttonEdge(gp, b.back)) {
+            toggleMuteFromUI();
+        }
+
+        // A = jump for the pad's OWN seat (a claim requires directional
+        // input first — an unseated pad's A does nothing mid-run yet).
+        // B = pause, shared like Start.
+        if (!CONTINUOUS_MOVEMENT) {
+            if (buttonEdge(gp, b.a)) {
+                const seat = seatForPadIndex(gp.index);
+                if (seat >= 0) tryJump(seat);
+            }
+            if (buttonEdge(gp, b.b)) {
+                sfx.click();
+                togglePause();
+            }
+        }
+
+        // Speed and zoom are world-shared — either pad may drive them.
+        if (!state.isPaused && buttonEdge(gp, b.y)) {
+            sfx.click();
+            speedUp();
+        }
+        if (!state.isPaused && buttonEdge(gp, b.x)) {
+            sfx.click();
+            speedDown();
+        }
+        if (buttonEdge(gp, b.lb)) {
+            sfx.click();
+            zoomOut();
+        }
+        if (buttonEdge(gp, b.rb)) {
+            sfx.click();
+            zoomIn();
+        }
+
+        snapshotButtons(gp);
+    }
+    padConnected = !!anyPad;
+    updatePadHud(anyPad);
+    updatePadDebug(anyPad);
+}
+
 // Status line: pad id + short bind reminder when live. The composed string
 // is compared against the last write (plan 020 P-7): a per-frame
 // textContent assignment invalidates layout even when the text is
@@ -443,6 +637,14 @@ function updatePadDebug(gp) {
 }
 
 export function setupGamepad() {
+    // Seat-aware rumble (plan 026): kills/collects/deaths pulse the pad of
+    // the seat that earned them. Injection (not import) keeps rumble.js free
+    // of input.js — see rumble.js.
+    setSeatPadResolver((seat) => {
+        const idx = seatClaims[seat];
+        if (idx == null) return null;
+        return padByIndex(navigator.getGamepads ? navigator.getGamepads() : null, idx);
+    });
     window.addEventListener('gamepadconnected', (e) => {
         padPollCounter++; // Invalidate the selection cache — react this frame
         padConnected = true;
@@ -451,7 +653,12 @@ export function setupGamepad() {
     window.addEventListener('gamepaddisconnected', (e) => {
         padPollCounter++; // Invalidate the selection cache — react this frame
         if (e.gamepad && e.gamepad.index === preferredPadIndex) preferredPadIndex = null;
-        if (e.gamepad) prevPadButtonsByIndex.delete(e.gamepad.index);
+        if (e.gamepad) {
+            prevPadButtonsByIndex.delete(e.gamepad.index);
+            // A vacated seat reopens for the next live pad (plan 026).
+            if (seatClaims[0] === e.gamepad.index) seatClaims[0] = null;
+            if (seatClaims[1] === e.gamepad.index) seatClaims[1] = null;
+        }
         padConnected = !!activeGamepad();
         updatePadHud(activeGamepad());
         updatePadDebug(activeGamepad());
@@ -486,20 +693,51 @@ export function keyboardVector() {
     return keyboardScratch;
 }
 
-// THE movement vector (audit C-5): sums EVERY source — keyboard, gamepad
-// (via keyboardVector above), and the touch drag — then clamps ONCE to unit
-// length. game.js consumes this for all player movement; the old shape
-// added the touch vector on top of the already-clamped keys+stick sum, so
-// stacking touch and keyboard reached 2x speed.
+// One seat's HALF of the keyboard in 2P: WASD drives seat 0, Arrows drive
+// seat 1 (Space vs Slash jump the same split — see onKeyDown). Solo never
+// calls this — moveVector's solo branch keeps the full alias merge.
+const keyboardHalfScratch = { x: 0, z: 0 };
+function keyboardHalfVector(seat) {
+    const right = (seat === 0 ? keys['d'] : keys['arrowright']) ? 1 : 0;
+    const left = (seat === 0 ? keys['a'] : keys['arrowleft']) ? 1 : 0;
+    const down = (seat === 0 ? keys['s'] : keys['arrowdown']) ? 1 : 0;
+    const up = (seat === 0 ? keys['w'] : keys['arrowup']) ? 1 : 0;
+    keyboardHalfScratch.x = right - left;
+    keyboardHalfScratch.z = down - up;
+    return keyboardHalfScratch;
+}
+
+// THE movement vector (audit C-5): sums EVERY source for a seat — keyboard,
+// gamepad, and the touch drag — then clamps ONCE to unit length. game.js
+// consumes this for all player movement; the old shape added the touch
+// vector on top of the already-clamped keys+stick sum, so stacking touch
+// and keyboard reached 2x speed.
+// SOLO (one player): the exact classic merge — WASD+Arrows aliases, the
+// ACTIVE pad, touch. 2P (plan 026): the seat's keyboard half + the pad
+// claiming that seat (additive, same one-clamp rule, now per seat); the
+// touch drag keeps driving seat 0.
 // Returned object is a module-level scratch — read it, don't keep it.
 const moveScratch = { x: 0, z: 0 };
-export function moveVector() {
-    const kv = keyboardVector();
-    let x = kv.x;
-    let z = kv.z;
-    if (state.touchActive) {
-        x += state.movementVector.x;
-        z += state.movementVector.y; // Touch vector is {x,y}: y drives world z
+export function moveVector(seat = 0) {
+    let x;
+    let z;
+    if (state.players.length < 2) {
+        const kv = keyboardVector();
+        x = kv.x;
+        z = kv.z;
+        if (state.touchActive) {
+            x += state.movementVector.x;
+            z += state.movementVector.y; // Touch vector is {x,y}: y drives world z
+        }
+    } else {
+        const kv = keyboardHalfVector(seat);
+        const pv = seatPadVector(seat);
+        x = kv.x + pv.x;
+        z = kv.z + pv.z;
+        if (seat === 0 && state.touchActive) {
+            x += state.movementVector.x;
+            z += state.movementVector.y;
+        }
     }
     const mag = Math.hypot(x, z);
     if (mag > 1) {
@@ -571,7 +809,15 @@ export function onKeyDown(event) {
     if (key === ' ' || key === 'space') {
         event.preventDefault(); // Prevent page scroll
         if (CONTINUOUS_MOVEMENT) return; // Boost, not pause
-        if (!isRepeat) tryJump(); // Fresh presses only — no held-key hop strobe
+        if (!isRepeat) tryJump(0); // Fresh presses only — no held-key hop strobe
+        return;
+    }
+    // 2P keyboard jump split (plan 026): Slash is seat 1's Space (Enter is
+    // pause, so the right hand gets the key beside its arrows). Solo leaves
+    // '/' exactly as before (an inert latched key).
+    if (key === '/' && state.players.length >= 2) {
+        event.preventDefault();
+        if (!isRepeat) tryJump(1);
         return;
     }
     if (key === 'p') {
@@ -611,6 +857,15 @@ export function onKeyDown(event) {
     }
 
     keys[key] = true; // Record that the key is pressed
+    // Seat-claim tiebreak (plan 026): remember which keyboard half moved
+    // this run — the first claiming pad then leaves that player their hero.
+    // WASD is seat 0's half; the arrows are seat 1's in 2P (in solo they
+    // alias seat 0, whose keyboard is then "in use" either way).
+    if (key === 'w' || key === 'a' || key === 's' || key === 'd') {
+        kbSeatActive[0] = true;
+    } else if (["arrowup", "arrowdown", "arrowleft", "arrowright"].includes(key)) {
+        kbSeatActive[state.players.length >= 2 ? 1 : 0] = true;
+    }
     // Prevent default browser action for arrow keys (scrolling)
     if (["arrowup", "arrowdown", "arrowleft", "arrowright"].includes(key)) {
         event.preventDefault();

@@ -409,7 +409,7 @@ export function killPlayer(player, reason) {
     player.alive = false;
     onPlayerDeath(player); // Squash flat + burst for THIS hero only
     sfx.death();
-    rumble(180, 0.7);
+    rumble(180, 0.7, player.seat); // The fallen hero's own pad takes the hit
 }
 
 export function endGame(reason, dyingPlayer = state.players[0]) {
@@ -422,7 +422,7 @@ export function endGame(reason, dyingPlayer = state.players[0]) {
     updateJumpButton(); // The dead can't hop — hide the touch JUMP control
     music.stop(); // 0.3s fadeout — the death jingle plays over it
     sfx.death();
-    rumble(180, 0.7); // Stronger death pulse when the pad can rumble
+    rumble(180, 0.7, dyingPlayer.seat); // Stronger death pulse when the pad can rumble
     onPlayerDeath(dyingPlayer); // Squash flat + orange-red burst (pool), behind the beat
     // Per-mode boards: the death screen shows the ladder of the mode that
     // just ended, and endless runs never pollute the classic top-5.

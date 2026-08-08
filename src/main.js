@@ -2,7 +2,7 @@ import { applySpeedMultiplier, speedUp, speedDown, forceWorldMode, perfInfo, set
 import { state } from './state.js';
 import { spawnNearPlayer, spawnAtPosition, spawnChunkFood } from './collectibles.js';
 import { spawnNewEnemies, updateEnemyStreaming, resetEnemyStreaming, updateSpawnWarnings, debugSpawnSpecies, pendingSpawnInfo, clearPendingSpawns } from './enemies.js';
-import { onTouchStart, onTouchMove, onTouchEndOrCancel, gamepadVector, pollGamepad, isGamepadConnected, gamepadDebugInfo } from './input.js';
+import { onTouchStart, onTouchMove, onTouchEndOrCancel, gamepadVector, pollGamepad, isGamepadConnected, gamepadDebugInfo, seatInfo } from './input.js';
 import { sfx, isMuted, audioState, music } from './audio.js';
 import { spawnBurst, spawnScorePopup, effectsInfo } from './effects.js';
 import { terrainHeight, groundHeightAt, terrainInfo, isWalkable, canMove, terrainTint, isRockFree, biomeRegion } from './terrain.js';
@@ -46,6 +46,7 @@ window.__game = {
         // the coop spec's entry; setPlayerCount(1) returns to solo.
         setPlayerCount,
         startTwoPlayer: () => setPlayerCount(2),
+        seatInfo, // { claims: [padIndex|null x2], keyboardActive: [bool x2] } — coop seat specs
         touchHandlers: { onTouchStart, onTouchMove, onTouchEndOrCancel },
         gamepadVector, // Stick/D-pad unit vector (gamepad spec)
         pollGamepad, // Edge actions — tests drive a mocked navigator.getGamepads

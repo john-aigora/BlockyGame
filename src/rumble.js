@@ -10,9 +10,21 @@ function activePad() {
     return null;
 }
 
+// Seat routing (plan 026): input.js injects a resolver (seat → its claimed
+// Gamepad) at setup — injection keeps this module import-cycle-free. A call
+// with a seat rumbles THAT seat's pad; no resolver / no claim falls back to
+// the first connected pad (the exact solo behavior — solo never claims).
+let seatPadResolver = null;
+
+export function setSeatPadResolver(fn) {
+    seatPadResolver = fn;
+}
+
 // Light haptic pulse when the pad exposes a vibration actuator (many F310s no-op).
-export function rumble(durationMs = 40, mag = 0.35) {
-    const gp = activePad();
+export function rumble(durationMs = 40, mag = 0.35, seat = null) {
+    let gp = null;
+    if (seat != null && seatPadResolver) gp = seatPadResolver(seat);
+    if (!gp) gp = activePad();
     const actuator = gp && (gp.vibrationActuator || gp.hapticActuators?.[0]);
     if (!actuator || typeof actuator.playEffect !== 'function') return;
     try {

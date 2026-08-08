@@ -22,7 +22,7 @@ import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoo
 import { initTerrain, setTerrainActive, resetTerrainForNewRun, updateTerrain, shiftTerrain, groundHeightAt, slideMove, isRockWedged, biomeRegion, isWalkable } from './terrain.js';
 import { initClouds, setCloudMode, updateClouds, shiftClouds } from './clouds.js';
 import { initEffects, updateEffects, resetEffects, onCollect, onGrowthMilestone, shiftActiveParticles, spawnTextPopup, onJumpTakeoff, onJumpLand } from './effects.js';
-import { keys, moveVector, clearTransientInput, onKeyDown, onKeyUp, setupTouchControls, setupGamepad, pollGamepad } from './input.js';
+import { keys, moveVector, clearTransientInput, resetSeatActivity, onKeyDown, onKeyUp, setupTouchControls, setupGamepad, pollGamepad } from './input.js';
 import { rumble } from './rumble.js';
 import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension, resetIndicators, showGoFlourish, updateModeHud, updateDistanceDisplay, resetDistanceDisplay, updateTimeDisplay, resetTimeDisplay } from './ui.js';
 import { resetCollectClock, tickCollectClock, tickComboClock } from './timers.js';
@@ -254,6 +254,7 @@ function setupNewGame() {
     for (const key in keys) {
         keys[key] = false;
     }
+    resetSeatActivity(); // Fresh run: the pad-claim keyboard tiebreak re-arms (plan 026)
     hideMessage();
     resetEffects(); // Park all particles; reset squash/walk transients (plan 015)
     if (CONTINUOUS_MOVEMENT) resetContinuousMovement(); // Full energy, default heading (plan 014 spike)
@@ -347,11 +348,10 @@ function update(dt) {
                 if (!player.alive || !player.mesh) continue;
                 updateJumpPhysics(player, dt); // Advance the arc BEFORE the slide reads jump.airborne
                 // ONE movement vector for every input source (audit C-5):
-                // moveVector sums keyboard+stick+touch and clamps once —
-                // stacking sources can never exceed full speed. (Per-seat
-                // input split lands in Stage C; until then every seat reads
-                // the same merged vector — solo only ever has seat 0.)
-                const mv = moveVector();
+                // moveVector sums this seat's keyboard half + its claimed
+                // pad (+ touch on seat 0) and clamps once — stacking sources
+                // can never exceed full speed. Solo reads the classic merge.
+                const mv = moveVector(player.seat);
                 const moveX = mv.x * player.actualSpeed * dt;
                 const moveZ = mv.z * player.actualSpeed * dt;
                 const p = player.mesh.position;
@@ -382,7 +382,7 @@ function update(dt) {
             // inside moveVector instead of adding a second speed on top.
             for (const player of state.players) {
                 if (!player.alive || !player.mesh) continue;
-                const mv = moveVector();
+                const mv = moveVector(player.seat);
                 player.mesh.position.x += mv.x * player.actualSpeed * dt;
                 player.mesh.position.z += mv.z * player.actualSpeed * dt;
             }
@@ -495,7 +495,7 @@ function update(dt) {
                 } else {
                     sfx.collect();
                 }
-                rumble(35, 0.25); // Soft pad pulse (no-op if no actuator)
+                rumble(35, 0.25, player.seat); // Soft pulse on the eater's own pad
                 // (The box deliberately does NOT re-derive mid-sweep after a
                 // collect grew the body — matching the old once-per-frame
                 // setFromObject refresh; next frame measures the new size.)
@@ -628,7 +628,7 @@ function updateRegionDiscovery(player) {
 // never in a lake.
 function tryScheduleBoss(player) {
     const p = player.mesh.position;
-    const mv = moveVector();
+    const mv = moveVector(player.seat); // The crosser's own live heading
     let hx = mv.x, hz = mv.z;
     if (hx === 0 && hz === 0) {
         const tx = p.x + state.worldOrigin.x;
