@@ -588,7 +588,9 @@ export function killEnemy(enemyGroup, index) {
             });
         }
         sfx.fanfare(); // The FULL fanfare — this is the run's landmark kill
-        enemyDeathPosition.y = enemyBaseHeight * enemyGroup.scale.y * 0.6; // Banner up at the fallen titan's chest height
+        // Banner at the fallen titan's chest height ABOVE the terrain it
+        // stood on — the absolute y already carries the ground (B7 rev ADV-1).
+        enemyDeathPosition.y = enemyGroup.position.y + enemyBaseHeight * enemyGroup.scale.y * 0.6;
         spawnTextPopup(enemyDeathPosition, 'TITAN DOWN!', '#FFD700');
     } else {
         for (let i = 0; i < enemyGroup.userData.species.foodDrop; i++) {
@@ -777,8 +779,11 @@ export function updateEnemyStreaming(dt) {
     bubbleSpawnCooldown -= dt;
     if (bubbleSpawnCooldown > 0) return;
     // Hard cap counts EVERY body — live enemies plus reserved warn discs —
-    // so the bubble never floods past ENDLESS_ENEMY_CAP however much prey
-    // is alive (the balance cap spec pins this).
+    // so the BUBBLE never floods past ENDLESS_ENEMY_CAP however much prey
+    // is alive (the balance cap spec pins this). One sanctioned exception
+    // lives outside this function: the once-per-run titan (game.js
+    // tryScheduleBoss) may briefly make it 13 at a saturated bubble — the
+    // landmark beat must fire; attrition restores the cap (B7 rev ADV-3).
     if (state.enemies.length + pendingSpawns.length >= ENDLESS_ENEMY_CAP) return;
     // Prey supply (audit DT-4): the top-up TARGET gate counts THREATS, not
     // everything. The owner report behind the rotation ("enemies bigger

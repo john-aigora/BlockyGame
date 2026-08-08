@@ -178,8 +178,11 @@ export function dailySeed(date = new Date()) {
 }
 
 function readDailyFlag() {
-    if (typeof location !== 'undefined' &&
-        new URLSearchParams(location.search).get('daily') === '1') return true;
+    if (typeof location !== 'undefined') {
+        const p = new URLSearchParams(location.search).get('daily');
+        if (p === '1') return true;
+        if (p === '0') return false; // Explicit off-switch beats the sticky flag (B7 rev ADV-9)
+    }
     try {
         return typeof sessionStorage !== 'undefined' &&
             sessionStorage.getItem('blocky.daily') === '1';

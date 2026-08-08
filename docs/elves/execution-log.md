@@ -476,3 +476,21 @@ All five steps landed; suite grew 95 → 102 (+4 tension, +3 audio).
   with rationale comments; BASE_ENEMY_SPEED/RAMP_SPEED_MAX untouched (the
   titan multiplies SIZE, never speed — the no-enemy-base-speed-change STOP
   condition holds).
+
+## 2026-08-08 — B7 review: APPROVE-WITH-ADVISORIES, 0 blockers → reconciled
+
+- Reviewer traced all five hard questions clean: no titan spawn-deadlock (1 of
+  12 slots; always eventually edible), restart leak spec-pinned, Node-clean
+  seed module w/ complete consumer sweep, prune path never writes on read,
+  early-return removal preserved every guarded behavior.
+- Driver folded: ADV-1 TITAN DOWN! banner now rides the terrain height;
+  ADV-3 the cap comment names the sanctioned once-per-run 13th-body exception;
+  ADV-9 ?daily=0 is an explicit off-switch.
+- Routed: ADV-2 biomeRegion hot-path allocation → B10 perf pass (H13);
+  ADV-4/7/8/10 recorded as notes (fleeing-titan slot, food-layout re-roll on
+  the default seed, realized gold rarity ~1/14-16, region-name granularity).
+- PLAYTEST BRIEF additions: (12) on daily runs the NEW BEST celebration now
+  tracks TODAY'S board, not the all-time endless board — an all-time PB on a
+  daily world gets no confetti; owner call whether both should fire. (13) A
+  past-midnight daily death briefly shows a one-row TODAY'S BEST that
+  self-retires on the next view — by design, may read as a glitch once a year.
