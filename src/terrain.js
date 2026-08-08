@@ -8,7 +8,7 @@ import {
     FOOD_PER_CHUNK_MIN, FOOD_PER_CHUNK_MAX, FOOD_WATER_CLEARANCE, GOLD_CHUNK_CHANCE,
     minSpawnDistanceFromPlayer,
     BIOME_WAVELENGTH, BIOME_TINT_STRENGTH, SHORE_BAND_HEIGHT, SHORE_BAND_BOOST,
-    WATER_DEPTH_RANGE, WATER_DEEP_TINT, WATER_SNAP
+    WATER_DEPTH_RANGE, WATER_DEEP_TINT, WATER_SNAP, REGION_BINS
 } from './constants.js';
 import { state } from './state.js';
 import { makeGroundTexture, GROUND_TILE } from './world.js';
@@ -225,7 +225,9 @@ export function biomeAt(tx, tz) {
     return octave(tx, tz, BIOME_WAVELENGTH, 51.3, 27.9);
 }
 
-const REGION_BINS = 5; // The biome octave quantized into 5 identity bands
+// REGION_BINS lives in the GAME BALANCE block (constants.js) — it tunes how
+// often DISCOVERED fires and what the REGIONS death stat can reach
+// (terminal review A-2: every balance knob in the block, no exceptions).
 // Kid-friendly two-word region names. Which name a region wears is a seeded
 // hash pick — the TABLE is fixed, the MAP of it is per-world.
 const REGION_NAMES = [

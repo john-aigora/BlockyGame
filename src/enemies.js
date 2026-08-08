@@ -523,8 +523,12 @@ export function updateEnemies(dt) {
             enemyGroup.timeToChangeRandomVelocity = Math.random() * 2 + 1;
         }
 
-        if (killableNow) {
+        if (killableNow || ud.species.harmless) {
             // --- Fleeing Behavior ---
+            // Harmless species flee UNCONDITIONALLY: a juja sized off the
+            // BIGGER hero in 2P can be non-killable for the smaller one, and
+            // a "harmless" critter chasing a kid at 2.6x speed forever is
+            // the opposite of the species' promise (terminal review B-1).
             if (distanceToPlayer > 0) { // Avoid issues if somehow at the exact same spot
                 // Flee = the shortest-path direction to the player, negated
                 const fleeDirection = torusDelta(enemyGroup.position, target.mesh.position, tmpVec).normalize().negate();
@@ -598,9 +602,12 @@ export function updateEnemies(dt) {
                 setEnemyCollisionBox(scratchBox, enemyGroup); // killPlayer fx never move the enemy, but stay honest after callbacks
             }
             // Harmless species (juja): a non-killable contact never ends the
-            // run. The rotation sizes jujas at 0.35x the player, so this is
-            // in practice unreachable — the guard exists for oversized test
-            // spawns and future tuning (plan 024).
+            // run. SOLO sizes jujas at 0.35x the (monotonic) player so the
+            // guard is unreachable there — but in 2P a juja sized off the
+            // bigger hero IS non-killable for the smaller one (per-seat
+            // spawn anchors, plan 026), so this guard is load-bearing in
+            // coop; harmless enemies also flee unconditionally and are
+            // excluded from every dread/threat surface (terminal review B-1).
         }
         if (killed) continue;
     }

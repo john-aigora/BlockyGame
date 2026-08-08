@@ -643,6 +643,14 @@ export function updateDangerPulse(dt) {
                 ud.nearMissArmed[player.seat] = false;
                 continue; // Killable enemies flee — they are prey, not danger
             }
+            if (ud.species.harmless) {
+                // Harmless species are NEVER a threat, even when too big for
+                // this viewer to eat (2P divergent scales): no vignette, no
+                // heartbeat, no CLOSE ONE! from a critter that cannot hurt
+                // you (terminal review B-1).
+                ud.nearMissArmed[player.seat] = false;
+                continue;
+            }
             const d = torusDistance(enemyGroup.position, player.mesh.position);
             if (d < nearest) nearest = d;
             // CLOSE ONE! near-miss (plan 023): arm when a hunter enters the
@@ -986,11 +994,16 @@ function updateIndicatorsForView(camera, viewer, rectLeft, rectWidth, poolStart,
         const isOffScreenY = screenPos.y < -1 || screenPos.y > 1;
 
         if (isOffScreenX || isOffScreenY) {
+            const viewerCanKill = canKillSpecificEnemy(enemyGroup, viewer);
+            // A harmless critter this viewer can't eat is neither threat nor
+            // food — no arrow at all; a blue "hunts you" arrow for a juja
+            // would be a lie (terminal review B-1).
+            if (enemyGroup.userData.species.harmless && !viewerCanKill) continue;
             const indicator = state.enemyIndicators[indicatorsUsed];
 
             // Color by killability FOR THIS VIEWER (yellow = killable by
             // them, blue = hunts them) — each half tells its own truth.
-            const color = canKillSpecificEnemy(enemyGroup, viewer)
+            const color = viewerCanKill
                 ? 'rgba(255, 235, 59, 0.8)'
                 : 'rgba(3, 169, 244, 0.8)';
 

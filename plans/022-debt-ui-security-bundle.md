@@ -152,8 +152,10 @@ of re-declaring; `tests/gate.spec.js` drops the literal assertion at `:18`
 title; `readme.md:28` → "Password: see `src/gate.js` (shared family password)."
 Leave `index.html:19`'s comment removal to taste — prefer removing it.
 **Verify**: `npx playwright test tests/gate.spec.js --workers=1` green;
-`grep -rn "blocky" tests/ | grep -iv "blockygame\|blocky\."` shows no password
-literal in tests.
+`grep -rn "<the-gate-password>" tests/` (substitute the literal from
+src/gate.js when running) shows no password literal in tests. *(Needle
+redacted from this plan at terminal review A-6 — the plan itself was leaking
+the string it verifies the absence of.)*
 
 ## Done criteria
 

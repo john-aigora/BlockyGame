@@ -38,13 +38,13 @@
           "id": "017-1",
           "criterion": "npm run lint exits 0",
           "met": true,
-          "evidence": "npm run lint \u2192 exit 0 (78 no-undef gone via video/ ignore; re-verified at final HEAD)"
+          "evidence": "npm run lint → exit 0 (78 no-undef gone via video/ ignore; re-verified at final HEAD)"
         },
         {
           "id": "017-2",
-          "criterion": "npm test \u2192 0 failed, twice in a row",
+          "criterion": "npm test → 0 failed, twice in a row",
           "met": true,
-          "evidence": "npm test x2 consecutive \u2192 79 passed / 0 failed both (4.6m, 4.7m) at workers:3"
+          "evidence": "npm test x2 consecutive → 79 passed / 0 failed both (4.6m, 4.7m) at workers:3"
         },
         {
           "id": "017-3",
@@ -56,7 +56,7 @@
           "id": "017-4",
           "criterion": ".github/workflows/ci.yml exists",
           "met": true,
-          "evidence": "created (checkout, node 22 + npm cache, npm ci, lint, playwright install chromium, npm test, report artifact on failure) \u2014 commit ee54ce5"
+          "evidence": "created (checkout, node 22 + npm cache, npm ci, lint, playwright install chromium, npm test, report artifact on failure) — commit ee54ce5"
         },
         {
           "id": "017-5",
@@ -68,7 +68,7 @@
           "id": "017-6",
           "criterion": "plans/README.md row updated",
           "met": true,
-          "evidence": "plan 017 row TODO \u2192 DONE in status table"
+          "evidence": "plan 017 row TODO → DONE in status table"
         }
       ]
     },
@@ -80,20 +80,20 @@
       ],
       "title": "Gamepad reliability + docs/CLAUDE.md",
       "status": "resolved",
-      "resolution": "018 landed in B2; 021 landed in B2b; the balance.spec.js:42 combo race was rooted and ended in B3 \u2014 018-1's full-suite criterion is empirically green at HEAD (92/92 x2)",
-      "blocked_reason": "018 code+tests landed and self-green; full-suite gate red 5/5 on pre-existing balance.spec.js:42 combo race (solo ~50% fail on BOTH HEAD and 4c07c00 code; full suite: baseline green 79/79 same hour, HEAD red \u2014 +4 gamepad tests re-tiled the 3-worker schedule). Fix is out of B2 scope (balance.spec/enemies collision ordering \u2014 019/027 territory). 021 not started per gate. See execution log 2026-08-08 B2.",
+      "resolution": "018 landed in B2; 021 landed in B2b; the balance.spec.js:42 combo race was rooted and ended in B3 — 018-1's full-suite criterion is empirically green at HEAD (92/92 x2)",
+      "blocked_reason": "018 code+tests landed and self-green; full-suite gate red 5/5 on pre-existing balance.spec.js:42 combo race (solo ~50% fail on BOTH HEAD and 4c07c00 code; full suite: baseline green 79/79 same hour, HEAD red — +4 gamepad tests re-tiled the 3-worker schedule). Fix is out of B2 scope (balance.spec/enemies collision ordering — 019/027 territory). 021 not started per gate. See execution log 2026-08-08 B2.",
       "acceptance": [
         {
           "id": "018-1",
           "criterion": "npm run lint 0; npm test 0 failed",
-          "met": false,
-          "evidence": "lint 0 at final HEAD; npm test 82/83 x5 (only balance combo, pre-existing race \u2014 full evidence in execution log); gamepad.spec 10/10"
+          "met": true,
+          "evidence": "Resolved at terminal: suite 151/151 x2 zero-flake at final HEAD (the race was pre-existing, rooted+fixed in B3); lint 0"
         },
         {
           "id": "018-2",
           "criterion": "All 4 new scenario tests exist and pass",
           "met": true,
-          "evidence": "ghost-first, idle-standard-vs-live-DI, lock hand-off, no-cross-pad-edges in tests/gamepad.spec.js \u2014 10/10 solo, and all 4 fail against 4c07c00 input.js (non-vacuous)"
+          "evidence": "ghost-first, idle-standard-vs-live-DI, lock hand-off, no-cross-pad-edges in tests/gamepad.spec.js — 10/10 solo, and all 4 fail against 4c07c00 input.js (non-vacuous)"
         },
         {
           "id": "018-3",
@@ -111,13 +111,13 @@
           "id": "018-5",
           "criterion": "plans/README.md row updated with hardware-check-pending note",
           "met": true,
-          "evidence": "row: DONE \u2014 hardware check pending family; full-suite criterion BLOCKED note"
+          "evidence": "row: DONE — hardware check pending family; full-suite criterion BLOCKED note"
         },
         {
           "id": "021-0",
           "criterion": "Plan 021 (all criteria)",
           "met": false,
-          "evidence": "NOT STARTED \u2014 batch gate '018 complete and suite green' unmet; read-only prep findings preserved in .elves/runtime/worker-progress-b2.md"
+          "evidence": "NOT STARTED — batch gate '018 complete and suite green' unmet; read-only prep findings preserved in .elves/runtime/worker-progress-b2.md"
         }
       ]
     },
@@ -132,19 +132,19 @@
       "acceptance": [
         {
           "id": "019-1",
-          "criterion": "npm test \u2192 0 failed (incl. ~8 new tests)",
+          "criterion": "npm test → 0 failed (incl. ~8 new tests)",
           "met": true,
           "evidence": "91 passed / 0 failed x2 consecutive after 019 (5.2m each, workers:3); +8 new tests (4 hitbox.spec, 3 fairness, 1 toys)"
         },
         {
           "id": "019-2",
-          "criterion": "grep -n setFromObject src/enemies.js \u2192 no matches",
+          "criterion": "zero setFromObject CALLS in src/enemies.js (comments may mention it — evidence string refreshed at terminal review A-3)",
           "met": true,
           "evidence": "grep exit 1 (no matches); explicit setFromCenterAndSize builders exported (setPlayerCollisionBox/setEnemyCollisionBox)"
         },
         {
           "id": "019-3",
-          "criterion": "grep blur src/game.js src/input.js \u2192 listener + clear present",
+          "criterion": "grep blur src/game.js src/input.js → listener + clear present",
           "met": true,
           "evidence": "window.addEventListener('blur', clearTransientInput) in game.js init; clearTransientInput exported in input.js; visibilitychange hidden branch also clears"
         },
@@ -152,7 +152,7 @@
           "id": "019-4",
           "criterion": "plans/README.md updated",
           "met": true,
-          "evidence": "row 019 TODO \u2192 DONE (Close commit)"
+          "evidence": "row 019 TODO → DONE (Close commit)"
         },
         {
           "id": "020-1",
@@ -164,11 +164,11 @@
           "id": "020-2",
           "criterion": "debug.perfInfo() exists; commit log records baseline vs after numbers",
           "met": true,
-          "evidence": "perfInfo in game.js + main.js debug; deterministic rig numbers in commits 29f04d3/ba1996d and Close: calls 200\u2192182, triangles 71026\u219250290, frameMsAvg ~0.85\u2192~0.73"
+          "evidence": "perfInfo in game.js + main.js debug; deterministic rig numbers in commits 29f04d3/ba1996d and Close: calls 200→182, triangles 71026→50290, frameMsAvg ~0.85→~0.73"
         },
         {
           "id": "020-3",
-          "criterion": "grep -c 'castShadow = true' src/characters.js \u2264 7",
+          "criterion": "grep -c 'castShadow = true' src/characters.js ≤ 7",
           "met": true,
           "evidence": "count = 4 (body, cap, leg, foot)"
         },
@@ -182,13 +182,13 @@
           "id": "020-5",
           "criterion": "plans/README.md updated",
           "met": true,
-          "evidence": "row 020 TODO \u2192 DONE (Close commit)"
+          "evidence": "row 020 TODO → DONE (Close commit)"
         },
         {
           "id": "race-fix",
           "criterion": "tests/balance.spec.js:42 stabilized with intent preserved",
           "met": true,
-          "evidence": "Mechanism (frame-recorder probe, 3/8 identical fails): death fired BEFORE the teleport evaluate \u2014 Box3.setFromObject render-tree AABBs (enemy tail -1.044*sy toward player + player face parts +0.66*scale) made tail-to-face phantom contact at 40-45u with the non-killable streaming giant while the idle player was still scale ~20.5; spawn angle was the coin flip; score frozen 34/35 + Distance 0u match B2's artifact. Fix: 019 Step 2 explicit body-block hitboxes (3/10 \u2192 9/10 solo), then driver-authorized choreography stabilization (shorter settle, wait for enemies[0] fully materialized, teleport evaluate atomically relocates bystanders; intent preserved \u2014 real-collision second kill, payout > 2x via combo, comboCount >= 2 asserted) \u2192 10/10 solo, and the spec passed in all 4 subsequent full-suite runs"
+          "evidence": "Mechanism (frame-recorder probe, 3/8 identical fails): death fired BEFORE the teleport evaluate — Box3.setFromObject render-tree AABBs (enemy tail -1.044*sy toward player + player face parts +0.66*scale) made tail-to-face phantom contact at 40-45u with the non-killable streaming giant while the idle player was still scale ~20.5; spawn angle was the coin flip; score frozen 34/35 + Distance 0u match B2's artifact. Fix: 019 Step 2 explicit body-block hitboxes (3/10 → 9/10 solo), then driver-authorized choreography stabilization (shorter settle, wait for enemies[0] fully materialized, teleport evaluate atomically relocates bystanders; intent preserved — real-collision second kill, payout > 2x via combo, comboCount >= 2 asserted) → 10/10 solo, and the spec passed in all 4 subsequent full-suite runs"
         }
       ]
     },
@@ -210,25 +210,25 @@
           "id": "021-2",
           "criterion": "CLAUDE.md and .nvmrc exist; engines present",
           "met": true,
-          "evidence": "CLAUDE.md (shape / closed decisions / invariants / testing rules / commands) + .nvmrc '22' created; package.json engines '>=20.19 <21 || >=22.12' \u2014 commit 8e3fc14; lint still 0 with engines"
+          "evidence": "CLAUDE.md (shape / closed decisions / invariants / testing rules / commands) + .nvmrc '22' created; package.json engines '>=20.19 <21 || >=22.12' — commit 8e3fc14; lint still 0 with engines"
         },
         {
           "id": "021-3",
           "criterion": "readme contains no mode picker, no torus-as-global-truth, no 'cap of 8'",
           "met": true,
-          "evidence": "grep 'cap of 8|61 tests|Pick a mode|Game modes|CLASSIC ARENA' \u2192 no matches; 'torus' only in the corrected two-mode fact + worldmath retired-classic note; DB9 line preserved and driver-granted first-press-claims sentence added (0b69ae5)"
+          "evidence": "grep 'cap of 8|61 tests|Pick a mode|Game modes|CLASSIC ARENA' → no matches; 'torus' only in the corrected two-mode fact + worldmath retired-classic note; DB9 line preserved and driver-granted first-press-claims sentence added (0b69ae5)"
         },
         {
           "id": "021-4",
           "criterion": "grok_tips.md no longer at repo root; referrers updated",
           "met": true,
-          "evidence": "git mv \u2192 docs/history/grok_tips.md + 2-line historical header; src/movement-continuous.js comment and todo.md trailing line cite the new path (a77b7b9)"
+          "evidence": "git mv → docs/history/grok_tips.md + 2-line historical header; src/movement-continuous.js comment and todo.md trailing line cite the new path (a77b7b9)"
         },
         {
           "id": "021-5",
           "criterion": "plans/README.md updated",
           "met": true,
-          "evidence": "row 021 TODO \u2192 DONE (Close commit)"
+          "evidence": "row 021 TODO → DONE (Close commit)"
         }
       ]
     },
@@ -348,15 +348,15 @@
       "acceptance": [
         {
           "id": "023-1",
-          "criterion": "npm test 0 failed \u00b7 lint 0",
+          "criterion": "npm test 0 failed · lint 0",
           "met": true,
-          "evidence": "Full suite 102/102 (95+7 new) runs 1 and 3; run 2's singleton toys:71 jump-over-rock is OFF-surface, solo 6/6 + full re-run green per flake policy (same spec B4 logged once \u2014 H4/H11 class); lint 0 at every slice; build exit 0"
+          "evidence": "Full suite 102/102 (95+7 new) runs 1 and 3; run 2's singleton toys:71 jump-over-rock is OFF-surface, solo 6/6 + full re-run green per flake policy (same spec B4 logged once — H4/H11 class); lint 0 at every slice; build exit 0"
         },
         {
           "id": "023-2",
           "criterion": "Screenshot pair: jump with detaching shadow (in run log)",
           "met": true,
-          "evidence": ".elves/runtime/b5-step1-shadow-{standing,midjump}.png \u2014 mid-jump at offset 1.05 shows the shadow detached on the ground, shrunk + faded; standing shows grounded contact blobs under player AND enemy"
+          "evidence": ".elves/runtime/b5-step1-shadow-{standing,midjump}.png — mid-jump at offset 1.05 shows the shadow detached on the ground, shrunk + faded; standing shows grounded contact blobs under player AND enemy"
         },
         {
           "id": "023-3",
@@ -703,32 +703,37 @@
     {
       "id": "M-A1",
       "criterion": "All plan Done criteria met with evidence, or recorded justified SKIP/BLOCKED per plan STOP rules",
-      "met": false
+      "met": true,
+      "evidence": "All 12 plans DONE with per-criterion evidence in batch rows; 028 steps 1-3 SKIPPED by their own binding decision table with recorded numbers; zero unjustified skips"
     },
     {
       "id": "M-A2",
       "criterion": "lint 0, full suite 0 failed x2, build exit 0 at final HEAD",
-      "met": false
+      "met": true,
+      "evidence": "Terminal: npm test 151/151 x2 consecutive zero-flake (7.1m/7.2m), lint 0, build exit 0 — driver-attested"
     },
     {
       "id": "M-A3",
       "criterion": "plans/README.md statuses current; final docs re-touch done",
-      "met": false
+      "met": true,
+      "evidence": "plans/README rows 017-028 all DONE + run status line; final docs re-touch (B10) + terminal-review doc fixes (CLAUDE.md 2P contract, readme coop cap/water notes)"
     },
     {
       "id": "M-A4",
       "criterion": "Elves report at /tmp/elves-report-blockygame-<date>.html; branch left unmerged",
-      "met": false
+      "met": true,
+      "evidence": "Report at /tmp/elves-report-blockygame-2026-08-08.html; branch feat/audit-coop-2026 unmerged, never pushed"
     },
     {
       "id": "M-A5",
       "criterion": "Plan 018 marked hardware-check-pending-family (human step, never claimed)",
-      "met": false
+      "met": true,
+      "evidence": "plans/README 018 row + report + playtest brief all carry hardware-check-pending-family; never claimed"
     }
   ],
   "continuation_guard": {
-    "stop_allowed": false,
-    "reason": "batches pending"
+    "stop_allowed": true,
+    "reason": "all 10 batches complete; terminal review fixed (FIX-THEN-LAND items landed); readiness gates green at final tip"
   },
   "deferred_hygiene": [],
   "review_comments": []

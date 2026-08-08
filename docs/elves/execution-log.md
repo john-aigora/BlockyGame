@@ -774,3 +774,22 @@ All five steps landed; suite grew 95 → 102 (+4 tension, +3 audio).
   consecutively (7.2m, 7.3m, workers 3, zero flakes — B9's zero-flake state
   holds); npm run build exit 0; lint 0. Commits 2c74403 (H13+H8), aa2976b
   (docs re-touch), Close. No plan STOP condition fired anywhere in B10.
+
+## 2026-08-08 — TERMINAL: cumulative review → FIX-THEN-LAND → fixed → attested
+
+- One cumulative review of the whole branch (74 files): verdict FIX-THEN-LAND.
+  B-1 (real 2P-only seam bug): oversized juja terrorized the smaller hero —
+  harmless species now flee unconditionally and are excluded from every
+  threat surface (danger loop, arrows, AI branch); regression spec added
+  (fails 3 ways pre-fix). B-2 plans/README 339→324. Folded: A-1 CLAUDE.md 2P
+  architecture contract, A-2 REGION_BINS → GAME BALANCE block, A-3 stale
+  evidence string, A-4 readme coop cap 16 + water-view note, A-6 password
+  needle redacted from plan 022. Rig-naming reconciled (A-5): B8 = traveled
+  mix, B10 = parked statue ring — both correct.
+- Also verified by the reviewer: museum build byte-identical across the run,
+  zero solo leaks from 14 coop branches, worldmath/flash/material invariants
+  clean, daily-2P records coop only, advance() player-count agnostic.
+- TERMINAL ATTESTATION at final content state: npm test 151/151 x2
+  consecutive zero-flake (7.1m/7.2m), lint 0, build exit 0. Suite 79 → 151
+  over the run. Learnings promoted (5 entries). Session acceptance flipped
+  with evidence; stop_allowed → true.

@@ -90,7 +90,12 @@ YOUR truth.
   it politely takes P2). Ghost adapter ports never claim. Unplugging frees
   the seat.
 - **Pause pauses both** (P / Enter / Start on any pad); speed and zoom are
-  shared too.
+  shared too. The field cap rises to **16** monsters with two heroes (solo
+  stays 12).
+- **Stay in the same neighborhood-ish**: past roughly 560 units of
+  separation the water surface falls out of view range — lakes still block
+  you (the world's rules don't bend), they just read as invisible walls
+  until you regroup.
 - **Death is personal**: whoever runs out of clock (or gets caught) squashes
   and spectates — their half follows the survivor under a WAITING chip. When
   both are down, one death screen shows both runs side by side, and the

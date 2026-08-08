@@ -470,3 +470,69 @@ test('solo input is untouched: WASD and Arrows both drive the single hero', asyn
   const after = await page.evaluate(() => window.__game.state.player.position.x);
   expect(after - before).toBeGreaterThan(3); // Both halves reached the one hero
 });
+
+test('an oversized juja is nobody\'s nightmare: no dread, no arrow, and it FLEES the smaller hero (terminal review B-1)', async ({ page }) => {
+  await startTwoPlayerGame(page);
+  await clearThreats(page);
+  // Divergent growth: P2 is the big hero (scale 4), P1 stays scale 1. A juja
+  // sized off P2 (height 0.35 x 4 x 1.2 = 1.68) is NON-killable for P1
+  // (height 1.0) — pre-fix this made a "harmless" critter read and act like
+  // a lethal hunter for the smaller hero (vignette, CLOSE ONE!, blue arrow,
+  // 2.6x-speed chase). Post-fix: harmless species never touch a threat
+  // surface and always flee.
+  await page.evaluate(() => {
+    const s = window.__game.state;
+    s.players[1].scale = 4;
+    s.players[1].mesh.scale.set(4, 4, 4);
+    // Park the juja 6u from P1 — inside DANGER_RADIUS (9) and the arm band.
+    window.__game.debug.spawnSpecies('juja', 6, 0, 1.4); // scale.y 1.4 -> height 1.68 > P1's 1.0
+  });
+  // Let the danger/AI passes run on the game clock.
+  await page.evaluate(() => window.__game.debug.advance(1.5));
+  const probe = await page.evaluate(() => {
+    const s = window.__game.state;
+    const juja = s.enemies.find((e) => e.userData.speciesKey === 'juja');
+    const killableForP1 = window.__game.debug.canKill
+      ? window.__game.debug.canKill(juja, s.players[0]) : null;
+    return {
+      exists: !!juja,
+      p1Danger: s.players[0].dangerOpacity,
+      p1NearMissArmed: juja ? juja.userData.nearMissArmed[0] === true : null,
+      // The juja must be MOVING AWAY from P1 (flee), not closing: sample
+      // its position delta over another advance below.
+      x0: juja ? juja.position.x : null
+    };
+  });
+  expect(probe.exists).toBe(true);
+  expect(probe.p1Danger).toBeLessThan(0.02); // No vignette/heartbeat dread from a harmless critter
+  expect(probe.p1NearMissArmed).toBe(false); // CLOSE ONE! can never arm on it
+  const x1 = await page.evaluate(() => {
+    window.__game.debug.advance(1.0);
+    const juja = window.__game.state.enemies.find((e) => e.userData.speciesKey === 'juja');
+    return juja ? juja.position.x : null;
+  });
+  expect(x1).not.toBeNull();
+  expect(x1).toBeGreaterThan(probe.x0); // P1 is at x~0, juja at x 6+: fleeing means x GROWS
+  // And no arrow points at it from P1's half. Ambient bubble spawns show
+  // their own (legitimate) arrows, so isolate: shove every NON-juja enemy
+  // past the despawn radius, let streaming reap them (0.2gs — under the
+  // 1.25s top-up interval, and a freshly scheduled warn disc is not an
+  // enemy), then probe with ONLY the juja offscreen east of P1.
+  const arrows = await page.evaluate(() => {
+    const s = window.__game.state;
+    for (const e of s.enemies) {
+      if (e.userData.speciesKey !== 'juja') e.position.set(500, e.position.y, 500);
+    }
+    const juja = s.enemies.find((e) => e.userData.speciesKey === 'juja');
+    juja.position.x = 70; // Well outside P1's view, inside despawn radius
+    juja.position.z = 0;
+    window.__game.debug.advance(0.2);
+    const onlyJuja = s.enemies.every((e) => e.userData.speciesKey === 'juja');
+    return {
+      onlyJuja,
+      lit: s.enemyIndicators.slice(0, 5).filter((el) => el.style.display === 'block').length
+    };
+  });
+  expect(arrows.onlyJuja).toBe(true); // Isolation held — the count below means the juja
+  expect(arrows.lit).toBe(0); // Harmless + non-killable = no arrow at all
+});

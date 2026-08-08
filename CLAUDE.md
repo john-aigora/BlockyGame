@@ -42,6 +42,23 @@ change. Run-ephemeral lessons live in `docs/elves/learnings.md`.
 - Every balance/tuning knob lives in the GAME BALANCE block of
   `src/constants.js` with a rationale comment — nowhere else.
 
+## Two-player architecture (plan 026)
+
+- The roster is `state.players[]` (`makePlayerState(seat)`); each entry owns
+  its hero mesh, camera, gameplay scale, score, collect clock, combo, danger
+  state, and jump. The classic singleton names (`state.player`,
+  `state.playerScale`, `state.score`, `state.collectTimeLeft`, …) are
+  DELEGATES to `players[0]` — always safe to read, but per-player code must
+  iterate the roster, never the aliases.
+- **Solo must stay byte-stable**: every 2P behavior hangs off an additive
+  `coopMode()` / `players.length >= 2` branch with the solo path falling
+  through unchanged (single full-rect render, no scissor, solo caps). A 2P
+  change that edits a solo code path needs a solo regression spec in the
+  same commit.
+- Per-VIEWER truth: edibility colors/arrows are repainted per half per frame;
+  per-PLAYER state (beats, clocks, near-miss arming) is keyed by seat.
+  Harmless species are excluded from every threat surface for every viewer.
+
 ## Testing rules
 
 - **Game time ≠ wall time.** The `MAX_DELTA = 0.05` clamp (`src/game.js`)

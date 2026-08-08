@@ -45,6 +45,7 @@ export const NEAR_MISS_FACTOR = 1.5; // CLOSE ONE! arms inside this × (player+e
 
 // --- World identity & late game (plan 025) ---
 export const REGION_DISCOVER_DEBOUNCE = 1.5; // Game-seconds a NEW biome region must hold before DISCOVERED fires — shoreline wiggles flicker the bin, and a banner that stutters is no banner
+export const REGION_BINS = 5; // Biome octave quantized into this many identity bands — more bins = more (smaller) discoverable regions and a faster-climbing REGIONS stat (moved from terrain.js: every balance knob lives HERE, terminal review A-2)
 // Gold food: a visible routing prize — worth a detour, not a strategy.
 // 5x points, same full clock reset as normal food; the VALUE is the detour
 // decision, so rarity does the balancing, not the clock.
