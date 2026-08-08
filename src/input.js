@@ -20,7 +20,12 @@ export const keys = {}; // Object to keep track of currently pressed keys
 //   Select mute · Y faster · X slower · LB/RB zoom · Start+Select restart
 // Title: stick/D-pad left-right mode · face start
 const gamepadAxesScratch = { x: 0, z: 0 };
-let prevPadButtons = []; // Edge detection for face/menu buttons
+// Per-pad edge state keyed by gamepad.index — the only stable identity on
+// dual-port DB9 adapters (both interfaces may share an id string). A single
+// shared array would leak pressed-state across pads when the active pad
+// switches, firing false edges on the new pad.
+const prevPadButtonsByIndex = new Map();
+let lastPolledPadIndex = null; // Detect active-pad hand-off → seed, don't fire
 let padConnected = false;
 let preferredPadIndex = null; // Stick to the pad that last produced input
 let padDebugEl = null;
@@ -57,7 +62,8 @@ function buttonPressed(gp, index) {
 }
 
 function buttonEdge(gp, index) {
-    return buttonPressed(gp, index) && !prevPadButtons[index];
+    const prev = prevPadButtonsByIndex.get(gp.index);
+    return buttonPressed(gp, index) && !(prev && prev[index]);
 }
 
 // True when this pad is the F310 (or kin) in DirectInput / non-standard mode.
@@ -230,8 +236,12 @@ function anyFaceEdge(gp) {
 
 function snapshotButtons(gp) {
     const n = gp.buttons ? gp.buttons.length : 0;
-    if (prevPadButtons.length !== n) prevPadButtons = new Array(n).fill(false);
-    for (let i = 0; i < n; i++) prevPadButtons[i] = buttonPressed(gp, i);
+    let prev = prevPadButtonsByIndex.get(gp.index);
+    if (!prev || prev.length !== n) {
+        prev = new Array(n).fill(false);
+        prevPadButtonsByIndex.set(gp.index, prev);
+    }
+    for (let i = 0; i < n; i++) prev[i] = buttonPressed(gp, i);
 }
 
 // True while A or RT is held — continuous-mode boost (mirrors Space).
@@ -268,7 +278,8 @@ export function gamepadDebugInfo() {
 export function pollGamepad() {
     const gp = activeGamepad();
     if (!gp) {
-        if (prevPadButtons.length) prevPadButtons = [];
+        if (prevPadButtonsByIndex.size) prevPadButtonsByIndex.clear();
+        lastPolledPadIndex = null;
         padConnected = false;
         updatePadHud(null);
         updatePadDebug(null);
@@ -277,9 +288,12 @@ export function pollGamepad() {
     padConnected = true;
     updatePadHud(gp);
     updatePadDebug(gp);
-    // First frame after connect: seed edge state without firing. A button
-    // already held at plug-in must not auto-start or jump.
-    if (prevPadButtons.length === 0) {
+    // First poll of this pad (fresh connect, reconnect, or active-pad
+    // hand-off): seed edge state without firing. A button already held must
+    // not auto-start, jump, or toggle pause on the switch itself.
+    const isNewActivePad = gp.index !== lastPolledPadIndex;
+    lastPolledPadIndex = gp.index;
+    if (isNewActivePad || !prevPadButtonsByIndex.has(gp.index)) {
         snapshotButtons(gp);
         return;
     }
@@ -410,8 +424,8 @@ export function setupGamepad() {
     });
     window.addEventListener('gamepaddisconnected', (e) => {
         if (e.gamepad && e.gamepad.index === preferredPadIndex) preferredPadIndex = null;
+        if (e.gamepad) prevPadButtonsByIndex.delete(e.gamepad.index);
         padConnected = !!activeGamepad();
-        prevPadButtons = [];
         updatePadHud(activeGamepad());
         updatePadDebug(activeGamepad());
     });
