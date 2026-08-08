@@ -60,7 +60,9 @@ test('two rapid kills pay more than 2x the single-kill bounty (combo)', async ({
   // Endless spawns go through a 0.95s warn + 0.5s materialize pipeline
   // (src/enemies.js), so the wave spawned by the first kill is not in
   // state.enemies yet — settle on the GAME clock, then require a live
-  // enemy before touching enemies[0] (plan 017).
+  // enemy before touching enemies[0] (plan 017). enemies[0] is the first
+  // wave spawn, whose size band the rotation fixes at height 30 — the
+  // choreography below relies on that, so no reordering/despawning here.
   await waitGameSeconds(page, 2.0);
   await page.waitForFunction(() => window.__game.state.enemies.length >= 1, null, { timeout: 10000 });
 
