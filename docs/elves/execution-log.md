@@ -70,6 +70,34 @@
   test weakened; no lottery reruns claimed as green. Driver decides: patch
   the combo choreography under 027/019 authority, then 021 can run.
 
+## 2026-08-08 — B3 worker: 019 + 020 landed, combo race rooted and ended
+
+- RACE ROOT CAUSE (frame-recorder probe, zero src changes, 3/8 fails all
+  identical): the death fired BEFORE the teleport evaluate — B2's "at
+  teleport" probes had measured an already-dead frozen game. Killer: the
+  streaming giant (sy~25.5, non-killable vs the idle scale-20.5 player) on
+  its first post-materialize frame 40-45u SOUTH: Box3.setFromObject unioned
+  the render tree, so the enemy TAIL (-1.044*sy toward the player) met the
+  player's FACE parts (+0.66*scale) at 40+u — phantom contact; spawn angle
+  was the coin flip; score frozen 34/35 + "Distance 0u" match B2's artifact.
+- Fix: 019 Step 2 explicit body-block hitboxes (solo combo 3/10 fail →
+  9/10 pass); residual 1/10 was HONEST contact (ENDLESS_SPAWN_MIN 35 <
+  37.3u diagonal body reach at these scales) → driver-authorized spec
+  choreography stabilization (intent preserved) → 10/10, green in all
+  subsequent full suites.
+- 019 shipped (31a84a5, 01e5fff): dead-run guard, exported hitbox builders,
+  truthful behind-camera arrows, blur-cleared inputs, single movement
+  clamp, probe-parity rock grace; +8 tests, each proven red-on-old.
+- 020 shipped (29f04d3, ba1996d, 07f49da, 648cfa1): perfInfo hook, shadow
+  diet (19→4 casters/char), chunk culling (+24u spheres, eager-register
+  first draw), food-glow baseY cache + fog gate, indicator/AI/pad/probe
+  hot-loop hygiene, mobile tier + preconnect. Deterministic rig: calls
+  200→182, triangles 71026→50290, frameMsAvg ~0.85→~0.73 (r128 resets
+  info AFTER the shadow pass — diet shows in frame time, not calls).
+- Gates: after 019 suite 91/91 x2; after 020 suite x2 at final HEAD +
+  build 0 (see Close commit). Deferred: game.js food-collect loop still
+  uses render-tree boxes (not an audit finding; flagged for review).
+
 ## 2026-08-08 — Driver reconcile: B2 split, B3 pulled forward with race authority
 
 - Driver verified 018: gamepad spec 10/10 (--workers=1, 35.9s), lint 0, clean
