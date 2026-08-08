@@ -25,7 +25,7 @@ import { keys, moveVector, clearTransientInput, onKeyDown, onKeyUp, setupTouchCo
 import { rumble } from './rumble.js';
 import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension, resetIndicators, showGoFlourish, updateModeHud, updateDistanceDisplay, resetDistanceDisplay } from './ui.js';
 import { resetCollectClock, tickCollectClock, tickComboClock } from './timers.js';
-import { loadWorldMode, saveWorldMode } from './hiscores.js';
+import { loadWorldMode } from './hiscores.js';
 import { unlockAudio, sfx, music } from './audio.js';
 
 // --- Simulation Clock ---
@@ -554,7 +554,6 @@ function shiftEntityForRebase(group, dx, dz) {
 export function forceWorldMode(mode) {
     if (mode !== 'classic' && mode !== 'endless') return;
     state.worldMode = mode;
-    saveWorldMode(mode);
     applyWorldEnvironment();
     updateModeHud();
     if (state.onStartScreen) setupNewGame();

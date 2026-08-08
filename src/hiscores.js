@@ -1,14 +1,12 @@
 // Local storage owner (plan 009 + endless mode). The ONLY module (besides
-// src/audio.js) allowed to touch localStorage — the world-mode preference
-// lives here for that reason. Every storage access is wrapped in try/catch —
-// Safari private mode, blocked storage, or corrupt JSON must degrade to
-// "nothing persists", never to a crash.
+// src/audio.js) allowed to touch localStorage. Every storage access is
+// wrapped in try/catch — Safari private mode, blocked storage, or corrupt
+// JSON must degrade to "nothing persists", never to a crash.
 // Keys are versioned: any future schema change (names, per-mode boards)
 // bumps to .v2 with a migration read of .v1.
 
 const KEY = 'blocky.hiscores.v1'; // Classic board — untouched by endless runs
 const KEY_ENDLESS = 'blocky.hiscores.endless.v1'; // Endless board — its own ladder
-const MODE_KEY = 'blocky.worldMode';
 const MAX = 5;
 
 function keyForMode(mode) {
@@ -30,7 +28,10 @@ function sortBoard(list, mode) {
     return list;
 }
 
-export function loadHiscores(mode = 'classic') {
+// Default mode is ENDLESS — the live product board (audit D-5). A caller
+// that forgets to pass the mode must hit the board players actually see;
+// the classic key + sort branch stay only because real scores exist there.
+export function loadHiscores(mode = 'endless') {
     try {
         const raw = localStorage.getItem(keyForMode(mode));
         const arr = raw ? JSON.parse(raw) : [];
@@ -52,7 +53,7 @@ export function loadHiscores(mode = 'classic') {
 // own board AND its own ladder rule (sortBoard): a monster endless run must
 // not bury the classic ladder, and endless NEW BEST means furthest, not
 // richest.
-export function recordScore(score, mode = 'classic', distance = 0) {
+export function recordScore(score, mode = 'endless', distance = 0) {
     const list = loadHiscores(mode);
     const entry = { score, date: new Date().toISOString().slice(0, 10) };
     if (mode === 'endless') entry.distance = Math.max(0, Math.floor(distance));
@@ -66,16 +67,9 @@ export function recordScore(score, mode = 'classic', distance = 0) {
 }
 
 // --- World-mode preference ---
-// Product is endless-only. load always returns endless; save is a no-op
-// kept so older call sites and tests that still write do not throw.
+// Product is endless-only: load always returns endless. The old saveWorldMode
+// 'blocky.worldMode' write is deleted (audit D-5) — nothing ever read it back
+// (this function ignores storage entirely), so it only planted a stale key.
 export function loadWorldMode() {
     return 'endless';
-}
-
-export function saveWorldMode(mode) {
-    try {
-        // Still record debug classic requests so forceWorldMode can round-trip
-        // in tests; the product boot path never reads classic from storage.
-        localStorage.setItem(MODE_KEY, mode === 'classic' ? 'classic' : 'endless');
-    } catch { /* preference just doesn't persist */ }
 }
