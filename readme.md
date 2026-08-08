@@ -19,9 +19,10 @@ at `/original.html` (outside the password gate).
 
 ## Access
 
-In-app password gate (not Vercel protection). Password: `blocky`. Unlock is
-session-scoped. The gate wraps only the game itself (it defers loading the game
-module); `/original.html` is served outside it.
+In-app password gate (not Vercel protection). Password: see `src/gate.js`
+(shared family password). Unlock is session-scoped. The gate wraps only the
+game itself (it defers loading the game module); `/original.html` is served
+outside it.
 
 ## How to play
 

@@ -1,7 +1,10 @@
 import { test, expect } from '@playwright/test';
+// In-app gate password — single-sourced from src/gate.js (audit SEC-3):
+// no re-declared literal here to drift. Tests usually skip the form via
+// sessionStorage (bypassGate); unlockGate drives it with the real value.
+import { GATE_PASSWORD } from '../src/gate.js';
 
-// In-app gate password (src/gate.js). Tests skip the form via sessionStorage.
-export const GATE_PASSWORD = 'blocky';
+export { GATE_PASSWORD };
 
 // Call before page.goto so the gate never blocks module load.
 export async function bypassGate(page) {
