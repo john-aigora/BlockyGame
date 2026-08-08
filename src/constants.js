@@ -211,9 +211,6 @@ export const JUMP_APEX_HEIGHT = 1.55; // Apex at playerScale 1
 export const JUMP_APEX_GROWTH = 0.75; // Extra apex per unit of scale above 1
 export const JUMP_AIRTIME = 0.52; // Airtime at playerScale 1
 export const JUMP_AIRTIME_GROWTH = 0.07; // Extra airtime per unit scale above 1 (more horizontal range)
-// Legacy derived constants (scale-1) — still used by any reader that imports them.
-export const JUMP_GRAVITY = (8 * JUMP_APEX_HEIGHT) / (JUMP_AIRTIME * JUMP_AIRTIME);
-export const JUMP_VELOCITY = (JUMP_GRAVITY * JUMP_AIRTIME) / 2;
 
 // --- Continuous-movement flag (plan 014 design spike) ---
 // `?move=continuous` opts into the Little Big Snake-style prototype
