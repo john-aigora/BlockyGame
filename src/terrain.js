@@ -234,16 +234,38 @@ const REGION_NAMES = [
     'THE SLEEPY SHORES', 'CLOVER COUNTRY', 'THE WOBBLY WILDS', 'SUGAR STEPPES'
 ];
 
+// The biome octave quantized into its identity band (shared by the key and
+// display paths below — one binning rule, never a fork).
+function biomeBin(biome) {
+    return Math.min(REGION_BINS - 1, Math.max(0, Math.floor(((biome + 1) / 2) * REGION_BINS)));
+}
+
+// Identity-only region key at TRUE (tx, tz) — THE hot path (H13, plan 028
+// batch). updateRegionDiscovery calls this every frame for every living
+// player, and on almost every frame the answer is "same key as before":
+// building the full biomeRegion object there threw away a fresh object,
+// a name hash, and a formatted CSS color string per player per frame.
+// This returns just the key (one short string — the comparison target
+// game.js stores in player.regionKey), leaving name/color to biomeRegion,
+// which the discovery branch calls only when a region actually commits.
+export function biomeRegionKey(tx, tz) {
+    return biomeBin(biomeAt(tx, tz)) + ':' +
+        Math.floor(tx / BIOME_WAVELENGTH) + ':' + Math.floor(tz / BIOME_WAVELENGTH);
+}
+
 // Region identity + display data at TRUE (tx, tz): the biome bin crossed
 // with a BIOME_WAVELENGTH-sized cell grid, so one huge biome band still
 // breaks into discoverable places. `key` is the identity game.js debounces
-// on; `name` is a seeded pick from the table (WORLD_SEED in the mix — a new
-// seed deals a fresh map of names); `color` is the biome's own tint
-// direction as a CSS color for the DISCOVERED popup (greener bins mint,
-// bluer bins sky-cyan — the teal family both ways, readable on any sky).
+// on (byte-identical to biomeRegionKey at the same point — same binning,
+// same cell math); `name` is a seeded pick from the table (WORLD_SEED in
+// the mix — a new seed deals a fresh map of names); `color` is the biome's
+// own tint direction as a CSS color for the DISCOVERED popup (greener bins
+// mint, bluer bins sky-cyan — the teal family both ways, readable on any
+// sky). Display path: called on discovery commits, resets, and the debug
+// handle — never per frame (that is biomeRegionKey's job).
 export function biomeRegion(tx, tz) {
     const biome = biomeAt(tx, tz);
-    const bin = Math.min(REGION_BINS - 1, Math.max(0, Math.floor(((biome + 1) / 2) * REGION_BINS)));
+    const bin = biomeBin(biome);
     const cellX = Math.floor(tx / BIOME_WAVELENGTH);
     const cellZ = Math.floor(tz / BIOME_WAVELENGTH);
     let h = (Math.imul(bin + 1, 2246822519) ^ Math.imul(cellX, 374761393) ^
@@ -495,7 +517,20 @@ function acquireChunkMesh() {
     const pooled = meshPool.pop();
     if (pooled) {
         pooled.visible = true;
-        pooled.frustumCulled = true; // Geometry already registered — cull from frame 1
+        // Cull-flag hardening (H8, plan 028 batch): only cull from frame 1
+        // if this mesh's geometry has actually been through a render —
+        // userData.registered is set by the eager-register flip below, at
+        // the mesh's first real draw. A mesh released BEFORE that draw
+        // (built and released between two resets with no rendered frame in
+        // between) still carries its un-run flip handler; sending it back
+        // out with frustumCulled=true would let an off-frustum re-entry
+        // defer geometry registration until the camera happens to look at
+        // it — exactly the late-registration bump the resource-plateau
+        // specs pin against. Unreachable today (every reset path renders
+        // between builds), closed anyway: the un-registered re-acquire
+        // just re-enters the one-frame eager path its pending flip already
+        // implements.
+        pooled.frustumCulled = pooled.userData.registered === true;
         return pooled;
     }
     meshAllocCount++;
@@ -506,6 +541,7 @@ function acquireChunkMesh() {
     mesh.receiveShadow = true;
     mesh.frustumCulled = false; // One eager-registration draw, then...
     mesh.onAfterRender = () => {
+        mesh.userData.registered = true; // Proof of first real draw (H8 gate above)
         mesh.frustumCulled = true; // ...culled for life (pool reuse keeps it)
         mesh.onAfterRender = () => {};
     };

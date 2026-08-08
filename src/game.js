@@ -19,7 +19,7 @@ import { createPlayer, disposeCharacter, P2_BODY_COLOR } from './characters.js';
 import { createEnemy, updateEnemies, updateEnemyStreaming, resetEnemyStreaming, playerBox, scratchBox, setPlayerCollisionBox, beginMaterialize, updateSpawnWarnings, clearPendingSpawns, shiftPendingSpawns, reimagePendingSpawns, scheduleEnemySpawn, currentEnemyScaleFactor } from './enemies.js';
 import { spawnNearPlayer, spawnAnywhere, setCollectibleBox } from './collectibles.js';
 import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoomIn, zoomOut, updateGroundScroll, createCameraFor, renderFrame } from './world.js';
-import { initTerrain, setTerrainActive, resetTerrainForNewRun, updateTerrain, shiftTerrain, groundHeightAt, slideMove, isRockWedged, biomeRegion, isWalkable } from './terrain.js';
+import { initTerrain, setTerrainActive, resetTerrainForNewRun, updateTerrain, shiftTerrain, groundHeightAt, slideMove, isRockWedged, biomeRegion, biomeRegionKey, isWalkable } from './terrain.js';
 import { initClouds, setCloudMode, updateClouds, shiftClouds } from './clouds.js';
 import { initEffects, updateEffects, resetEffects, onCollect, onGrowthMilestone, shiftActiveParticles, spawnTextPopup, onJumpTakeoff, onJumpLand } from './effects.js';
 import { keys, moveVector, clearTransientInput, resetSeatActivity, onKeyDown, onKeyUp, setupTouchControls, setupGamepad, pollGamepad } from './input.js';
@@ -615,29 +615,33 @@ function resetRegionTracking() {
         p.regionKey = null;
     }
     if (state.worldMode === 'endless') {
-        const home = biomeRegion(state.worldOrigin.x, state.worldOrigin.z); // Players spawn at local (0,0) on reset
-        for (const p of state.players) p.regionKey = home.key;
-        state.regionsVisited.add(home.key);
+        const homeKey = biomeRegionKey(state.worldOrigin.x, state.worldOrigin.z); // Players spawn at local (0,0) on reset
+        for (const p of state.players) p.regionKey = homeKey;
+        state.regionsVisited.add(homeKey);
     }
 }
 
 function updateRegionDiscovery(player) {
     const p = player.mesh.position;
-    const region = biomeRegion(p.x + state.worldOrigin.x, p.z + state.worldOrigin.z);
-    if (region.key === player.regionKey) {
+    // Hot path (H13): identity only — the full biomeRegion object (name
+    // hash + CSS color string) is built below, exclusively on the
+    // first-ever-visit branch. Same binning/cell math, identical keys.
+    const key = biomeRegionKey(p.x + state.worldOrigin.x, p.z + state.worldOrigin.z);
+    if (key === player.regionKey) {
         player.regionCandidateKey = null; // Back home before the debounce ran out
         return;
     }
-    if (region.key !== player.regionCandidateKey) {
-        player.regionCandidateKey = region.key; // New candidate: start the clock
+    if (key !== player.regionCandidateKey) {
+        player.regionCandidateKey = key; // New candidate: start the clock
         player.regionCandidateSince = state.runTime;
         return;
     }
     if (state.runTime - player.regionCandidateSince < REGION_DISCOVER_DEBOUNCE) return;
-    player.regionKey = region.key; // Held long enough — the player really moved
+    player.regionKey = key; // Held long enough — the player really moved
     player.regionCandidateKey = null;
-    if (!state.regionsVisited.has(region.key)) {
-        state.regionsVisited.add(region.key);
+    if (!state.regionsVisited.has(key)) {
+        state.regionsVisited.add(key);
+        const region = biomeRegion(p.x + state.worldOrigin.x, p.z + state.worldOrigin.z); // Display data, built only here
         milestoneOrigin.x = p.x;
         milestoneOrigin.y = p.y + player.scale + 0.6; // Above the head (milestone pattern)
         milestoneOrigin.z = p.z;

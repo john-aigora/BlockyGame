@@ -122,11 +122,19 @@ test('crossing into a new region fires DISCOVERED and the death screen counts RE
   const region = await page.evaluate(() => ({
     home: window.__game.debug.biomeRegion(0, 0),
     again: window.__game.debug.biomeRegion(0, 0),
-    far: window.__game.debug.biomeRegion(400, 0)
+    far: window.__game.debug.biomeRegion(400, 0),
+    // H13 (plan 028 batch): the per-frame identity path must agree with the
+    // full display object byte-for-byte — a fork between them would let a
+    // hero "re-discover" (or never re-enter) a region the visited set
+    // already knows under the other spelling.
+    homeKey: window.__game.debug.biomeRegionKey(0, 0),
+    farKey: window.__game.debug.biomeRegionKey(400, 0)
   }));
   expect(region.again).toEqual(region.home);
   expect(region.far.key).not.toBe(region.home.key); // 400u crosses the 300u cell grid
   expect(region.far.name).toMatch(/^[A-Z' ]+$/);
+  expect(region.homeKey).toBe(region.home.key); // Hot path === display path (H13)
+  expect(region.farKey).toBe(region.far.key);
 
   await startGame(page);
   expect(await page.evaluate(() => window.__game.state.regionsVisited.size)).toBe(1); // Spawn region pre-seeded, no banner

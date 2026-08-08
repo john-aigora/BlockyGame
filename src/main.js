@@ -5,7 +5,7 @@ import { spawnNewEnemies, updateEnemyStreaming, resetEnemyStreaming, updateSpawn
 import { onTouchStart, onTouchMove, onTouchEndOrCancel, gamepadVector, pollGamepad, isGamepadConnected, gamepadDebugInfo, seatInfo } from './input.js';
 import { sfx, isMuted, audioState, music } from './audio.js';
 import { spawnBurst, spawnScorePopup, effectsInfo } from './effects.js';
-import { terrainHeight, groundHeightAt, terrainInfo, isWalkable, canMove, terrainTint, isRockFree, biomeRegion } from './terrain.js';
+import { terrainHeight, groundHeightAt, terrainInfo, isWalkable, canMove, terrainTint, isRockFree, biomeRegion, biomeRegionKey } from './terrain.js';
 import { WORLD_SEED, DAILY_WORLD } from './constants.js';
 import { cloudInfo } from './clouds.js';
 import { movementDebug } from './movement-continuous.js';
@@ -72,6 +72,7 @@ window.__game = {
         terrainInfo, // { activeChunks, pooledMeshes, queued, builds, ... } — streaming/pool checks
         terrainTint, // { h, r, g, b } vertex color at TRUE coords — biome/shoreline checks
         biomeRegion, // { key, bin, cellX, cellZ, name, color } at TRUE coords — region-identity checks (plan 025)
+        biomeRegionKey, // Identity-only hot path (H13) — worldfun pins it byte-equal to biomeRegion().key
         isWalkable, // Endless collision query (water + rocks) — impassability checks
         canMove, // Honest directional movement probe — gap-width fairness checks
         isRockFree, // Rock-circle-only query — the jump spec finds seeded rocks with it
