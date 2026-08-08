@@ -2,8 +2,8 @@
 // THROWAWAY PROTOTYPE, active only behind `?move=continuous` (see
 // MOVEMENT_MODE in constants.js). Deliberately spike-quality: inline-styled
 // DOM, no tests, tuning numbers straight from the family's saved notes
-// (grok_tips.md §1-2). If the scheme is adopted, a real plan replaces this
-// module; if rejected, delete it plus the MOVEMENT_MODE branches.
+// (docs/history/grok_tips.md §1-2). If the scheme is adopted, a real plan
+// replaces this module; if rejected, delete it plus the MOVEMENT_MODE branches.
 //
 // Behavior:
 // - Desktop: the player moves continuously at actualPlayerSpeed toward the

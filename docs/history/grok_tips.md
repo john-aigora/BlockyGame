@@ -1,3 +1,6 @@
+> Historical reference (moved here from the repo root 2026-08-08): the family's saved Grok feedback, in the repo since 2025-05-11, that seeded the Little Big Snake ideas.
+> Superseded by `plans/014-lbs-movement-spike.md` and `plans/design/lbs-movement-notes.md` — read those for the current state of the LBS direction.
+
 This file contains detailed suggestions and implementation notes from Grok (via User) for enhancing Blocky Collector 3D, inspired by games like Little Big Snake. This information was originally provided in a user query and is preserved here for reference.
 
 ## Grok's Feedback Text (Received from User):

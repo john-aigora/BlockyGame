@@ -105,11 +105,9 @@ export function updateModePicker() {
         el.modeEndless.setAttribute('aria-pressed', String(endless));
     }
     if (el.endlessHint) el.endlessHint.style.display = endless ? '' : 'none';
-    if (el.controlsHint) {
-        el.controlsHint.textContent = endless
-            ? 'Move: Stick / WASD · Jump: Space or A · Slow: X or R · Fast: Y · Pause: Start · Mute: Select'
-            : 'Move: Stick / WASD · Slow: X or R · Fast: Y · Pause: Start · Mute: Select · F cycles';
-    }
+    // Controls-hint text is single-sourced in index.html (#controls-hint) —
+    // the old per-mode textContent overwrite here is gone (plan 021); classic
+    // is a test-only path and keeps the endless wording.
     if (el.distanceDisplay) {
         el.distanceDisplay.style.display = endless ? '' : 'none';
     }

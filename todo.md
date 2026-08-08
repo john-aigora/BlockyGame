@@ -19,17 +19,17 @@ This file tracks potential future enhancements and features for the game.
     - [ ] Pets could visually follow the player.
 
 ## Gameplay Enhancements (Existing & From Grok/Gemini Summary)
-- [ ] **Enhanced Player Movement (Consider Little Big Snake Style - Major Refactor):**
-    - [ ] **Desktop:** Option for continuous movement towards mouse cursor.
-    - [ ] **Desktop:** Option for smooth player rotation to face cursor.
-    - [ ] **Mobile:** Option for virtual joystick with continuous movement / persistent direction.
-    - [ ] General: Aim for smoother, more fluid gameplay feel ("Little Big Snake feel").
-- [ ] **Boost Mechanic with Energy System (Inspired by LBS):**
-    - [ ] Activation: Hold Left-click/Space (desktop), or a dedicated touch button (mobile).
-    - [ ] Speed Increase: e.g., 1.5x base speed.
-    - [ ] Energy Meter: Max capacity, drains during boost, regenerates when not boosting.
-    - [ ] UI: Visual energy bar.
-    - [ ] Visuals: Particle trail effect during boost.
+- [x] **Enhanced Player Movement (Consider Little Big Snake Style - Major Refactor):** _(spike, behind `?move=continuous` — see plans/design/lbs-movement-notes.md; adopt-or-delete pending family playtest)_
+    - [x] **Desktop:** Option for continuous movement towards mouse cursor. _(spike)_
+    - [x] **Desktop:** Option for smooth player rotation to face cursor. _(spike: framerate-independent heading lerp)_
+    - [x] **Mobile:** Option for virtual joystick with continuous movement / persistent direction. _(spike: drag steers, heading persists on finger lift)_
+    - [x] General: Aim for smoother, more fluid gameplay feel ("Little Big Snake feel"). _(spike — the family playtest judges it)_
+- [x] **Boost Mechanic with Energy System (Inspired by LBS):** _(spike, behind `?move=continuous` — see plans/design/lbs-movement-notes.md; adopt-or-delete pending family playtest)_
+    - [x] Activation: Hold Left-click/Space (desktop), or a dedicated touch button (mobile). _(spike: hold Space, or the on-screen BOOST button)_
+    - [x] Speed Increase: e.g., 1.5x base speed. _(spike: ×1.5)_
+    - [x] Energy Meter: Max capacity, drains during boost, regenerates when not boosting. _(spike: 100 max, −10/s boosting, +5/s regen)_
+    - [x] UI: Visual energy bar. _(spike)_
+    - [x] Visuals: Particle trail effect during boost. _(spike)_
 - [ ] **Trailing Body Segments (Visual Growth & Gameplay Impact - LBS Style):**
     - [ ] Each food block collected adds a segment up to a max.
     - [ ] Segments follow player's path history.
@@ -95,7 +95,7 @@ This file tracks potential future enhancements and features for the game.
 - [ ] **Visual Effects (Particles, etc.):**
     *   [x] Particle effect when player collects food.
     *   [x] More elaborate particle effect for enemy "explosion" on defeat (linked to dynamic food spawn).
-    *   [ ] Trail effect for player movement (especially during boost - e.g., lime green sparks).
+    *   [x] Trail effect for player movement (especially during boost - e.g., lime green sparks). _(spike, behind `?move=continuous` — see plans/design/lbs-movement-notes.md; adopt-or-delete pending family playtest)_
     *   [ ] Visual feedback for player growth (beyond just scaling/segments).
     *   [ ] Visual effect for power-up orbs (e.g., glowing).
     *   [ ] Visual indication for Shield power-up active on player.
@@ -109,7 +109,7 @@ This file tracks potential future enhancements and features for the game.
     *   [x] More distinct styling for active/hover states on UI buttons.
     *   [x] Potentially a start screen/main menu.
     *   [ ] On-screen indication of current speed multiplier (if button text isn't enough).
-    *   [ ] Energy Bar for Boost Mechanic.
+    *   [x] Energy Bar for Boost Mechanic. _(spike, behind `?move=continuous` — see plans/design/lbs-movement-notes.md; adopt-or-delete pending family playtest)_
     *   [ ] Icon display for active Power-Up.
     *   [ ] Skin selector UI (post-game or in menu for Roblox skins).
     *   [x] Improve "New Game" start flow/button for user-friendliness.
@@ -129,7 +129,7 @@ This file tracks potential future enhancements and features for the game.
 - [ ] **Save Game State (More Advanced):**
     *   [ ] Allow pausing and resuming session later (e.g., via `localStorage`).
 - [x] **More Levels or Game Modes (Advanced):** _(shipped 2026: the ENDLESS WORLD mode — an infinite streamed world with hills, lakes, boulders, a curved horizon, biome regions, distance milestones, and its own BEST RUNS board)_
-    *   [x] Different arenas or layouts. _(mode picker on the start screen: CLASSIC ARENA / ENDLESS WORLD)_
+    *   [x] Different arenas or layouts. _(the ENDLESS WORLD replaced the classic arena, which retired to a test-only path)_
     *   [ ] Challenge modes (e.g., time attack, survival against waves).
 - [ ] **Settings Menu:**
     *   [x] Toggle sound/music on/off.
@@ -152,7 +152,7 @@ This file tracks potential future enhancements and features for the game.
 - [ ] **Enhanced Mobile UI/UX:**
     *   [ ] Consider dedicated pause button for touch interface that's larger/better placed than top-corner controls.
     *   [x] Test on various device sizes and adjust UI breakpoints.
-    *   [ ] Design/Implement dedicated touch button for Boost if LBS movement and boost are adopted.
+    *   [x] Design/Implement dedicated touch button for Boost if LBS movement and boost are adopted. _(spike, behind `?move=continuous` — see plans/design/lbs-movement-notes.md; adopt-or-delete pending family playtest)_
 
 ---
-*This todo list has been updated with suggestions inspired by Little Big Snake (from Grok via User) and a summary from Gemini (via User).* 
+*This todo list has been updated with suggestions inspired by Little Big Snake (from Grok via User — the full notes are preserved at [docs/history/grok_tips.md](docs/history/grok_tips.md)) and a summary from Gemini (via User).*
