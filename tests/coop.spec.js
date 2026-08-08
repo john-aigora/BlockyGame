@@ -316,6 +316,139 @@ test('start-overlay entry: 2 PLAYERS flips and persists across reload; 1 PLAYER 
   expect(await page.evaluate(() => sessionStorage.getItem('blocky.playerCount'))).toBe('1');
 });
 
+test('per-half danger vignette: a hunter stalking P2 reddens ONLY P2\'s half — and the CSS rule actually paints it', async ({ page }) => {
+  await startTwoPlayerGame(page);
+  await clearThreats(page);
+  // Separate the heroes far beyond 2x DANGER_RADIUS (9), then park a giant
+  // hunter 7u from P2 — inside P2's danger ring, 67u from P1. Bubble
+  // top-ups land at >=35u (ENDLESS_SPAWN_MIN), so no ambient spawn can
+  // leak danger onto P1 during the short window; at enemy speed 1.5u/s
+  // the ~4u closing gap to contact buys several game-seconds of headroom.
+  await page.evaluate(() => {
+    const s = window.__game.state;
+    s.players[1].mesh.position.x = 60;
+    window.__game.debug.spawnSpecies('grunt', 67, 0, 4); // Height 4.8 — pure hunter for either hero
+  });
+  await page.waitForFunction(() => window.__game.state.players[1].dangerOpacity > 0.15, null, { timeout: 30000 });
+  const vig = await page.evaluate(() => {
+    const read = (seat) => {
+      const cs = getComputedStyle(document.querySelector(`.danger-vignette[data-seat="${seat}"]`));
+      return {
+        opacity: parseFloat(cs.opacity),
+        display: cs.display,
+        position: cs.position,
+        background: cs.backgroundImage
+      };
+    };
+    return { p1: read(0), p2: read(1) };
+  });
+  // P2's half glows — and is STYLED (B8 review BLOCK-1): the base vignette
+  // rule must match the class-based coop element. A bare unstyled div would
+  // still report the driven opacity while painting nothing, so the matched
+  // rule itself (radial gradient + absolute frame position) is the assert.
+  expect(vig.p2.opacity).toBeGreaterThan(0.05); // 0.15 base x breath >= 0.6
+  expect(vig.p2.display).toBe('block');
+  expect(vig.p2.position).toBe('absolute');
+  expect(vig.p2.background).toContain('radial-gradient');
+  // P1's half stays calm on the SAME styled rule.
+  expect(vig.p1.opacity).toBeLessThan(0.02);
+  expect(vig.p1.background).toContain('radial-gradient');
+});
+
+test('coop board: teamScore-desc ranking, maxDistance tiebreak, trimmed to top 5', async ({ page }) => {
+  test.setTimeout(150000);
+  await startTwoPlayerGame(page);
+  await clearThreats(page);
+  // Five seeded team runs. The 12/999u row ties the upcoming run's
+  // teamScore with a FAR higher distance — the tiebreak must keep it
+  // ahead; the 5-pt row must fall off the trimmed board.
+  await page.evaluate(() => {
+    localStorage.setItem('blocky.hiscores.coop.v1', JSON.stringify([
+      { p1Score: 25, p2Score: 25, teamScore: 50, maxDistance: 10, date: '2026-01-01' },
+      { p1Score: 20, p2Score: 20, teamScore: 40, maxDistance: 10, date: '2026-01-02' },
+      { p1Score: 6, p2Score: 6, teamScore: 12, maxDistance: 999, date: '2026-01-03' },
+      { p1Score: 4, p2Score: 4, teamScore: 8, maxDistance: 10, date: '2026-01-04' },
+      { p1Score: 3, p2Score: 2, teamScore: 5, maxDistance: 10, date: '2026-01-05' }
+    ]));
+  });
+  // The mid-ranked run: team 3+9=12 at ~40u, then both clocks expire.
+  await page.evaluate(() => {
+    const s = window.__game.state;
+    s.players[0].score = 3;
+    s.players[1].score = 9;
+    s.players[1].mesh.position.x = 40;
+  });
+  await waitGameSeconds(page, 0.3); // The distance frame registers 40u
+  await page.evaluate(() => {
+    window.__game.state.players.forEach((p) => { p.collectTimeLeft = 0.05; });
+  });
+  await waitForGameOver(page);
+  const board = await page.evaluate(() => JSON.parse(localStorage.getItem('blocky.hiscores.coop.v1')));
+  expect(board).toHaveLength(5); // Trimmed: one of the six is gone...
+  expect(board.some((e) => e.teamScore === 5)).toBe(false); // ...and it is the bottom row
+  expect(board.map((e) => e.teamScore)).toEqual([50, 40, 12, 12, 8]); // teamScore desc
+  expect(board[2].maxDistance).toBe(999); // Equal teams rank by distance...
+  expect(board[3].p1Score).toBe(3); // ...so the new 12-pt/40u run sits BELOW the 12-pt/999u row
+  expect(board[3].p2Score).toBe(9);
+  expect(board[3].maxDistance).toBeGreaterThanOrEqual(40);
+  // The death screen renders that ranking with the new run highlighted mid-list.
+  await expect(page.locator('#hiscore-slot')).toContainText('TEAM RUNS');
+  await expect(page.locator('#hiscore-slot .hiscore-list li').nth(3)).toHaveClass(/is-new/);
+});
+
+test('per-half arrows: each half\'s offscreen arrows stay inside ITS bounds and wear ITS viewer\'s colors', async ({ page }) => {
+  await startTwoPlayerGame(page);
+  await clearThreats(page);
+  // A grown P1, a small P2 300u east, and ONE formed grunt 60u east of P1
+  // (inside the 80u despawn ring): offscreen for BOTH cameras, edible for
+  // P1 (2 > 1.44) but a hunter for P2 (1 < 1.44) — the same body must
+  // paint yellow on the left half and blue on the right (B8 review
+  // BLOCK-4: seat 0 owns pool slots 0-4, seat 1 owns 5-9, and the first
+  // roster enemy claims the first slot of each half's slice).
+  await page.evaluate(() => {
+    const s = window.__game.state;
+    s.players[0].scale = 2;
+    s.players[1].mesh.position.x = 300;
+    window.__game.debug.spawnSpecies('grunt', 60, 0, 1.2); // Height 1.44
+  });
+  await page.waitForFunction(() => {
+    const inds = window.__game.state.enemyIndicators;
+    return inds[0].style.display === 'block' && inds[5].style.display === 'block';
+  }, null, { timeout: 30000 });
+  const info = await page.evaluate(() => {
+    const rect = window.__game.state.gameContainer.getBoundingClientRect();
+    return {
+      seam: rect.left + Math.floor(rect.width / 2),
+      left: rect.left,
+      right: rect.right,
+      inds: window.__game.state.enemyIndicators.map((el) => {
+        const r = el.getBoundingClientRect();
+        return {
+          visible: el.style.display === 'block',
+          centerX: (r.left + r.right) / 2,
+          color: getComputedStyle(el).backgroundColor
+        };
+      })
+    };
+  });
+  expect(info.inds.filter((i) => i.visible).length).toBeGreaterThanOrEqual(2);
+  // Every seat-0 arrow inside the LEFT half, every seat-1 arrow inside the
+  // RIGHT half — the seam is respected from both sides.
+  for (const i of info.inds.slice(0, 5)) {
+    if (!i.visible) continue;
+    expect(i.centerX).toBeGreaterThan(info.left);
+    expect(i.centerX).toBeLessThan(info.seam);
+  }
+  for (const i of info.inds.slice(5)) {
+    if (!i.visible) continue;
+    expect(i.centerX).toBeGreaterThan(info.seam);
+    expect(i.centerX).toBeLessThan(info.right);
+  }
+  // Same enemy, two truths: P1's half shows it EDIBLE, P2's half HUNTER.
+  expect(info.inds[0].color).toBe('rgba(255, 235, 59, 0.8)');
+  expect(info.inds[5].color).toBe('rgba(3, 169, 244, 0.8)');
+});
+
 test('solo input is untouched: WASD and Arrows both drive the single hero', async ({ page }) => {
   // No startTwoPlayer — the classic merged keyboard must still hold.
   await page.locator('#start-button').click();

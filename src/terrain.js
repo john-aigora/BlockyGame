@@ -141,25 +141,29 @@ let streaming = false; // True while endless mode is the live environment
 // Streaming anchors (plan 026): every LIVING player is an anchor — the
 // active set is the UNION of each anchor's window. With all players dead
 // (the frozen death-screen world) the fallback anchor is seat 0's corpse,
-// which is exactly the old single-player behavior. Scratch array — rebuilt
-// per frame, never allocated per frame beyond the entries.
+// which is exactly the old single-player behavior. Scratch array over
+// PRE-ALLOCATED slot objects (B8 review ADV-9) — this runs per frame, and
+// the old literal pushes allocated 1-2 objects each call.
 const anchorScratch = [];
+const anchorSlots = [{ cx: 0, cz: 0 }, { cx: 0, cz: 0 }]; // One per possible seat; the corpse fallback reuses slot 0
+
+function pushAnchor(x, z) {
+    const slot = anchorSlots[anchorScratch.length] ??
+        (anchorSlots[anchorScratch.length] = { cx: 0, cz: 0 }); // Roster growth beyond 2 stays safe
+    slot.cx = Math.floor((x + state.worldOrigin.x) / CHUNK_SIZE);
+    slot.cz = Math.floor((z + state.worldOrigin.z) / CHUNK_SIZE);
+    anchorScratch.push(slot);
+}
 
 function currentAnchors() {
     anchorScratch.length = 0;
     for (const player of state.players) {
         if (!player.alive || !player.mesh) continue;
-        anchorScratch.push({
-            cx: Math.floor((player.mesh.position.x + state.worldOrigin.x) / CHUNK_SIZE),
-            cz: Math.floor((player.mesh.position.z + state.worldOrigin.z) / CHUNK_SIZE)
-        });
+        pushAnchor(player.mesh.position.x, player.mesh.position.z);
     }
     if (anchorScratch.length === 0 && state.players[0].mesh) {
         const p = state.players[0].mesh.position;
-        anchorScratch.push({
-            cx: Math.floor((p.x + state.worldOrigin.x) / CHUNK_SIZE),
-            cz: Math.floor((p.z + state.worldOrigin.z) / CHUNK_SIZE)
-        });
+        pushAnchor(p.x, p.z);
     }
     return anchorScratch;
 }
