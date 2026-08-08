@@ -1,4 +1,4 @@
-import { applySpeedMultiplier, speedUp, speedDown, forceWorldMode } from './game.js';
+import { applySpeedMultiplier, speedUp, speedDown, forceWorldMode, perfInfo } from './game.js';
 import { state } from './state.js';
 import { spawnNearPlayer, spawnAtPosition } from './collectibles.js';
 import { spawnNewEnemies, updateEnemyStreaming, resetEnemyStreaming, updateSpawnWarnings } from './enemies.js';
@@ -41,6 +41,7 @@ window.__game = {
         spawnBurst, // Particle pool-discipline checks (effects spec)
         spawnScorePopup, // Score-popup pool-discipline checks (effects spec)
         effectsInfo, // { reducedMotion, activeParticles, poolSize }
+        perfInfo, // { calls, triangles, geometries, textures, frameMsAvg } — plan 020 measurement hook
         terrainHeight, // Pure seeded height sampler (endless) — determinism checks
         groundHeightAt, // Origin-aware local-coordinate sampler (endless)
         terrainInfo, // { activeChunks, pooledMeshes, queued, builds, ... } — streaming/pool checks

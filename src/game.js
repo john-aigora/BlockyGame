@@ -599,6 +599,24 @@ function reimageEntities() {
     }
 }
 
+// --- Perf measurement (plan 020 Step 1) ---
+// Wall-clock cost of one full update+render pass, exponentially averaged
+// (~20-frame window). DIAGNOSTICS ONLY: this never feeds the simulation —
+// game logic keeps using the clamped game clock (dt above). Exposed on the
+// debug handle as perfInfo() together with the renderer's draw counters.
+let frameMsAvg = 0;
+
+export function perfInfo() {
+    const r = state.renderer;
+    return {
+        calls: r ? r.info.render.calls : 0,
+        triangles: r ? r.info.render.triangles : 0,
+        geometries: r ? r.info.memory.geometries : 0,
+        textures: r ? r.info.memory.textures : 0,
+        frameMsAvg
+    };
+}
+
 // --- Animation Loop ---
 // Called by the browser each display frame; `now` is the RAF timestamp (ms).
 function animate(now) {
@@ -606,6 +624,7 @@ function animate(now) {
     if (lastFrameTime === null) lastFrameTime = now;
     const dt = Math.min((now - lastFrameTime) / 1000, MAX_DELTA);
     lastFrameTime = now;
+    const frameStart = performance.now(); // perfInfo probe — see above
     // Gamepad runs every frame — start/death/pause need button edges even
     // when update() early-returns (paused or no active run).
     pollGamepad();
@@ -626,6 +645,8 @@ function animate(now) {
     // game over — the frozen scene must stay visible behind the message box.
     updateCameraPosition(dt);
     state.renderer.render(state.scene, state.camera);
+    // Exponential average of the whole update+render body (perfInfo).
+    frameMsAvg += (performance.now() - frameStart - frameMsAvg) * 0.05;
 }
 
 // --- Game Reset Function ---
