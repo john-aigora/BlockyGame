@@ -39,14 +39,15 @@
 
 ## Next action
 
-- **NOW**: B4 worker — plan 022 (15-item bundle) + driver-granted extra H7:
-  behind-camera arrow edge push uses a fixed NDC 1000 which corner-quantizes
-  bearings — scale by `1.001 / max(|x|,|y|)` instead (keeps the true edge
-  point). B2b (021, done) skipped its own review — FOLD B2b+B4 into one
-  review window (eb4e51d..B4-close) after B4 lands.
-- Then B5 (023) → B6 (024) → B7 (025) → B8 (026) → B9 (027) → B10 (028).
+- **NOW**: B5 worker — plan 023 (fun: blob shadows, survival beats, danger
+  music layer, title warmth). Then B6 (024) → B7 (025) → B8 (026) → B9 (027)
+  → B10 (028).
 - Loop per batch: worker → driver verify → fresh review → reconcile
   (Review-phase commit) → guide/log update → next batch.
+- FLAKE POLICY (growing suite, 3 workers): a full-suite failure on a spec NOT
+  on the batch's surfaces gets ONE solo re-run + ONE full re-run; solo-green +
+  full-green = pre-existing load-flake class (H4/H11), record and continue.
+  Root fix is B9's wall-clock retirement.
 - At TERMINAL readiness: flip B2's historical 018-1 acceptance row to met:true
   (suite green at final HEAD is the proof; resolution note already in session).
 

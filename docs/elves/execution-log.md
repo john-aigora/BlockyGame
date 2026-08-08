@@ -110,6 +110,30 @@
 - B2's fresh review is deferred and COMBINED with B3's (window 4c07c00..B3
   close) so one reviewer sees the pad work plus what builds on it.
 
+## 2026-08-08 — B2b+B4 review BLOCK → driver revision → resolved (c795dea)
+
+- Review verdict on eb4e51d..6786a8a: BLOCK on 3 findings, all confirmed real:
+  B1 the new CSP forbade the museum archive's ONLY bootstrap (inline script)
+  — deploy-time-only, invisible to `vite build`; B2 the relocated KILL! banner
+  painted UNDER the mobile-sized ORIGINAL '25 link (z 120 vs 50, link grows to
+  72px tall ≤600px); B3 CLAUDE.md re-declared the password item 15 had just
+  single-sourced. Everything else in the window verified sound (CLAUDE.md
+  fact table all-true; debt items no orphaned readers; H7 degenerate-case
+  safe).
+- Driver revision (c795dea): CSP += 'unsafe-inline' (script-src, both
+  /original rules); kill/combo desktop 52/106 + mobile media-query 88/142 —
+  proven by LIVE GEOMETRY probe (mobile link-bottom 194 < kill-top 200,
+  desktop 92 < 103; screenshots b4rev-kill-{390x844,1280x800}.png); CLAUDE.md
+  literal removed (scan clean). Advisories done in the same commit: A1
+  modifier guard hoisted above the game-over branch (Cmd+Space on death
+  screen no longer resets), A4 dead worldMode seeds deleted, A5 dead
+  el.controlsHint cache removed, A6 constants.js Node-import contract note,
+  A7 README 022 label 15→16.
+- Delta verification in lieu of a second reviewer pass (recorded decision:
+  every fix followed the reviewer's own specified mechanism and carries
+  direct evidence a read-only pass could not improve on): targeted specs
+  21/21, full suite 95/95, lint 0, JSON parses, geometry probe above.
+
 ## 2026-08-08 — Combined B2+B3 review: APPROVE-WITH-ADVISORIES, 0 blockers
 
 - Reviewer independently verified: combo-spec assertion pair byte-identical to
