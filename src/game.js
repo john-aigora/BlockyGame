@@ -880,6 +880,37 @@ function nearestImageToPlayer(x, z) {
     return reimageScratch;
 }
 
+// --- Deterministic time stepper (plan 027 Step 1) ---
+// TEST-ONLY (debug.advance — must never ship to players beyond the debug
+// handle, same policy as the rest of __game): advances the simulation by
+// `seconds` of GAME time through the REAL update(), so timers, spawns,
+// combos, and warn discs all tick exactly as they would live.
+// Assert-paused pattern: cancel the pending rAF first so the stepper is the
+// ONLY driver of update() (animate() re-requests itself at the top of every
+// frame, so state.animationFrameId is always the one pending handle —
+// cancel + re-request keeps the invariant "exactly one rAF in flight" and
+// the loop can never double-run). Steps in fixed 1/60 s frames — the same
+// order of magnitude as live frames and safely under the MAX_DELTA clamp.
+// A death mid-advance is fine: update() early-returns on !gameActive and
+// the remaining steps are no-ops (the entry guard below only rejects calls
+// that START on a dead/menu state).
+export function advanceGameTime(seconds, { allowMenu = false } = {}) {
+    if (!state.gameActive && !allowMenu) {
+        throw new Error('advanceGameTime: no active run (pass {allowMenu:true} to step anyway)');
+    }
+    if (state.animationFrameId !== null) {
+        cancelAnimationFrame(state.animationFrameId);
+        state.animationFrameId = null;
+    }
+    const steps = Math.ceil(seconds * 60);
+    for (let i = 0; i < steps; i++) update(1 / 60);
+    // Resume the live loop: null lastFrameTime so the next real frame does
+    // not integrate the wall time this stepper consumed (togglePause's
+    // resume uses the same reset).
+    lastFrameTime = null;
+    state.animationFrameId = requestAnimationFrame(animate);
+}
+
 // --- Perf measurement (plan 020 Step 1) ---
 // Wall-clock cost of one full update+render pass, exponentially averaged
 // (~20-frame window). DIAGNOSTICS ONLY: this never feeds the simulation —

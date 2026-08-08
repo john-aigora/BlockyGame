@@ -1,4 +1,4 @@
-import { applySpeedMultiplier, speedUp, speedDown, forceWorldMode, perfInfo, setPlayerCount } from './game.js';
+import { applySpeedMultiplier, speedUp, speedDown, forceWorldMode, perfInfo, setPlayerCount, advanceGameTime } from './game.js';
 import { state } from './state.js';
 import { spawnNearPlayer, spawnAtPosition, spawnChunkFood } from './collectibles.js';
 import { spawnNewEnemies, updateEnemyStreaming, resetEnemyStreaming, updateSpawnWarnings, debugSpawnSpecies, pendingSpawnInfo, clearPendingSpawns } from './enemies.js';
@@ -41,6 +41,10 @@ window.__game = {
         speedUp,
         speedDown,
         forceWorldMode, // Classic torus for wrap regression tests only
+        // Deterministic game-clock stepper (plan 027): rAF-paused loop of
+        // the REAL update(1/60). THE sanctioned way for specs to move game
+        // time — no wall-clock waits, no load-dependent dilation.
+        advance: advanceGameTime,
         // Two-player split-screen (plan 026): flips the roster; on the start
         // overlay this re-runs setup so both heroes spawn. startTwoPlayer is
         // the coop spec's entry; setPlayerCount(1) returns to solo.
