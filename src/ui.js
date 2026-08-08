@@ -262,14 +262,21 @@ export function updateTimeDisplay() {
     // Minute milestone: fires when the shown time crosses a whole-minute
     // boundary mid-run. prev >= 0 guards the reset's -1 -> 0 write, and the
     // gameActive/player guard keeps a post-death HUD refresh silent.
+    // Run time is SHARED (plan 026): the beat rises over every living hero
+    // (one popup each — solo is exactly one), with a single chime.
     if (minutes >= 1 && prev >= 0 && minutes > Math.floor(prev / 60) &&
-        state.gameActive && state.player) {
-        const p = state.player.position;
-        survivalBeatOrigin.x = p.x;
-        survivalBeatOrigin.y = p.y + state.playerScale + 0.6;
-        survivalBeatOrigin.z = p.z;
-        spawnTextPopup(survivalBeatOrigin, `${minutes} MINUTE${minutes > 1 ? 'S' : ''}!`, '#8BC34A');
-        sfx.milestone();
+        state.gameActive) {
+        let celebrated = false;
+        for (const player of state.players) {
+            if (!player.alive || !player.mesh) continue;
+            const p = player.mesh.position;
+            survivalBeatOrigin.x = p.x;
+            survivalBeatOrigin.y = p.y + player.scale + 0.6;
+            survivalBeatOrigin.z = p.z;
+            spawnTextPopup(survivalBeatOrigin, `${minutes} MINUTE${minutes > 1 ? 'S' : ''}!`, '#8BC34A');
+            celebrated = true;
+        }
+        if (celebrated) sfx.milestone();
     }
 }
 
@@ -362,10 +369,12 @@ export function hideComboChip() {
 
 // Zeroes the combo state and hides the chip — the single combo reset path
 // (death via endGame, and every setupNewGame so a mid-run restart can't
-// smuggle a live combo into the next run).
+// smuggle a live combo into the next run). All players (plan 026).
 export function resetCombo() {
-    state.comboCount = 0;
-    state.comboTimeLeft = 0;
+    for (const p of state.players) {
+        p.comboCount = 0;
+        p.comboTimeLeft = 0;
+    }
     hideComboChip();
 }
 
@@ -382,9 +391,31 @@ export function resetCombo() {
 // game is still sitting on THIS dead run before showing anything.
 let deathScreenTimer = null;
 
-export function endGame(reason) {
+// Kills ONE player (plan 026). The single per-player death entry: the
+// collect clock (timers.js) and enemy contact (enemies.js) both land here.
+// While a partner still lives the run continues — this hero squashes and
+// becomes a spectator (Stage E adds the partner-cam + WAITING chip); the
+// LAST death forwards to endGame, which is byte-for-byte the solo path.
+export function killPlayer(player, reason) {
+    if (!state.gameActive || !player.alive) return;
+    let othersLiving = 0;
+    for (const q of state.players) {
+        if (q !== player && q.alive) othersLiving++;
+    }
+    if (othersLiving === 0) {
+        endGame(reason, player);
+        return;
+    }
+    player.alive = false;
+    onPlayerDeath(player); // Squash flat + burst for THIS hero only
+    sfx.death();
+    rumble(180, 0.7);
+}
+
+export function endGame(reason, dyingPlayer = state.players[0]) {
     if (!state.gameActive) return;
     state.gameActive = false;
+    dyingPlayer.alive = false; // The final death — every seat is down now
     resetCombo(); // Death breaks the chain (and clears the chip behind the box)
     resetTension(); // Panic pulse and danger vignette must not haunt the death screen
     resetIndicators(); // Nor stale enemy arrows / a frozen KILL! flash
@@ -392,7 +423,7 @@ export function endGame(reason) {
     music.stop(); // 0.3s fadeout — the death jingle plays over it
     sfx.death();
     rumble(180, 0.7); // Stronger death pulse when the pad can rumble
-    onPlayerDeath(); // Squash flat + orange-red burst (pool), behind the beat
+    onPlayerDeath(dyingPlayer); // Squash flat + orange-red burst (pool), behind the beat
     // Per-mode boards: the death screen shows the ladder of the mode that
     // just ended, and endless runs never pollute the classic top-5.
     let { list, rank } = recordScore(state.score, state.worldMode, state.furthestDistance);
@@ -436,12 +467,14 @@ export function setTimerPanic(on) {
 // and neither can ever spam. Popup + sfx only — zero gameplay effect.
 const survivalBeatOrigin = { x: 0, y: 0, z: 0 }; // Scratch — never allocated per beat
 
-function fireSurvivalBeat(text, fillStyle, sound) {
-    if (state.runTime - state.lastSurvivalBeat < SURVIVAL_BEAT_COOLDOWN) return;
-    state.lastSurvivalBeat = state.runTime;
-    const p = state.player.position;
+// Per player since plan 026: each hero has their own beat cooldown and the
+// popup rises over THEIR head — a P2 escape celebrates P2.
+function fireSurvivalBeat(player, text, fillStyle, sound) {
+    if (state.runTime - player.lastSurvivalBeat < SURVIVAL_BEAT_COOLDOWN) return;
+    player.lastSurvivalBeat = state.runTime;
+    const p = player.mesh.position;
     survivalBeatOrigin.x = p.x;
-    survivalBeatOrigin.y = p.y + state.playerScale + 0.6; // Above the head (distance-milestone pattern)
+    survivalBeatOrigin.y = p.y + player.scale + 0.6; // Above the head (distance-milestone pattern)
     survivalBeatOrigin.z = p.z;
     spawnTextPopup(survivalBeatOrigin, text, fillStyle);
     sound();
@@ -456,59 +489,77 @@ function fireSurvivalBeat(text, fillStyle, sound) {
 // danger persists AND hunt mode is off — the hunt layer already owns the
 // music intensity; the heartbeat owns the dread.
 export function updateDangerPulse(dt) {
-    if (!state.gameActive || !state.player) return;
-    let nearest = Infinity;
-    let anyKillable = false;
-    for (const enemyGroup of state.enemies) {
-        if (canKillSpecificEnemy(enemyGroup)) {
-            anyKillable = true;
-            // Disarm any stale near-miss: an armed hunter the player has
-            // since outgrown must not fire CLOSE ONE! if it ever un-flips
-            // (B5+B6 review ADV-5 — latent trap if rescaling ever lands).
-            enemyGroup.userData.nearMissArmed = false;
-            continue; // Killable enemies flee — they are prey, not danger
-        }
-        const d = torusDistance(enemyGroup.position, state.player.position);
-        if (d < nearest) nearest = d;
-        // CLOSE ONE! near-miss (plan 023): arm when a hunter enters the
-        // whisker band around actual contact, fire when it exits with the
-        // player still alive (a death never reaches here — gameActive gate
-        // above). Materializing spawns can't collide, so they never arm.
-        const ud = enemyGroup.userData;
-        if (ud.materializing === undefined) {
-            const armRadius = NEAR_MISS_FACTOR * (
-                state.playerScale * PLAYER_COLLIDER_HALF_WIDTH +
-                enemyGroup.scale.y * ENEMY_COLLIDER_HALF_WIDTH
-            );
-            if (d < armRadius) {
-                ud.nearMissArmed = true;
-            } else if (ud.nearMissArmed) {
-                ud.nearMissArmed = false;
-                fireSurvivalBeat('CLOSE ONE!', '#FFC107', sfx.tick); // Amber — warning that ended well
+    if (!state.gameActive || !state.players[0].mesh) return;
+    let maxIntensity = 0; // Music layer request = MAX of the players' states (plan 026)
+    let anyHeartbeatDanger = false; // Heartbeat fires if EITHER hero is in prey-less dread
+    for (const player of state.players) {
+        if (!player.alive || !player.mesh) continue;
+        let nearest = Infinity;
+        let anyKillable = false;
+        for (const enemyGroup of state.enemies) {
+            const ud = enemyGroup.userData;
+            // Near-miss arming is per (enemy, seat) since plan 026 — the
+            // same hunter can be a whisker from P2 while ignoring P1.
+            if (ud.nearMissArmed === undefined || typeof ud.nearMissArmed === 'boolean') {
+                ud.nearMissArmed = [false, false];
             }
-        } else {
-            ud.nearMissArmed = false;
+            if (canKillSpecificEnemy(enemyGroup, player)) {
+                anyKillable = true;
+                // Disarm any stale near-miss: an armed hunter the player has
+                // since outgrown must not fire CLOSE ONE! if it ever un-flips
+                // (B5+B6 review ADV-5 — latent trap if rescaling ever lands).
+                ud.nearMissArmed[player.seat] = false;
+                continue; // Killable enemies flee — they are prey, not danger
+            }
+            const d = torusDistance(enemyGroup.position, player.mesh.position);
+            if (d < nearest) nearest = d;
+            // CLOSE ONE! near-miss (plan 023): arm when a hunter enters the
+            // whisker band around actual contact, fire when it exits with the
+            // player still alive (a death never reaches here — gameActive gate
+            // above). Materializing spawns can't collide, so they never arm.
+            if (ud.materializing === undefined) {
+                const armRadius = NEAR_MISS_FACTOR * (
+                    player.scale * PLAYER_COLLIDER_HALF_WIDTH +
+                    enemyGroup.scale.y * ENEMY_COLLIDER_HALF_WIDTH
+                );
+                if (d < armRadius) {
+                    ud.nearMissArmed[player.seat] = true;
+                } else if (ud.nearMissArmed[player.seat]) {
+                    ud.nearMissArmed[player.seat] = false;
+                    fireSurvivalBeat(player, 'CLOSE ONE!', '#FFC107', sfx.tick); // Amber — warning that ended well
+                }
+            } else {
+                ud.nearMissArmed[player.seat] = false;
+            }
         }
-    }
-    const inDanger = nearest < DANGER_RADIUS;
+        const inDanger = nearest < DANGER_RADIUS;
 
-    const target = inDanger ? DANGER_VIGNETTE_MAX : 0;
-    state.dangerOpacity += (target - state.dangerOpacity) * (1 - Math.exp(-5 * dt));
-    if (!inDanger && state.dangerOpacity < 0.003) state.dangerOpacity = 0; // Settle instead of asymptote
+        const target = inDanger ? DANGER_VIGNETTE_MAX : 0;
+        player.dangerOpacity += (target - player.dangerOpacity) * (1 - Math.exp(-5 * dt));
+        if (!inDanger && player.dangerOpacity < 0.003) player.dangerOpacity = 0; // Settle instead of asymptote
 
-    // PHEW! escape beat (plan 023): the dread system gets a positive
-    // resolution — when a REAL scare (peak above PHEW_PEAK_MIN) has fully
-    // drained away, celebrate the escape once, then re-arm. The peak always
-    // resets at the zero crossing, so one scare can never span two beats.
-    if (state.dangerOpacity > state.dangerPeak) state.dangerPeak = state.dangerOpacity;
-    if (state.dangerOpacity <= 0.01) {
-        if (state.dangerPeak > PHEW_PEAK_MIN) {
-            fireSurvivalBeat('PHEW!', '#8BC34A', sfx.phew); // Soft green — survival's own color
+        // PHEW! escape beat (plan 023): the dread system gets a positive
+        // resolution — when a REAL scare (peak above PHEW_PEAK_MIN) has fully
+        // drained away, celebrate the escape once, then re-arm. The peak always
+        // resets at the zero crossing, so one scare can never span two beats.
+        if (player.dangerOpacity > player.dangerPeak) player.dangerPeak = player.dangerOpacity;
+        if (player.dangerOpacity <= 0.01) {
+            if (player.dangerPeak > PHEW_PEAK_MIN) {
+                fireSurvivalBeat(player, 'PHEW!', '#8BC34A', sfx.phew); // Soft green — survival's own color
+            }
+            player.dangerPeak = 0;
         }
-        state.dangerPeak = 0;
+
+        // This player's music request: hunt (prey exists for THEM) keeps
+        // priority at 1; danger (2) only when dread owns their channel.
+        const intensity = anyKillable ? 1 : (player.dangerOpacity > DANGER_MUSIC_THRESHOLD ? 2 : 0);
+        if (intensity > maxIntensity) maxIntensity = intensity;
+        if (inDanger && !anyKillable) anyHeartbeatDanger = true;
     }
-    // Reduced motion: static faint opacity (the eased base alone, no breath)
-    let shown = state.dangerOpacity;
+
+    // Vignette element: seat 0's eased base drives the (single) overlay —
+    // Stage E gives each half its own. Reduced motion: static faint opacity.
+    let shown = state.players[0].dangerOpacity;
     if (!dangerReducedMotion && shown > 0) {
         dangerBreathClock += dt;
         // 0.4Hz breath riding the eased base; peak stays DANGER_VIGNETTE_MAX
@@ -520,14 +571,14 @@ export function updateDangerPulse(dt) {
         el.dangerVignette.style.opacity = css;
     }
 
-    // Music layer (plan 023 CAP-5) — the ONE setIntensity driver. Hunt
-    // (prey exists anywhere) keeps priority at 1; the danger layer (2)
-    // speaks only when dread owns the channel — the same "no prey" rule as
-    // the heartbeat below. Bar-line commits in audio.js keep every switch
-    // musical, so this per-frame write is safe.
-    music.setIntensity(anyKillable ? 1 : (state.dangerOpacity > DANGER_MUSIC_THRESHOLD ? 2 : 0));
+    // Music layer (plan 023 CAP-5) — the ONE setIntensity driver; in 2P the
+    // request is the MAX of the players' states (plan 026). Bar-line commits
+    // in audio.js keep every switch musical, so this per-frame write is safe.
+    music.setIntensity(maxIntensity);
 
-    if (inDanger && !anyKillable) {
+    // Heartbeat: ONE audible heart (seat 0's clock is THE clock), thumping
+    // while ANY living hero is in prey-less danger (plan 026 Stage E rule).
+    if (anyHeartbeatDanger) {
         state.heartbeatClock -= dt;
         if (state.heartbeatClock <= 0) {
             sfx.heartbeat();
@@ -543,10 +594,12 @@ export function updateDangerPulse(dt) {
 // a pulsing timer or a lingering red frame.
 export function resetTension() {
     setTimerPanic(false);
-    state.dangerOpacity = 0;
-    state.dangerPeak = 0; // A scare must not leak a PHEW! across death / new game
-    state.lastSurvivalBeat = -SURVIVAL_BEAT_COOLDOWN; // Fresh run: first beat is free
-    state.heartbeatClock = 0;
+    for (const p of state.players) {
+        p.dangerOpacity = 0;
+        p.dangerPeak = 0; // A scare must not leak a PHEW! across death / new game
+        p.lastSurvivalBeat = -SURVIVAL_BEAT_COOLDOWN; // Fresh run: first beat is free
+        p.heartbeatClock = 0;
+    }
     dangerBreathClock = 0;
     lastVignetteCss = null;
     if (el.dangerVignette) el.dangerVignette.style.opacity = '0';

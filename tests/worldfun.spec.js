@@ -302,15 +302,20 @@ test('titan kill: 3x payout, the 10-food feast ring, TITAN DOWN!, and no second 
   // out (they despawn unpaid), the titan placed at +5u — inside the
   // gameplay contact reach (player half 3.12 + boss half 2.64 = 5.76u) but
   // far enough that the feast ring (radius <= 3.1 around the fall) lands
-  // beyond ANY render-box reach. The player is made TALL in gameplay terms
-  // only — state.playerScale drives edibility and the enemy-contact box,
-  // while the pickup box still reads the RENDER scale (game.js
-  // setFromObject; plan-026/H6 may unify them — this test then needs a
-  // post-kill shrink instead) — so the winner cannot gulp its own feast
-  // and all 10 pieces are countable. (At an 0.9u boss offset this raced:
-  // a min-radius ring roll could graze the scarf-side render box — one
-  // bite synced the render scale via the collect path and the giant
-  // hoovered all 10, +10 score. Frame-probed, ~1 in 4.)
+  // beyond ANY pickup-box reach. The player is made TALL in gameplay terms
+  // only — playerScale drives edibility and the enemy-contact box, while
+  // the pickup box reads the RENDER scale (plan-026/H6: the body-block
+  // builder with scale = mesh.scale.y — the render/gameplay split is
+  // deliberate and this test depends on it; unifying pickup onto the
+  // GAMEPLAY scale is geometrically incompatible with this choreography:
+  // contact reach 5.76u < the 6.67u the ring would need to clear a
+  // 3.12u-half pickup box, and the kill and the collect sweep share one
+  // update() frame, so no post-kill shrink can interleave) — so the winner
+  // cannot gulp its own feast and all 10 pieces are countable. (Historical:
+  // at an 0.9u offset the OLD render-tree setFromObject raced — a
+  // min-radius ring roll could graze the scarf-side render box, one bite
+  // synced the render scale via the collect path and the giant hoovered
+  // all 10. The body-block builder has no scarf; +5u stays for margin.)
   const before = await page.evaluate(() => {
     const g = window.__game;
     const s = g.state;

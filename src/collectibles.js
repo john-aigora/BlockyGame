@@ -25,6 +25,24 @@ const GOLD_FOOD_MATERIAL = new THREE.MeshStandardMaterial({
 applyWorldBend(GOLD_FOOD_MATERIAL);
 const GOLD_FOOD_SCALE = 1.25; // Slightly larger than normal food — a prize, not a snack
 
+// --- Pickup AABB builder (plan 026 / H6) ---
+// The body-block box of a collectible: cube edge 0.7 × the mesh scale (gold
+// rides its 1.25), centered on the mesh position (BoxGeometry is centered,
+// and the bob writes position.y directly). Replaces the per-frame
+// setFromObject in the pickup pass — same center, same size, minus the
+// rotated-AABB breathing (the idle spin used to swell the box up to ~1.4x
+// on the diagonal) and minus the traversal cost.
+const pickupCenter = new THREE.Vector3();
+const pickupSize = new THREE.Vector3();
+
+export function setCollectibleBox(box, collectible) {
+    const edge = 0.7 * collectible.scale.x; // Uniform scale: x == y == z
+    pickupCenter.copy(collectible.position);
+    pickupSize.set(edge, edge, edge);
+    box.setFromCenterAndSize(pickupCenter, pickupSize);
+    return box;
+}
+
 // Builds a collectible mesh (small lime-green cube — or the gold prize) on
 // the shared resources.
 function buildCollectible(gold = false) {
@@ -111,9 +129,12 @@ export function releaseFoodForChunk(chunkKey) {
     }
 }
 
-// Spawn a collectible in a random box around the player.
-export function spawnNearPlayer() {
-    if (!state.player) return; // Can't spawn relative to non-existent player
+// Spawn a collectible in a random box around the given player (plan 026:
+// the collect reward lands near the hero who earned it; default seat 0
+// keeps the debug handle's no-arg call working).
+export function spawnNearPlayer(player = state.players[0]) {
+    if (!player || !player.mesh) return; // Can't spawn relative to non-existent player
+    const pos = player.mesh.position;
 
     spawnCollectible(() => {
         let spawnX, spawnZ;
@@ -121,9 +142,9 @@ export function spawnNearPlayer() {
         // Keep trying to find a spawn position until it's not too close to the player
         do {
             // Random position within a square area around the player
-            spawnX = state.player.position.x + (Math.random() * collectibleSpawnRadius * 2) - collectibleSpawnRadius;
-            spawnZ = state.player.position.z + (Math.random() * collectibleSpawnRadius * 2) - collectibleSpawnRadius;
-            distanceToPlayer = Math.sqrt(Math.pow(spawnX - state.player.position.x, 2) + Math.pow(spawnZ - state.player.position.z, 2));
+            spawnX = pos.x + (Math.random() * collectibleSpawnRadius * 2) - collectibleSpawnRadius;
+            spawnZ = pos.z + (Math.random() * collectibleSpawnRadius * 2) - collectibleSpawnRadius;
+            distanceToPlayer = Math.sqrt(Math.pow(spawnX - pos.x, 2) + Math.pow(spawnZ - pos.z, 2));
         } while (distanceToPlayer < minSpawnDistanceFromPlayer);
         return { x: spawnX, z: spawnZ };
     });

@@ -19,7 +19,7 @@ import { state } from './state.js';
 import { createCharacter, disposeCharacter, shadeColor, CAP_LIGHTEN } from './characters.js';
 import { groundHeightAt, isWalkable, slideMove, applyWorldBend } from './terrain.js';
 import { spawnAtPosition, spawnCollectible } from './collectibles.js';
-import { endGame, updateScoreDisplay, showComboChip } from './ui.js';
+import { killPlayer, updateScoreDisplay, showComboChip } from './ui.js';
 import { wrapPosition, torusDelta, torusDistance } from './worldmath.js';
 import { sfx } from './audio.js';
 import { onEnemyKilled, spawnScorePopup, spawnTextPopup, spawnBurst } from './effects.js';
@@ -39,10 +39,13 @@ const orbitScratch = new THREE.Vector3();
 const chaseScratch = new THREE.Vector3();
 
 // Module-level scratch AABBs — the ONLY Box3 instances in the codebase
-// (plan 007). playerBox is refreshed once per collision section; scratchBox
-// is reused for every enemy/collectible test. game.js imports both.
+// (plan 007). playerBox/playerBox2 are refreshed once per collision section
+// (one per seat — plan 026); scratchBox is reused for every enemy/
+// collectible test. game.js imports playerBox + scratchBox.
 export const playerBox = new THREE.Box3();
 export const scratchBox = new THREE.Box3();
+const playerBox2 = new THREE.Box3(); // Seat 1's box (2P collision pass)
+const playerBoxes = [playerBox, playerBox2];
 
 // Scratch for the explicit hitbox builders below — never allocated per frame.
 const boxCenter = new THREE.Vector3();
@@ -57,21 +60,29 @@ const boxSize = new THREE.Vector3();
 // contact 40+ units before the bodies did (B3 probe evidence). Deriving the
 // player box from state.playerScale (not the render scale) also means the
 // collect squash / milestone pulse no longer throbs the hitbox.
-// Both builders stay EXPORTED: plan 026 reuses them for per-player collision.
-export function setPlayerCollisionBox(box) {
-    const s = state.playerScale;
+// Both builders stay EXPORTED and are per-player since plan 026 (H6 grant):
+// `scale` defaults to the player's GAMEPLAY scale (edibility/contact law);
+// the food-pickup pass passes the RENDER scale (mesh.scale.y) instead —
+// exactly what its old render-tree setFromObject read, minus the decoration
+// margins (scarf/outline/face parts are decoration, audit C-2) and minus
+// the per-frame setFromObject traversal cost. `flatten` applies the
+// airborne stretch-to-ground rule — enemy contact wants it (a hop is never
+// a dodge); the pickup pass does not (jumping over food must not collect it).
+export function setPlayerCollisionBox(box, player = state.players[0], scale = player.scale, flatten = true) {
+    const s = scale;
+    const pos = player.mesh.position;
     const half = PLAYER_COLLIDER_HALF_WIDTH * s; // True visual half-width × scale
     boxCenter.set(
-        state.player.position.x,
-        state.player.position.y + s * 0.5, // Body height base is 1.0 — center at half-height
-        state.player.position.z
+        pos.x,
+        pos.y + s * 0.5, // Body height base is 1.0 — center at half-height
+        pos.z
     );
     boxSize.set(half * 2, s * 1.0, half * 2);
     box.setFromCenterAndSize(boxCenter, boxSize);
     // Jump (endless): flatten the collision test to XZ while airborne by
     // stretching the box back down to the ground it left — hopping is for
     // rocks, never an accidental enemy dodge (owner queue item 5).
-    if (state.jumpOffset > 0) box.min.y -= state.jumpOffset;
+    if (flatten && player.jump.offset > 0) box.min.y -= player.jump.offset;
     return box;
 }
 
@@ -124,9 +135,27 @@ export function createEnemy(speciesKey = 'grunt') {
     return enemyGroup;
 }
 
-// Player can kill if player is TALLER than the enemy
-export function canKillSpecificEnemy(enemyGroup) {
-    const playerActualHeight = state.playerScale * 1.0; // Player geometry base height is 1
+// Nearest LIVING player to a world position (plan 026: enemies hunt, and
+// stream around, whoever is closest and still alive). Returns null only
+// when every player is dead — callers all run behind the gameActive gate.
+export function nearestLivingPlayer(pos) {
+    let best = null;
+    let bestDist = Infinity;
+    for (const p of state.players) {
+        if (!p.alive || !p.mesh) continue;
+        const d = torusDistance(pos, p.mesh.position);
+        if (d < bestDist) {
+            bestDist = d;
+            best = p;
+        }
+    }
+    return best;
+}
+
+// Player can kill if player is TALLER than the enemy. Per-player since plan
+// 026 — edibility is judged against a SPECIFIC hero's height.
+export function canKillSpecificEnemy(enemyGroup, player = state.players[0]) {
+    const playerActualHeight = player.scale * 1.0; // Player geometry base height is 1
     // enemyGroup.scale.y refers to the scale of the whole group.
     // The previous logic was: playerActualHeight > enemy.scale.y * enemyBaseHeight.
     // This refers to the enemy's main cube height. Let's stick to that for now for consistency in gameplay feel,
@@ -354,10 +383,12 @@ const materializeOrigin = { x: 0, y: 0, z: 0 };
 // enemies appended mid-frame by spawnNewEnemies() get indexes above the
 // cursor and intentionally act on the NEXT frame (same as the old forEach).
 export function updateEnemies(dt) {
-    // Refresh the player's AABB ONCE for this whole collision pass. The
-    // explicit builder (audit C-2) covers the body block only and preserves
-    // the airborne flatten rule internally.
-    setPlayerCollisionBox(playerBox);
+    // Refresh each living player's AABB ONCE for this whole collision pass.
+    // The explicit builder (audit C-2) covers the body block only and
+    // preserves the airborne flatten rule internally.
+    for (const p of state.players) {
+        if (p.alive && p.mesh) setPlayerCollisionBox(playerBoxes[p.seat], p);
+    }
     for (let i = state.enemies.length - 1; i >= 0; i--) {
         const enemyGroup = state.enemies[i];
         const ud = enemyGroup.userData;
@@ -375,7 +406,13 @@ export function updateEnemies(dt) {
         // killable" repaint would be noise on its green identity; the aura/
         // scared face (effects.js, driven off ud.killable) still telegraph
         // edibility.
-        const killableNow = canKillSpecificEnemy(enemyGroup);
+        // TARGET (plan 026): this enemy hunts the nearest LIVING player; its
+        // behavior branch (flee vs chase) and base colors are judged against
+        // THAT player. Per-viewer color passes (Stage E) overwrite the paint
+        // per half in 2P; solo target is always player 0.
+        const target = nearestLivingPlayer(enemyGroup.position);
+        if (!target) return; // No living players — the run is over
+        const killableNow = canKillSpecificEnemy(enemyGroup, target);
         if (killableNow !== ud.killable) {
             ud.killable = killableNow; // effects.js drives the aura/wobble off this
             if (!ud.species.harmless) {
@@ -426,7 +463,7 @@ export function updateEnemies(dt) {
         }
 
         // --- Enemy AI: Movement Logic ---
-        const distanceToPlayer = torusDistance(enemyGroup.position, state.player.position);
+        const distanceToPlayer = torusDistance(enemyGroup.position, target.mesh.position);
         const combinedMovement = moveScratch.set(0, 0, 0); // Re-zeroed per enemy (mutated below)
         // Species speed (plan 024): this enemy's own pace — the four speed
         // sites (flee, orbit, chase, and the total cap) all read it, so a
@@ -451,12 +488,12 @@ export function updateEnemies(dt) {
             // --- Fleeing Behavior ---
             if (distanceToPlayer > 0) { // Avoid issues if somehow at the exact same spot
                 // Flee = the shortest-path direction to the player, negated
-                const fleeDirection = torusDelta(enemyGroup.position, state.player.position, tmpVec).normalize().negate();
+                const fleeDirection = torusDelta(enemyGroup.position, target.mesh.position, tmpVec).normalize().negate();
                 combinedMovement.copy(fleeDirection).multiplyScalar(speciesSpeed);
             }
         } else {
             // --- Normal Chase and Orbit Logic ---
-            const chaseDirection = torusDelta(enemyGroup.position, state.player.position, tmpVec).normalize();
+            const chaseDirection = torusDelta(enemyGroup.position, target.mesh.position, tmpVec).normalize();
             if (distanceToPlayer < engagementRadius) {
                 // --- Orbiting Behavior (scratch vectors — plan 020 P-6) ---
                 const orbitVector = orbitScratch.set(-chaseDirection.z * enemyGroup.orbitDirection, 0, chaseDirection.x * enemyGroup.orbitDirection);
@@ -503,29 +540,40 @@ export function updateEnemies(dt) {
         // image, so an enemy may legitimately sit outside ±worldBoundary.
         // All gameplay math above is torus-aware, so this is invisible to AI.
 
-        // --- Collision Detection (with player) ---
+        // --- Collision Detection (with each living player) ---
+        // Edibility is PER PLAYER (plan 026): the same body can be prey to
+        // the big partner and death to the small one — each contact resolves
+        // against the touched player's own height.
         setEnemyCollisionBox(scratchBox, enemyGroup); // Body block only (audit C-2)
-        if (playerBox.intersectsBox(scratchBox)) {
-            if (killableNow) {
-                killEnemy(enemyGroup, i); // splice(i, 1) — safe going backwards
-                continue;
+        let killed = false;
+        for (const p of state.players) {
+            if (!p.alive || !p.mesh) continue;
+            if (!playerBoxes[p.seat].intersectsBox(scratchBox)) continue;
+            if (canKillSpecificEnemy(enemyGroup, p)) {
+                killEnemy(enemyGroup, i, p); // splice(i, 1) — safe going backwards
+                killed = true;
+                break; // The body is gone — nobody else can touch it
             } else if (!ud.species.harmless) {
-                endGame('The enemy caught you.');
-                return; // NOW actually exits the enemy update
+                killPlayer(p, 'The enemy caught you.');
+                if (!state.gameActive) return; // Last player down — exit the enemy update
+                setEnemyCollisionBox(scratchBox, enemyGroup); // killPlayer fx never move the enemy, but stay honest after callbacks
             }
             // Harmless species (juja): a non-killable contact never ends the
             // run. The rotation sizes jujas at 0.35x the player, so this is
             // in practice unreachable — the guard exists for oversized test
             // spawns and future tuning (plan 024).
         }
+        if (killed) continue;
     }
 }
 
 // Removes a killed enemy and pays out its rewards: the size-scaled kill
 // bounty times the combo multiplier, a "+N" popup, 4 food particles at the
 // death position, plus (up to) two new, larger enemies. The single kill
-// path — future kill causes must call this too.
-export function killEnemy(enemyGroup, index) {
+// path — future kill causes must call this too. `player` is the hero whose
+// body made the kill (plan 026): the bounty, combo, and replacement spawns
+// are all THEIRS.
+export function killEnemy(enemyGroup, index, player = state.players[0]) {
     const enemyDeathPosition = enemyGroup.position.clone(); // Get position before removing
 
     // Size bounty (score-juice pass): bigger enemies pay more — the risk of
@@ -534,12 +582,12 @@ export function killEnemy(enemyGroup, index) {
     // Combo multiplier: kills chained within COMBO_WINDOW escalate x1, x2...
     // up to COMBO_MAX. The window refreshes on every kill; timers.js expires
     // it on the game clock, and ui.js resets it on death / new game.
-    state.comboCount = state.comboTimeLeft > 0 ? Math.min(state.comboCount + 1, COMBO_MAX) : 1;
-    state.comboTimeLeft = COMBO_WINDOW;
+    player.comboCount = player.comboTimeLeft > 0 ? Math.min(player.comboCount + 1, COMBO_MAX) : 1;
+    player.comboTimeLeft = COMBO_WINDOW;
     // Titan jackpot (plan 025): the payout (bounty x combo) triples — the
     // size bounty already scales with height, the multiplier makes the beat.
     const boss = enemyGroup.userData.boss === true;
-    const payout = bounty * state.comboCount * (boss ? BOSS_BOUNTY_MULT : 1);
+    const payout = bounty * player.comboCount * (boss ? BOSS_BOUNTY_MULT : 1);
 
     // Death explosion (plan 015): burst in the enemy's CURRENT body color
     // (killable yellow — or the species base for a juja, which never flips)
@@ -558,14 +606,14 @@ export function killEnemy(enemyGroup, index) {
     state.scene.remove(enemyGroup);
     disposeCharacter(enemyGroup); // Release the per-instance body material
     state.enemies.splice(index, 1);
-    sfx.kill(state.comboCount - 1); // Pitch climbs with the combo
+    sfx.kill(player.comboCount - 1); // Pitch climbs with the combo
     rumble(55, 0.45); // Pad kick on kill
 
     // Kill bounty (plan 011): hunting must beat pacifism — the README's
     // "strategically defeating enemies" promise, now actually paid.
-    state.score += payout;
+    player.score += payout;
     updateScoreDisplay();
-    if (state.comboCount > 1) showComboChip(state.comboCount);
+    if (player.comboCount > 1) showComboChip(player.comboCount);
 
     // Enemy becomes food — the drop count is species data (plan 024): grunts
     // and sprinters keep the classic 4, the juja snack pays 2. The titan
@@ -598,23 +646,26 @@ export function killEnemy(enemyGroup, index) {
         }
     }
 
-    spawnNewEnemies();
+    spawnNewEnemies(player);
 }
 
 // The ramped enemy scale factor: the classic height rule, times the endless
 // distance ramp (+RAMP_HEIGHT_STEP per level — foes visibly tower the
 // further out you push). Classic reads the ramp as level 0, factor 1.
 // EXPORTED for the titan (plan 025): the boss is this formula x
-// BOSS_SCALE_MULT — one giant rule, never a fork.
-export function currentEnemyScaleFactor() {
-    let targetHeight = state.playerScale * 1.0 * ENEMY_HEIGHT_FACTOR;
+// BOSS_SCALE_MULT — one giant rule, never a fork. `player` (plan 026) is
+// the hero the spawn is sized against (the killer / the bubble anchor).
+export function currentEnemyScaleFactor(player = state.players[0]) {
+    let targetHeight = player.scale * 1.0 * ENEMY_HEIGHT_FACTOR;
     if (state.worldMode === 'endless') {
         targetHeight *= 1 + state.endlessRampLevel * RAMP_HEIGHT_STEP;
     }
     return targetHeight / enemyBaseHeight;
 }
 
-export function spawnNewEnemies() {
+// Kill replacements spawn around, and are sized against, the killing player
+// (plan 026); the debug handle's no-arg call keeps the seat-0 default.
+export function spawnNewEnemies(player = state.players[0]) {
     // Population cap (plan 011): only spawn into free slots under the cap
     // (endless runs a higher one — its bubble target ramps up). Pending
     // red-warn discs count as reserved slots so we never over-queue.
@@ -625,14 +676,14 @@ export function spawnNewEnemies() {
     const count = Math.min(ENEMIES_PER_KILL, slots);
     if (count === 0) return;
 
-    const newEnemyScaleFactor = currentEnemyScaleFactor();
+    const newEnemyScaleFactor = currentEnemyScaleFactor(player);
 
     // Calculate dynamic spawn distance based on playerScale, capped so spawns
     // always land inside the world even for a huge player (plan 005). In
     // endless the cap is the bubble's far edge instead — kill-spawned foes
     // must land inside the streaming bubble, never beyond the despawn ring.
     const spawnDistance = Math.min(
-        BASE_ENEMY_SPAWN_DISTANCE + (state.playerScale * SPAWN_DISTANCE_SCALE_FACTOR),
+        BASE_ENEMY_SPAWN_DISTANCE + (player.scale * SPAWN_DISTANCE_SCALE_FACTOR),
         endless ? ENDLESS_SPAWN_MAX : worldBoundary * 0.8
     );
 
@@ -651,14 +702,14 @@ export function spawnNewEnemies() {
         let dist = spawnDistance;
         if (chainable) {
             const [lo, hi] = PREY_HEIGHT_RANGE;
-            scaleFactor = (state.playerScale * (lo + Math.random() * (hi - lo))) / enemyBaseHeight;
+            scaleFactor = (player.scale * (lo + Math.random() * (hi - lo))) / enemyBaseHeight;
             dist = KILL_SPAWN_PREY_MIN + Math.random() * (KILL_SPAWN_PREY_MAX - KILL_SPAWN_PREY_MIN);
         }
         let angle = n === 0
             ? angle1
             : angle1 + Math.PI + (Math.random() - 0.5) * (Math.PI / 2);
-        let spawnX = state.player.position.x + Math.cos(angle) * dist;
-        let spawnZ = state.player.position.z + Math.sin(angle) * dist;
+        let spawnX = player.mesh.position.x + Math.cos(angle) * dist;
+        let spawnZ = player.mesh.position.z + Math.sin(angle) * dist;
         if (endless) {
             // Land placement: keep the angle intent for the first try, then
             // re-roll around the circle. All-water rings are practically
@@ -668,8 +719,8 @@ export function spawnNewEnemies() {
             let placed = isWalkable(spawnX, spawnZ, radius);
             for (let attempt = 0; !placed && attempt < 8; attempt++) {
                 angle = Math.random() * Math.PI * 2;
-                spawnX = state.player.position.x + Math.cos(angle) * dist;
-                spawnZ = state.player.position.z + Math.sin(angle) * dist;
+                spawnX = player.mesh.position.x + Math.cos(angle) * dist;
+                spawnZ = player.mesh.position.z + Math.sin(angle) * dist;
                 placed = isWalkable(spawnX, spawnZ, radius);
             }
             if (!placed) continue;
@@ -768,7 +819,11 @@ export function updateEnemyStreaming(dt) {
         // construction: setupNewGame disposes state.enemies wholesale, so
         // the exemption cannot leak a boss across a restart.
         if (enemy.userData.boss) continue;
-        if (torusDistance(enemy.position, state.player.position) > ENEMY_DESPAWN_RADIUS) {
+        // Despawn radius applies to the NEAREST living player (plan 026):
+        // a body chasing P2 is not "left behind" just because P1 fled.
+        const anchor = nearestLivingPlayer(enemy.position);
+        if (!anchor) return;
+        if (torusDistance(enemy.position, anchor.mesh.position) > ENEMY_DESPAWN_RADIUS) {
             state.scene.remove(enemy);
             disposeCharacter(enemy); // Per-instance body/cap materials released
             state.enemies.splice(i, 1);
@@ -810,28 +865,32 @@ export function updateEnemyStreaming(dt) {
     // sprinter is small and ALWAYS edible — fast but killable (the danger is
     // it reaches you, the answer is you eat it); juja is a fixed-size
     // harmless critter, bonus food on legs.
+    // Bubble anchor (plan 026): the first living player carries the bubble
+    // for now — Stage D grows this into per-player bubbles under the coop cap.
+    const spawnAnchor = state.players.find((p) => p.alive && p.mesh);
+    if (!spawnAnchor) return;
     const band = SPAWN_SIZE_PATTERN[bubbleSpawnCounter % SPAWN_SIZE_PATTERN.length];
     let scaleFactor;
     let speciesKey = 'grunt';
     if (band === 'giant') {
-        scaleFactor = currentEnemyScaleFactor();
+        scaleFactor = currentEnemyScaleFactor(spawnAnchor);
     } else if (band === 'juja') {
         speciesKey = 'juja';
-        scaleFactor = (state.playerScale * JUJA_HEIGHT_FACTOR) / enemyBaseHeight;
+        scaleFactor = (spawnAnchor.scale * JUJA_HEIGHT_FACTOR) / enemyBaseHeight;
     } else {
         if (band === 'sprinter') speciesKey = 'sprinter';
         const [lo, hi] = band === 'prey' ? PREY_HEIGHT_RANGE
             : band === 'sprinter' ? SPRINTER_HEIGHT_RANGE
                 : PEER_HEIGHT_RANGE;
-        const targetHeight = state.playerScale * (lo + Math.random() * (hi - lo));
+        const targetHeight = spawnAnchor.scale * (lo + Math.random() * (hi - lo));
         scaleFactor = targetHeight / enemyBaseHeight;
     }
     const radius = scaleFactor * ENEMY_COLLIDER_HALF_WIDTH;
     for (let attempt = 0; attempt < 10; attempt++) {
         const angle = Math.random() * Math.PI * 2;
         const dist = ENDLESS_SPAWN_MIN + Math.random() * (ENDLESS_SPAWN_MAX - ENDLESS_SPAWN_MIN);
-        const spawnX = state.player.position.x + Math.cos(angle) * dist;
-        const spawnZ = state.player.position.z + Math.sin(angle) * dist;
+        const spawnX = spawnAnchor.mesh.position.x + Math.cos(angle) * dist;
+        const spawnZ = spawnAnchor.mesh.position.z + Math.sin(angle) * dist;
         if (!isWalkable(spawnX, spawnZ, radius)) continue;
         scheduleEnemySpawn(spawnX, spawnZ, scaleFactor, speciesKey); // Red warn, then materialize
         bubbleSpawnCounter++; // Advance the band rotation only on a real schedule

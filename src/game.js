@@ -16,8 +16,8 @@ import { initContinuousMovement, resetContinuousMovement, updateContinuousMoveme
 import { wrapPosition, torusDeltaComponent } from './worldmath.js';
 import { state } from './state.js';
 import { createPlayer, disposeCharacter } from './characters.js';
-import { createEnemy, updateEnemies, updateEnemyStreaming, resetEnemyStreaming, playerBox, scratchBox, beginMaterialize, updateSpawnWarnings, clearPendingSpawns, shiftPendingSpawns, reimagePendingSpawns, scheduleEnemySpawn, currentEnemyScaleFactor } from './enemies.js';
-import { spawnNearPlayer, spawnAnywhere } from './collectibles.js';
+import { createEnemy, updateEnemies, updateEnemyStreaming, resetEnemyStreaming, playerBox, scratchBox, setPlayerCollisionBox, beginMaterialize, updateSpawnWarnings, clearPendingSpawns, shiftPendingSpawns, reimagePendingSpawns, scheduleEnemySpawn, currentEnemyScaleFactor } from './enemies.js';
+import { spawnNearPlayer, spawnAnywhere, setCollectibleBox } from './collectibles.js';
 import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoomIn, zoomOut, updateGroundScroll } from './world.js';
 import { initTerrain, setTerrainActive, resetTerrainForNewRun, updateTerrain, shiftTerrain, groundHeightAt, slideMove, isRockWedged, biomeRegion, isWalkable } from './terrain.js';
 import { initClouds, setCloudMode, updateClouds, shiftClouds } from './clouds.js';
@@ -34,6 +34,11 @@ import { unlockAudio, sfx, music } from './audio.js';
 // gaps and GC hitches so the world never teleports.
 let lastFrameTime = null;
 const MAX_DELTA = 0.05; // seconds; clamps tab-switch gaps and GC hitches
+
+// Directional-light follow target (plan 026): the midpoint of the living
+// players — a dedicated Object3D so two heroes share one consistent shadow
+// frame. With one player this is exactly the old player-tracking light.
+let lightTarget = null;
 
 
 // --- Initialization Function ---
@@ -69,9 +74,15 @@ function init() {
     initEffects(); // Particle pool + food glow (plan 015) — needs the scene
 
     // 6. Player and Enemy Objects
-    createPlayer();
+    createPlayer(state.players[0]);
     createEnemy();
-    directionalLight.target = state.player; // Make the directional light follow the player for consistent shadows
+    // The directional light tracks a dedicated target at the players'
+    // midpoint (plan 026) — with one player that IS the player's position,
+    // so solo shadows are unchanged.
+    lightTarget = new THREE.Object3D();
+    state.scene.add(lightTarget);
+    lightTarget.position.copy(state.player.position);
+    directionalLight.target = lightTarget;
 
     // 7. Event Listeners for user input and window resizing.
     document.addEventListener('keydown', onKeyDown);
@@ -137,18 +148,24 @@ function init() {
 function setupNewGame() {
     state.gameActive = true;
     state.isPaused = true; // Start the game in a paused state
-    state.score = 0;
     state.runTime = 0; // Fresh run clock (see state.js — the tests' timing base)
-    state.playerScale = 1.0; // Player's initial scale (acts as height for 1x1x1 geometry)
+    // Per-player reset (plan 026): every seat starts alive, small, broke,
+    // and grounded — a restart mid-arc lands instantly.
+    for (const p of state.players) {
+        p.alive = true;
+        p.score = 0;
+        p.scale = 1.0; // Initial scale (acts as height for 1x1x1 geometry)
+        p.distanceBest = 0;
+        p.jump.offset = 0;
+        p.jump.velocity = 0;
+        p.jump.gravity = 0;
+        p.jump.airborne = false;
+    }
     state.furthestDistance = 0; // Endless progress + difficulty ramp reset BEFORE the
     state.endlessRampLevel = 0; // speed recompute below (ramp feeds enemy speed)
     state.bossSpawned = false; // Fresh run, fresh titan (plan 025) — a live boss
     // dies with state.enemies below; a pending boss warn dies in clearPendingSpawns
-    state.jumpOffset = 0; // A restart mid-arc lands instantly:
-    state.jumpVelocity = 0; // fresh runs always start grounded
-    state.jumpGravity = 0;
     clearPendingSpawns(); // Drop any red warn discs from the last run
-    state.jumpAirborne = false;
     resetEnemyStreaming(); // A fresh run's first bubble top-up owes no cooldown
     resetDistanceDisplay(); // Zero the HUD and show/hide it per the current mode
     resetTimeDisplay(); // Fresh 0:00 (runTime was reset above)
@@ -178,11 +195,12 @@ function setupNewGame() {
     });
     state.enemies = [];
 
-    if (state.player) {
-        state.player.position.set(0, 0, 0); // MODIFIED: Group origin at feet
-        state.player.scale.set(state.playerScale, state.playerScale, state.playerScale);
-    } else {
-        createPlayer(); // createPlayer sets scale to playerScale by default
+    // Spawn every seat's hero: seat 0 at the classic (0,0,0), later seats
+    // offset a couple of units east on the spawn mesa (dry by construction).
+    for (const p of state.players) {
+        if (!p.mesh) createPlayer(p); // createPlayer applies p.scale by default
+        p.mesh.position.set(p.seat * 2.5, 0, 0); // Seat 0 ≡ the classic origin
+        p.mesh.scale.set(p.scale, p.scale, p.scale);
     }
 
     // Create initial enemy, taller than the player by the same factor as
@@ -201,13 +219,15 @@ function setupNewGame() {
     }
 
     // Endless world: fresh floating origin, fresh terrain window around the
-    // spawn, and the player/boot enemy grounded on it (the spawn mesa in
+    // spawn, and the players/boot enemy grounded on it (the spawn mesa in
     // terrain.js guarantees dry land at true (0,0)).
     state.worldOrigin.x = 0;
     state.worldOrigin.z = 0;
     if (state.worldMode === 'endless') {
         resetTerrainForNewRun();
-        state.player.position.y = groundHeightAt(0, 0);
+        for (const p of state.players) {
+            p.mesh.position.y = groundHeightAt(p.mesh.position.x, p.mesh.position.z);
+        }
         if (state.enemies.length > 0) {
             const firstFoe = state.enemies[0];
             firstFoe.position.y = groundHeightAt(firstFoe.position.x, firstFoe.position.z);
@@ -314,54 +334,64 @@ function update(dt) {
     if (state.gameActive) {
         if (CONTINUOUS_MOVEMENT) {
             // Plan 014 spike: cursor-steered constant motion + boost.
+            // (Seat 0 only — 2P is stepwise-movement only, per plan 026 scope.)
             updateContinuousMovement(dt);
         } else if (state.worldMode === 'endless') {
-        // Endless movement: same keyboard+touch input, but water and rocks
-        // are impassable — resolved honestly by the shared slide (terrain.js
-        // slideMove: the collider is the body's true visual half-width,
-        // sampled at the leading edge + lateral extremes of travel; a
-        // blocked diagonal creeps along the shoreline instead of freezing).
-        updateJumpPhysics(dt); // Advance the arc BEFORE the slide reads jumpAirborne
-        // ONE movement vector for every input source (audit C-5): moveVector
-        // sums keyboard+stick+touch and clamps once — stacking sources can
-        // never exceed full speed.
-        const mv = moveVector();
-        const moveX = mv.x * state.actualPlayerSpeed * dt;
-        const moveZ = mv.z * state.actualPlayerSpeed * dt;
-        const p = state.player.position;
-        const radius = state.playerScale * PLAYER_COLLIDER_HALF_WIDTH;
-        // JUMP RULES (owner queue item 5): airborne ignores ROCK circles
-        // only — WATER stays impassable even mid-air, so an arc aimed at a
-        // lake stops at the shoreline exactly like a blocked step and the
-        // landing is always dry. The second clause is the landing grace: an
-        // arc may legally END inside a rock circle (rocks were ignored on
-        // the way), so rocks stay ignored until the body walks clear.
-        // PROBE PARITY (audit C-6): "wedged" is judged by the same radius-0
-        // sample points the movement probes use — the old radius-inflated
-        // center circle stayed true across a ~radius-wide ring where every
-        // probe was already clear, silently turning rocks off there.
-        const ignoreRocks = state.jumpAirborne || isRockWedged(p.x, p.z, radius);
-        const applied = slideMove(p.x, p.z, moveX, moveZ, radius, ignoreRocks);
-        p.x += applied.x;
-        p.z += applied.z;
+            // Endless movement, per living player: same keyboard+touch input,
+            // but water and rocks are impassable — resolved honestly by the
+            // shared slide (terrain.js slideMove: the collider is the body's
+            // true visual half-width, sampled at the leading edge + lateral
+            // extremes of travel; a blocked diagonal creeps along the
+            // shoreline instead of freezing).
+            for (const player of state.players) {
+                if (!player.alive || !player.mesh) continue;
+                updateJumpPhysics(player, dt); // Advance the arc BEFORE the slide reads jump.airborne
+                // ONE movement vector for every input source (audit C-5):
+                // moveVector sums keyboard+stick+touch and clamps once —
+                // stacking sources can never exceed full speed. (Per-seat
+                // input split lands in Stage C; until then every seat reads
+                // the same merged vector — solo only ever has seat 0.)
+                const mv = moveVector();
+                const moveX = mv.x * player.actualSpeed * dt;
+                const moveZ = mv.z * player.actualSpeed * dt;
+                const p = player.mesh.position;
+                const radius = player.scale * PLAYER_COLLIDER_HALF_WIDTH;
+                // JUMP RULES (owner queue item 5): airborne ignores ROCK circles
+                // only — WATER stays impassable even mid-air, so an arc aimed at a
+                // lake stops at the shoreline exactly like a blocked step and the
+                // landing is always dry. The second clause is the landing grace: an
+                // arc may legally END inside a rock circle (rocks were ignored on
+                // the way), so rocks stay ignored until the body walks clear.
+                // PROBE PARITY (audit C-6): "wedged" is judged by the same radius-0
+                // sample points the movement probes use — the old radius-inflated
+                // center circle stayed true across a ~radius-wide ring where every
+                // probe was already clear, silently turning rocks off there.
+                const ignoreRocks = player.jump.airborne || isRockWedged(p.x, p.z, radius);
+                const applied = slideMove(p.x, p.z, moveX, moveZ, radius, ignoreRocks);
+                p.x += applied.x;
+                p.z += applied.z;
+                // Ground the hero on the terrain under him (plus the jump
+                // arc's height above it) — no wrap, no re-imaging: the world
+                // is truly flat and infinite.
+                p.y = groundHeightAt(p.x, p.z) + player.jump.offset;
+            }
         } else {
-        // Keyboard/stick/touch movement as ONE normalized vector (audit
-        // C-5): a diagonal is exactly actualPlayerSpeed, opposite keys
-        // cancel to a standstill, and stacked sources clamp to unit length
-        // inside moveVector instead of adding a second speed on top.
-        const mv = moveVector();
-        state.player.position.x += mv.x * state.actualPlayerSpeed * dt;
-        state.player.position.z += mv.z * state.actualPlayerSpeed * dt;
+            // Keyboard/stick/touch movement as ONE normalized vector (audit
+            // C-5): a diagonal is exactly actualPlayerSpeed, opposite keys
+            // cancel to a standstill, and stacked sources clamp to unit length
+            // inside moveVector instead of adding a second speed on top.
+            for (const player of state.players) {
+                if (!player.alive || !player.mesh) continue;
+                const mv = moveVector();
+                player.mesh.position.x += mv.x * player.actualSpeed * dt;
+                player.mesh.position.z += mv.z * player.actualSpeed * dt;
+            }
         }
 
         if (state.worldMode === 'endless') {
-            // Endless: no wrap, no re-imaging — the world is truly flat and
-            // infinite. Ground the player on the terrain under him (plus the
-            // jump arc's height above it), stream the monster bubble, advance
-            // the distance/difficulty ramp, and keep the floating origin
-            // within float-precision range.
-            state.player.position.y = groundHeightAt(state.player.position.x, state.player.position.z)
-                + state.jumpOffset;
+            // Stream the monster bubble, advance the distance/difficulty
+            // ramp (per player, ramp on the FURTHER one), and keep the
+            // floating origin within float-precision range.
             updateEnemyStreaming(dt);
             updateEndlessProgress();
             rebaseWorldIfNeeded();
@@ -388,78 +418,102 @@ function update(dt) {
         }
         }
 
-        // Update directional light to follow player
+        // Update directional light to follow the living players' midpoint
+        // (plan 026 — one player's midpoint is the player, so solo shadows
+        // are byte-identical).
         const dirLight = state.scene.children.find(child => child instanceof THREE.DirectionalLight);
-        if (dirLight) {
-            dirLight.position.set(state.player.position.x + 10, state.player.position.y + 20, state.player.position.z + 5);
-            dirLight.target.position.copy(state.player.position);
-            dirLight.target.updateMatrixWorld();
+        if (dirLight && lightTarget) {
+            let mx = 0, my = 0, mz = 0, living = 0;
+            for (const player of state.players) {
+                if (!player.alive || !player.mesh) continue;
+                mx += player.mesh.position.x;
+                my += player.mesh.position.y;
+                mz += player.mesh.position.z;
+                living++;
+            }
+            if (living > 0) {
+                mx /= living;
+                my /= living;
+                mz /= living;
+                dirLight.position.set(mx + 10, my + 20, mz + 5);
+                lightTarget.position.set(mx, my, mz);
+                lightTarget.updateMatrixWorld();
+            }
         }
 
-        // Collectibles collision — refresh the shared playerBox once (the
-        // player moved since the enemy pass), then reuse scratchBox per item.
-        playerBox.setFromObject(state.player);
-        for (let i = state.collectibles.length - 1; i >= 0; i--) {
-            const collectible = state.collectibles[i];
-            scratchBox.setFromObject(collectible);
-            if (playerBox.intersectsBox(scratchBox)) {
+        // Collectibles collision, per living player — the pickup boxes ride
+        // the body-block builders (plan 026 / H6): the player box from the
+        // RENDER scale (what the old render-tree setFromObject measured,
+        // minus decoration margins), un-flattened so a jump still sails
+        // over ground food; the food box from its own cube size.
+        for (const player of state.players) {
+            if (!player.alive || !player.mesh) continue;
+            setPlayerCollisionBox(playerBox, player, player.mesh.scale.y, false);
+            for (let i = state.collectibles.length - 1; i >= 0; i--) {
+                const collectible = state.collectibles[i];
+                setCollectibleBox(scratchBox, collectible);
+                if (!playerBox.intersectsBox(scratchBox)) continue;
                 // Gold food (plan 025): 5x points, everything else identical
                 // — same growth, same FULL clock reset. The clock is the
                 // survival axis; gold only sweetens the points axis, so the
                 // detour decision stays a routing choice, never a lifeline.
                 const isGold = collectible.userData.gold === true;
-                onCollect(collectible.position); // Lime burst + squash-stretch (plan 015)
+                onCollect(collectible.position, player); // Lime burst + squash-stretch (plan 015)
                 state.scene.remove(collectible);
                 state.collectibles.splice(i, 1);
-                state.score += isGold ? GOLD_FOOD_POINTS : FOOD_POINTS;
+                player.score += isGold ? GOLD_FOOD_POINTS : FOOD_POINTS;
                 updateScoreDisplay();
-                const prevScale = state.playerScale;
-                state.playerScale += growthFactor;
-                state.player.scale.set(state.playerScale, state.playerScale, state.playerScale);
+                const prevScale = player.scale;
+                player.scale += growthFactor;
+                player.mesh.scale.set(player.scale, player.scale, player.scale);
                 // Group origin at feet, scaling handles height. Endless keeps
                 // the terrain-grounded y set earlier this frame.
-                if (state.worldMode !== 'endless') state.player.position.y = 0;
+                if (state.worldMode !== 'endless') player.mesh.position.y = 0;
                 applySpeedMultiplier(); // playerScale changed → refresh the size speed bonus
                 // Growth milestone (score-juice pass): crossing a whole
                 // MILESTONE_STEP of scale earns a shockwave ring, a rising
                 // jingle, and a proud little swell. The epsilon absorbs the
                 // float drift of repeated += growthFactor at the boundary.
-                if (Math.floor((state.playerScale + 1e-9) / MILESTONE_STEP) >
+                if (Math.floor((player.scale + 1e-9) / MILESTONE_STEP) >
                     Math.floor((prevScale + 1e-9) / MILESTONE_STEP)) {
-                    onGrowthMilestone(state.player.position, state.playerScale);
+                    onGrowthMilestone(player.mesh.position, player.scale, player);
                     sfx.milestone();
                 }
-                spawnNearPlayer();
-                resetCollectClock();
+                spawnNearPlayer(player);
+                resetCollectClock(player);
                 if (isGold) {
                     // The gold beat: a "+5 GOLD!" popup over the head and the
                     // short fanfare INSTEAD of the collect blip (layering both
                     // would mush; the fanfare carries the reward). Fired after
                     // the milestone block so a same-frame growth jingle never
                     // buries the gold popup as the last text.
-                    milestoneOrigin.x = state.player.position.x;
-                    milestoneOrigin.y = state.player.position.y + state.playerScale + 0.6;
-                    milestoneOrigin.z = state.player.position.z;
+                    milestoneOrigin.x = player.mesh.position.x;
+                    milestoneOrigin.y = player.mesh.position.y + player.scale + 0.6;
+                    milestoneOrigin.z = player.mesh.position.z;
                     spawnTextPopup(milestoneOrigin, `+${GOLD_FOOD_POINTS} GOLD!`, '#FFD54F');
                     sfx.fanfare('short');
                 } else {
                     sfx.collect();
                 }
                 rumble(35, 0.25); // Soft pad pulse (no-op if no actuator)
+                // (The box deliberately does NOT re-derive mid-sweep after a
+                // collect grew the body — matching the old once-per-frame
+                // setFromObject refresh; next frame measures the new size.)
             }
         }
     }
 }
 
 // --- Jump (endless only; owner queue item 5) ---
-// A fixed ballistic arc on the GAME clock: tryJump is the single entry
-// point (Space in input.js + the touch JUMP button), updateJumpPhysics
-// integrates it inside update()'s endless branch. No double-jump: airborne
-// presses are ignored. XZ momentum carries because movement input keeps
-// applying mid-air (the slide just ignores rocks — see the movement block).
-// Apex/airtime grow with playerScale so bigger heroes clear more ground.
-function jumpLaunchParams() {
-    const s = Math.max(1, state.playerScale);
+// A fixed ballistic arc on the GAME clock, per player (plan 026): tryJump is
+// the single entry point (Space/Slash in input.js + the touch JUMP button —
+// each resolves a seat), updateJumpPhysics integrates it inside update()'s
+// endless branch. No double-jump: airborne presses are ignored. XZ momentum
+// carries because movement input keeps applying mid-air (the slide just
+// ignores rocks — see the movement block). Apex/airtime grow with the
+// player's scale so bigger heroes clear more ground.
+function jumpLaunchParams(player) {
+    const s = Math.max(1, player.scale);
     const apex = JUMP_APEX_HEIGHT + JUMP_APEX_GROWTH * (s - 1);
     const air = JUMP_AIRTIME + JUMP_AIRTIME_GROWTH * (s - 1);
     const gravity = (8 * apex) / (air * air);
@@ -467,36 +521,39 @@ function jumpLaunchParams() {
     return { gravity, velocity };
 }
 
-export function tryJump() {
+export function tryJump(seat = 0) {
     if (state.worldMode !== 'endless') return; // Classic Space = pause, untouched
     if (CONTINUOUS_MOVEMENT) return; // The spike owns Space (boost) — no jump there
     if (!state.gameActive || state.isPaused || state.onStartScreen) return;
-    if (state.jumpAirborne) return; // No double-jump
-    const { gravity, velocity } = jumpLaunchParams();
-    state.jumpAirborne = true;
-    state.jumpVelocity = velocity;
-    state.jumpGravity = gravity; // Locked for this arc (scale mid-air would warp it)
+    const player = state.players[seat];
+    if (!player || !player.alive || !player.mesh) return; // Spectators don't hop
+    if (player.jump.airborne) return; // No double-jump
+    const { gravity, velocity } = jumpLaunchParams(player);
+    player.jump.airborne = true;
+    player.jump.velocity = velocity;
+    player.jump.gravity = gravity; // Locked for this arc (scale mid-air would warp it)
     sfx.jump(); // Rising boing
-    onJumpTakeoff(); // Dust kick + crouch squash (squash skipped under reduced motion)
+    onJumpTakeoff(player); // Dust kick + crouch squash (squash skipped under reduced motion)
 }
 
-function updateJumpPhysics(dt) {
-    if (!state.jumpAirborne) return;
+function updateJumpPhysics(player, dt) {
+    const jump = player.jump;
+    if (!jump.airborne) return;
     // Prefer the locked per-jump gravity; recompute scale-1 if missing.
-    const grav = state.jumpGravity > 0
-        ? state.jumpGravity
+    const grav = jump.gravity > 0
+        ? jump.gravity
         : (8 * JUMP_APEX_HEIGHT) / (JUMP_AIRTIME * JUMP_AIRTIME);
-    state.jumpVelocity -= grav * dt;
-    state.jumpOffset += state.jumpVelocity * dt;
-    if (state.jumpOffset <= 0) {
+    jump.velocity -= grav * dt;
+    jump.offset += jump.velocity * dt;
+    if (jump.offset <= 0) {
         // Touchdown: the offset rides ON TOP of the terrain height, so the
         // landing spot is wherever the (water-legal) XZ slide ended up.
-        state.jumpOffset = 0;
-        state.jumpVelocity = 0;
-        state.jumpGravity = 0;
-        state.jumpAirborne = false;
+        jump.offset = 0;
+        jump.velocity = 0;
+        jump.gravity = 0;
+        jump.airborne = false;
         sfx.land(); // Soft thump
-        onJumpLand(); // Landing dust burst
+        onJumpLand(player); // Landing dust burst
     }
 }
 
@@ -508,48 +565,51 @@ function updateJumpPhysics(dt) {
 // (enemies.js) and enemy speed (applySpeedMultiplier below).
 const milestoneOrigin = { x: 0, y: 0, z: 0 }; // Scratch shared by the progress popups (milestone / DISCOVERED) — never allocated per beat
 
-// --- Region discovery (plan 025 Step 3) ---
+// --- Region discovery (plan 025 Step 3; per player since plan 026) ---
 // Tracks which named biome region (terrain.js biomeRegion — bin + cell in
-// TRUE coordinates) the player is CONFIRMED in. A candidate region must
+// TRUE coordinates) each player is CONFIRMED in. A candidate region must
 // hold for REGION_DISCOVER_DEBOUNCE game-seconds before it commits —
 // shoreline wiggles flicker the biome bin, and a stuttering banner is no
-// banner. First-ever visits (per run) earn the DISCOVERED popup in the
-// region's own tint color + the milestone jingle; re-entries just retarget
-// the key. The spawn region is pre-seeded by setupNewGame (no banner —
-// you start somewhere, you don't "discover" it), so REGIONS counts from 1.
-let regionCandidateKey = null;
-let regionCandidateSince = 0;
+// banner. DISCOVERY IS SHARED (one regionsVisited — a place either player
+// reached is known to the run): first-ever visits earn the DISCOVERED popup
+// over the DISCOVERING player's head in the region's own tint color + the
+// milestone jingle; re-entries just retarget that player's key. The spawn
+// region is pre-seeded by setupNewGame (no banner — you start somewhere,
+// you don't "discover" it), so REGIONS counts from 1.
 
 function resetRegionTracking() {
-    regionCandidateKey = null;
-    regionCandidateSince = 0;
     state.regionsVisited = new Set();
-    state.regionKey = null;
+    for (const p of state.players) {
+        p.regionCandidateKey = null;
+        p.regionCandidateSince = 0;
+        p.regionKey = null;
+    }
     if (state.worldMode === 'endless') {
-        const home = biomeRegion(state.worldOrigin.x, state.worldOrigin.z); // Player is at local (0,0) on reset
-        state.regionKey = home.key;
+        const home = biomeRegion(state.worldOrigin.x, state.worldOrigin.z); // Players spawn at local (0,0) on reset
+        for (const p of state.players) p.regionKey = home.key;
         state.regionsVisited.add(home.key);
     }
 }
 
-function updateRegionDiscovery(p) {
+function updateRegionDiscovery(player) {
+    const p = player.mesh.position;
     const region = biomeRegion(p.x + state.worldOrigin.x, p.z + state.worldOrigin.z);
-    if (region.key === state.regionKey) {
-        regionCandidateKey = null; // Back home before the debounce ran out
+    if (region.key === player.regionKey) {
+        player.regionCandidateKey = null; // Back home before the debounce ran out
         return;
     }
-    if (region.key !== regionCandidateKey) {
-        regionCandidateKey = region.key; // New candidate: start the clock
-        regionCandidateSince = state.runTime;
+    if (region.key !== player.regionCandidateKey) {
+        player.regionCandidateKey = region.key; // New candidate: start the clock
+        player.regionCandidateSince = state.runTime;
         return;
     }
-    if (state.runTime - regionCandidateSince < REGION_DISCOVER_DEBOUNCE) return;
-    state.regionKey = region.key; // Held long enough — the player really moved
-    regionCandidateKey = null;
+    if (state.runTime - player.regionCandidateSince < REGION_DISCOVER_DEBOUNCE) return;
+    player.regionKey = region.key; // Held long enough — the player really moved
+    player.regionCandidateKey = null;
     if (!state.regionsVisited.has(region.key)) {
         state.regionsVisited.add(region.key);
         milestoneOrigin.x = p.x;
-        milestoneOrigin.y = p.y + state.playerScale + 0.6; // Above the head (milestone pattern)
+        milestoneOrigin.y = p.y + player.scale + 0.6; // Above the head (milestone pattern)
         milestoneOrigin.z = p.z;
         spawnTextPopup(milestoneOrigin, `DISCOVERED: ${region.name}`, region.color);
         sfx.milestone();
@@ -566,7 +626,8 @@ function updateRegionDiscovery(p) {
 // if the whole fan ahead is water THIS frame, the flag stays unset and the
 // trigger simply retries next frame — the titan may arrive a step late,
 // never in a lake.
-function tryScheduleBoss(p) {
+function tryScheduleBoss(player) {
+    const p = player.mesh.position;
     const mv = moveVector();
     let hx = mv.x, hz = mv.z;
     if (hx === 0 && hz === 0) {
@@ -576,7 +637,7 @@ function tryScheduleBoss(p) {
         hx = tx / len;
         hz = tz / len;
     }
-    const scale = currentEnemyScaleFactor() * BOSS_SCALE_MULT;
+    const scale = currentEnemyScaleFactor(player) * BOSS_SCALE_MULT;
     const radius = scale * ENEMY_COLLIDER_HALF_WIDTH;
     const baseAngle = Math.atan2(hz, hx);
     for (let attempt = 0; attempt < 12; attempt++) {
@@ -588,7 +649,7 @@ function tryScheduleBoss(p) {
         scheduleEnemySpawn(spawnX, spawnZ, scale, 'grunt', true);
         state.bossSpawned = true;
         milestoneOrigin.x = p.x;
-        milestoneOrigin.y = p.y + state.playerScale + 0.6; // The dread banner rides over the head like every beat
+        milestoneOrigin.y = p.y + player.scale + 0.6; // The dread banner rides over the head like every beat
         milestoneOrigin.z = p.z;
         spawnTextPopup(milestoneOrigin, 'SOMETHING BIG COMES...', '#FF5252');
         return;
@@ -596,38 +657,51 @@ function tryScheduleBoss(p) {
 }
 
 function updateEndlessProgress() {
-    const p = state.player.position;
-    // Region tracking runs EVERY frame — wandering back into new lands must
-    // discover them even when no forward-progress record is being set.
-    updateRegionDiscovery(p);
-    const dist = Math.hypot(p.x + state.worldOrigin.x, p.z + state.worldOrigin.z);
-    if (dist > state.furthestDistance) {
-        // Distance milestone (stage 3): crossing a DISTANCE_MILESTONE_STEP
-        // boundary earns a waypoint chime and a lime "DISTANCE N!" popup over
-        // the player's head — the exploration counterpart to the growth
-        // milestone. Fires once per boundary (furthestDistance only grows).
-        const milestone = Math.floor(dist / DISTANCE_MILESTONE_STEP);
-        if (milestone > Math.floor(state.furthestDistance / DISTANCE_MILESTONE_STEP)) {
-            milestoneOrigin.x = p.x;
-            milestoneOrigin.y = p.y + state.playerScale + 0.6; // Above the head; popup pool adds its own rise
-            milestoneOrigin.z = p.z;
-            spawnTextPopup(milestoneOrigin, `DISTANCE ${milestone * DISTANCE_MILESTONE_STEP}!`, '#76FF03'); // Food lime — reward color
-            sfx.distance();
+    // Per player (plan 026): each hero tracks their own regions/current
+    // distance; the RUN's furthest (and so the ramp, milestones, and the
+    // titan trigger) rides the FURTHER player. The titan's banner and
+    // placement belong to the player who crossed the mark.
+    let furthestPlayer = null;
+    for (const player of state.players) {
+        if (!player.alive || !player.mesh) continue;
+        const p = player.mesh.position;
+        // Region tracking runs EVERY frame — wandering back into new lands
+        // must discover them even when no forward-progress record is set.
+        updateRegionDiscovery(player);
+        const dist = Math.hypot(p.x + state.worldOrigin.x, p.z + state.worldOrigin.z);
+        if (dist > player.distanceBest) player.distanceBest = dist;
+        if (dist > state.furthestDistance) {
+            // Distance milestone (stage 3): crossing a DISTANCE_MILESTONE_STEP
+            // boundary earns a waypoint chime and a lime "DISTANCE N!" popup
+            // over the RECORD-SETTER's head — the exploration counterpart to
+            // the growth milestone. Fires once per boundary (furthestDistance
+            // only grows).
+            const milestone = Math.floor(dist / DISTANCE_MILESTONE_STEP);
+            if (milestone > Math.floor(state.furthestDistance / DISTANCE_MILESTONE_STEP)) {
+                milestoneOrigin.x = p.x;
+                milestoneOrigin.y = p.y + player.scale + 0.6; // Above the head; popup pool adds its own rise
+                milestoneOrigin.z = p.z;
+                spawnTextPopup(milestoneOrigin, `DISTANCE ${milestone * DISTANCE_MILESTONE_STEP}!`, '#76FF03'); // Food lime — reward color
+                sfx.distance();
+            }
+            state.furthestDistance = dist;
+            updateDistanceDisplay();
+            const level = Math.floor(dist / RAMP_DISTANCE);
+            if (level !== state.endlessRampLevel) {
+                state.endlessRampLevel = level;
+                applySpeedMultiplier(); // Enemy speed carries the ramp factor
+            }
         }
-        state.furthestDistance = dist;
-        updateDistanceDisplay();
-        const level = Math.floor(dist / RAMP_DISTANCE);
-        if (level !== state.endlessRampLevel) {
-            state.endlessRampLevel = level;
-            applySpeedMultiplier(); // Enemy speed carries the ramp factor
+        if (!furthestPlayer || player.distanceBest > furthestPlayer.distanceBest) {
+            furthestPlayer = player;
         }
     }
     // Titan check AFTER the progress block: on the crossing frame the
     // DISTANCE 1000! chime fires first and SOMETHING BIG COMES... lands as
     // the headline. Outside the block so a water-blocked placement retries
     // even while the player stands still at the mark.
-    if (!state.bossSpawned && state.furthestDistance >= BOSS_DISTANCE) {
-        tryScheduleBoss(p);
+    if (!state.bossSpawned && state.furthestDistance >= BOSS_DISTANCE && furthestPlayer) {
+        tryScheduleBoss(furthestPlayer);
     }
 }
 
@@ -640,14 +714,30 @@ function updateEndlessProgress() {
 // camera recomputes absolutely from the player every frame, so it needs no
 // shift. CHUNK_SIZE granularity keeps chunk-local math exact.
 function rebaseWorldIfNeeded() {
-    const p = state.player.position;
-    if (Math.abs(p.x) < REBASE_DISTANCE && Math.abs(p.z) < REBASE_DISTANCE) return;
-    const dx = Math.round(p.x / CHUNK_SIZE) * CHUNK_SIZE;
-    const dz = Math.round(p.z / CHUNK_SIZE) * CHUNK_SIZE;
+    // Trigger on the LIVING players' midpoint (plan 026): both halves stay
+    // inside float-precision range together, and one shift moves everything
+    // — the midpoint of one player is the player, so solo is unchanged.
+    let mx = 0, mz = 0, living = 0;
+    for (const player of state.players) {
+        if (!player.alive || !player.mesh) continue;
+        mx += player.mesh.position.x;
+        mz += player.mesh.position.z;
+        living++;
+    }
+    if (living === 0) return;
+    mx /= living;
+    mz /= living;
+    if (Math.abs(mx) < REBASE_DISTANCE && Math.abs(mz) < REBASE_DISTANCE) return;
+    const dx = Math.round(mx / CHUNK_SIZE) * CHUNK_SIZE;
+    const dz = Math.round(mz / CHUNK_SIZE) * CHUNK_SIZE;
     if (dx === 0 && dz === 0) return;
     state.worldOrigin.x += dx;
     state.worldOrigin.z += dz;
-    shiftEntityForRebase(state.player, dx, dz);
+    // EVERY player mesh shifts — dead spectators included, or their fallen
+    // hero would teleport across the world relative to the survivor.
+    for (const player of state.players) {
+        if (player.mesh) shiftEntityForRebase(player.mesh, dx, dz);
+    }
     for (const enemy of state.enemies) shiftEntityForRebase(enemy, dx, dz);
     shiftPendingSpawns(dx, dz); // Red pre-spawn discs + scheduled coords
     for (const collectible of state.collectibles) {
@@ -813,8 +903,12 @@ export function togglePause() {
 // changes there, so the size factor must be recomputed).
 export function applySpeedMultiplier() {
     const baseSpeedForDevice = state.isMobile ? BASE_PLAYER_SPEED * MOBILE_SPEED_MULTIPLIER : BASE_PLAYER_SPEED;
-    const sizeFactor = Math.min(1 + (state.playerScale - 1) * SPEED_GROWTH_FACTOR, SPEED_GROWTH_CAP);
-    state.actualPlayerSpeed = baseSpeedForDevice * speedMultipliers[state.currentSpeedMultiplierIndex] * sizeFactor;
+    // Per player (plan 026): the size speed bonus rides EACH hero's own
+    // scale — the big partner is faster, exactly like the solo rule.
+    for (const p of state.players) {
+        const sizeFactor = Math.min(1 + (p.scale - 1) * SPEED_GROWTH_FACTOR, SPEED_GROWTH_CAP);
+        p.actualSpeed = baseSpeedForDevice * speedMultipliers[state.currentSpeedMultiplierIndex] * sizeFactor;
+    }
     // Enemy speed is DECOUPLED from the player base (owner: the 2x player
     // rebase must not touch enemies). BASE_ENEMY_SPEED is the pre-rebase
     // effective value; the mobile boost stays so enemies are byte-identical

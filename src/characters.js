@@ -38,18 +38,17 @@ export const CAP_LIGHTEN = 1.3; // Cap: top-face highlight shade
 // A soft dark gradient quad under every character: the missing ground-contact
 // cue that made jump height illegible (audit screenshots — the block just
 // floated). ONE shared radial-gradient CanvasTexture + ONE shared
-// PlaneGeometry for everyone; enemies share ONE static material. The PLAYER's
-// quad animates opacity with jump height, which a shared material cannot do
-// per-instance — it gets the single cached bendClone below (still one
-// geometry + one texture total; renderer memory counters see +1/+1 at boot,
-// absorbed by the pool specs' warm-up baselines). Look constants live here
-// with FOOT_SHADE/CAP_LIGHTEN — a look, not game balance.
+// PlaneGeometry for everyone; enemies share ONE static material. Each HERO's
+// quad animates opacity with that hero's jump height, which a shared
+// material cannot do per-instance — heroes get a bendClone each (plan 026;
+// still one geometry + one texture total; renderer memory counters see
+// +1/+1 at boot, absorbed by the pool specs' warm-up baselines). Look
+// constants live here with FOOT_SHADE/CAP_LIGHTEN — a look, not game balance.
 export const SHADOW_SIZE_FACTOR = 1.3; // Quad XZ size × baseSize (slightly wider than the body reads grounded)
 export const SHADOW_BASE_OPACITY = 0.45; // Grounded opacity; effects.js fades the player's with jump height
 let shadowGeometry = null; // Shared unit plane, scaled per character
 let shadowTexture = null; // Shared 64px radial gradient (dark center → transparent)
 let shadowMaterialShared = null; // Enemies: static opacity
-let shadowMaterialPlayer = null; // Player: opacity driven per-frame by effects.js
 
 function getShadowResources() {
     if (!shadowGeometry) {
@@ -72,9 +71,8 @@ function getShadowResources() {
             depthWrite: false // Never occludes; depthTest stays on so hills still hide it
         });
         applyWorldBend(shadowMaterialShared); // Far shadows ride the curved horizon like their owners
-        shadowMaterialPlayer = bendClone(shadowMaterialShared); // clone() drops onBeforeCompile — re-arm it
     }
-    return { shadowGeometry, shadowMaterialShared, shadowMaterialPlayer };
+    return { shadowGeometry, shadowMaterialShared };
 }
 
 // Multiplies a hex color's channels by `factor` (clamped to valid range).
@@ -402,9 +400,15 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
     // (player only) shrinks/fades it with jump height. Kept under reduced
     // motion on purpose: a shadow is static grounding, not motion.
     const shadow = getShadowResources();
+    // Heroes each get their OWN cloned shadow material (plan 026): effects.js
+    // fades a hero's shadow with THAT hero's jump height, which a shared
+    // material cannot express per instance. Materials are not in the
+    // renderer's memory counters (geometry + texture stay shared, still
+    // +1/+1 at boot), so the pool-plateau specs are untouched. Enemies keep
+    // the one static shared material.
     const shadowQuad = new THREE.Mesh(
         shadow.shadowGeometry,
-        menacing ? shadow.shadowMaterialShared : shadow.shadowMaterialPlayer
+        menacing ? shadow.shadowMaterialShared : bendClone(shadow.shadowMaterialShared)
     );
     shadowQuad.rotation.x = -Math.PI / 2; // Flat on XZ
     const shadowSize = SHADOW_SIZE_FACTOR * baseSize;
@@ -428,15 +432,22 @@ export function disposeCharacter(group) {
     }
 }
 
-export function createPlayer() {
-    if (state.player) {
-        state.scene.remove(state.player); // Remove old player group if it exists
+// Builds the hero for one player slot (plan 026: seat-indexed; P2 gets its
+// own palette via bodyColor). Tags the mesh with a back-reference to its
+// player state so effects.js walk/shadow/blink can stay player-generic.
+export function createPlayer(playerState = state.players[0], { bodyColor = 0xFF4500 } = {}) {
+    if (playerState.mesh) {
+        state.scene.remove(playerState.mesh); // Remove old player group if it exists
     }
-    const playerGroup = createCharacter({ baseSize: 1.0, bodyColor: 0xFF4500, faceColor: 0x000000 }); // Bright Orange-Red body, black face
+    const playerGroup = createCharacter({ baseSize: 1.0, bodyColor, faceColor: 0x000000 }); // Bright Orange-Red body, black face (P1)
 
-    // Assign to shared player state
-    state.player = playerGroup;
+    // Assign to the player slot; keep the classic state.player alias pointed
+    // at seat 0's mesh (the suites and solo paths read it).
+    playerState.mesh = playerGroup;
+    playerGroup.userData.playerState = playerState;
+    if (playerState === state.players[0]) state.player = playerGroup;
     playerGroup.position.y = 0; // Group's origin at feet level on the ground
-    playerGroup.scale.set(state.playerScale, state.playerScale, state.playerScale); // Apply initial/current scale
+    playerGroup.scale.set(playerState.scale, playerState.scale, playerState.scale); // Apply initial/current scale
     state.scene.add(playerGroup);
+    return playerGroup;
 }
