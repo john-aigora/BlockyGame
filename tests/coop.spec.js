@@ -355,6 +355,49 @@ test('2 PLAYERS and TODAY\'S WORLD are mutually exclusive (coop has no daily boa
   }))).toEqual({ daily: false, players: 2, playerCount: '2', dailyFlag: '0' });
 });
 
+test('each seat has its own speed multiplier (pad Y/X and debug seat arg)', async ({ page }) => {
+  await startTwoPlayerGame(page);
+  await clearThreats(page);
+  // Defaults: both 1x (index 0). Speed P2 only.
+  const stepped = await page.evaluate(() => {
+    const g = window.__game;
+    const ok = g.debug.speedUp(1);
+    g.debug.applySpeedMultiplier();
+    return {
+      ok,
+      i0: g.state.players[0].speedMultiplierIndex,
+      i1: g.state.players[1].speedMultiplierIndex,
+      s0: g.state.players[0].actualSpeed,
+      s1: g.state.players[1].actualSpeed,
+      label: document.getElementById('speed-cycle-button')?.textContent,
+      // Solo-compat surface still tracks seat 0
+      legacyIndex: g.state.currentSpeedMultiplierIndex,
+    };
+  });
+  expect(stepped.ok).toBe(true);
+  expect(stepped.i0).toBe(0);
+  expect(stepped.i1).toBeGreaterThan(0);
+  expect(stepped.s1).toBeGreaterThan(stepped.s0);
+  expect(stepped.legacyIndex).toBe(0);
+  expect(stepped.label).toMatch(/1x\s*\/\s*1\.5x/);
+
+  // Seat 0 cycles without pulling seat 1 back down.
+  const cycled = await page.evaluate(() => {
+    const g = window.__game;
+    g.debug.cycleSpeed(0);
+    return {
+      i0: g.state.players[0].speedMultiplierIndex,
+      i1: g.state.players[1].speedMultiplierIndex,
+      s0: g.state.players[0].actualSpeed,
+      s1: g.state.players[1].actualSpeed,
+    };
+  });
+  expect(cycled.i0).toBe(1);
+  expect(cycled.i1).toBe(stepped.i1);
+  expect(cycled.s0).toBeCloseTo(6 * 1.5, 5);
+  expect(cycled.s1).toBeCloseTo(stepped.s1, 5);
+});
+
 test('per-half danger vignette: a hunter stalking P2 reddens ONLY P2\'s half — and the CSS rule actually paints it', async ({ page }) => {
   await startTwoPlayerGame(page);
   await clearThreats(page);

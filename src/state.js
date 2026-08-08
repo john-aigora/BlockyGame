@@ -15,6 +15,10 @@ export function makePlayerState(seat = 0) {
         collectTimeLeft: initialCollectTime, // Per-player 15s clock (timers.js)
         lastShownCollectTime: initialCollectTime, // Last integer written to THEIR readout
         distanceBest: 0, // This player's furthest true distance (HUD + death column)
+        // Speed toy index into speedMultipliers (independent per seat in 2P —
+        // pad Y/X and F/R only touch that seat). actualSpeed is recomputed
+        // from this + size bonus by applySpeedMultiplier.
+        speedMultiplierIndex: 0,
         actualSpeed: undefined, // Fully adjusted move speed (size bonus is per player)
         // Jump arc (endless; game.js owns the physics on the game clock).
         // offset is height ABOVE the terrain — mesh y = ground + offset.
@@ -142,10 +146,13 @@ export const state = {
 
     animationFrameId: null, // requestAnimationFrame handle
 
-    // Speed Multiplier Variables — applySpeedMultiplier (game.js) recomputes
-    // the actual speeds from constants + device + ramp. The PLAYER speed is
-    // per player (size bonus); the enemy speed is world-level.
-    currentSpeedMultiplierIndex: 0,
+    // Speed multiplier index: delegates to seat 0 so solo/tests that read or
+    // write state.currentSpeedMultiplierIndex keep working. Each seat's own
+    // index lives on players[i].speedMultiplierIndex (independent in 2P).
+    get currentSpeedMultiplierIndex() { return this.players[0].speedMultiplierIndex; },
+    set currentSpeedMultiplierIndex(v) { this.players[0].speedMultiplierIndex = v; },
+    // applySpeedMultiplier (game.js) recomputes player actualSpeed (per seat)
+    // and actualEnemySpeed (world: max living player mult + ramp).
     actualEnemySpeed: undefined, // Will store the fully adjusted enemy speed
 
     // Camera zoom model: the LEVEL is shared (per-player zoom is out of v1);

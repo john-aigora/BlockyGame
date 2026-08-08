@@ -468,14 +468,12 @@ export function pollGamepad() {
         }
     }
 
-    // Y = faster, X = slower (dedicated slow-down). F key still cycles.
+    // Y = faster, X = slower for seat 0 (solo). F key still cycles seat 0.
     if (!state.isPaused && buttonEdge(gp, b.y)) {
-        sfx.click();
-        speedUp();
+        if (speedUp(0)) sfx.click();
     }
     if (!state.isPaused && buttonEdge(gp, b.x)) {
-        sfx.click();
-        speedDown();
+        if (speedDown(0)) sfx.click();
     }
 
     // LB / RB = zoom out / in
@@ -512,8 +510,8 @@ function pollGamepadSeats() {
     let wantReset = false;
     let wantPause = false;
     let wantMute = false;
-    let wantSpeedUp = false;
-    let wantSpeedDown = false;
+    const speedUpSeats = [];
+    const speedDownSeats = [];
     let wantZoomIn = false;
     let wantZoomOut = false;
     const jumpSeats = [];
@@ -571,9 +569,12 @@ function pollGamepadSeats() {
             if (buttonEdge(gp, b.b)) wantPause = true;
         }
 
-        // Speed and zoom are world-shared — either pad may drive them.
-        if (!state.isPaused && buttonEdge(gp, b.y)) wantSpeedUp = true;
-        if (!state.isPaused && buttonEdge(gp, b.x)) wantSpeedDown = true;
+        // Speed is PER SEAT (independent 2P toys). Zoom stays world-shared.
+        if (!state.isPaused) {
+            const seat = seatForPadIndex(gp.index);
+            if (seat >= 0 && buttonEdge(gp, b.y)) speedUpSeats.push(seat);
+            if (seat >= 0 && buttonEdge(gp, b.x)) speedDownSeats.push(seat);
+        }
         if (buttonEdge(gp, b.lb)) wantZoomOut = true;
         if (buttonEdge(gp, b.rb)) wantZoomIn = true;
 
@@ -593,13 +594,11 @@ function pollGamepadSeats() {
         }
         if (wantMute) toggleMuteFromUI();
         for (const seat of jumpSeats) tryJump(seat);
-        if (wantSpeedUp) {
-            sfx.click();
-            speedUp();
+        for (const seat of speedUpSeats) {
+            if (speedUp(seat)) sfx.click();
         }
-        if (wantSpeedDown) {
-            sfx.click();
-            speedDown();
+        for (const seat of speedDownSeats) {
+            if (speedDown(seat)) sfx.click();
         }
         if (wantZoomOut) {
             sfx.click();
