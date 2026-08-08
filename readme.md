@@ -151,8 +151,8 @@ src/
 tests/              Playwright specs (smoke, timing, gameover, world, camera,
                     resources, hiscores, audio, balance, touch, effects,
                     endless + endless-stream + endless-polish, gate, gamepad,
-                    fairness, hitbox, tension, toys, species, worldfun, coop)
-                    + shared helpers
+                    fairness, hitbox, tension, toys, species, worldfun, coop,
+                    spawnwarn) + shared helpers
 plans/              the audit + implementation plans this overhaul followed
 ```
 
@@ -179,7 +179,9 @@ The repo is a standard Vite app — Vercel detects it automatically.
    repository.
 3. Framework preset shows **Vite** (build `vite build`, output `dist/`) —
    accept and **Deploy**.
-4. Every push to `main` now auto-deploys. That's it — no config file needed.
+4. Every push to `main` now auto-deploys. The repo's `vercel.json` only adds
+   security headers (nosniff site-wide + a CSP scoped to the `/original`
+   archive) — the build itself needs no configuration.
 
 Alternatively, from a machine with the Vercel CLI logged in: `npx vercel` then
 `npx vercel --prod`.

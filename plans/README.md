@@ -43,6 +43,11 @@ see finding BASE-1; plan 017 repairs it and gates everything else.
 
 ## 2026-07-31 run: plans 017–028 (owner selected "all", plus two new owner requests)
 
+**Status (2026-08-08): run COMPLETE on `feat/audit-coop-2026` (unmerged, never
+pushed) — rows 017–028 all DONE; suite 150 tests green, lint 0, build 0 at the
+run head. One human step remains: 018's family hardware check (`?paddebug=1`).
+The RED-main note above still describes `main` — the repair lives on the branch.**
+
 Owner requests folded in: **two-player split-screen mode** (026) and **fix the
 joysticks** (018 — root cause: pad-selection lock never rescans + unconditional
 standard-mapping bias; reference implementation in sibling repo battle-paddle,
@@ -61,7 +66,7 @@ which hardened BlockyGame's own pad code for dual-port DB9 adapters).
 | 025 | Fun 3: daily worlds + ?seed=, named biomes, golden food, 1000u boss | P2 | M-L | 017, 023, 024 | DONE — WORLD_SEED resolution (?seed= → daily → default; one source of truth, consumers swept); TODAY'S WORLD toggle (reuses `.mode-button`) + SEED line on the overlay; daily board `blocky.hiscores.daily.v1` (endless ranking rules, seed-stamped rows pruned to today on read, TODAY'S BEST death board); biomeRegion 5-bin×300u-cell named regions with 1.5gs-debounced DISCOVERED banners + REGIONS death stat; gold food (8%/chunk via ONE stream-aligned roll, 5 pts, same clock reset, fanfare-short); the 1000u titan (giant formula ×1.6, 2× speed-scaled warn, gold crown, ×3 payout, 10-food feast ring, despawn-immune until killed, once per run, restart-safe) |
 | 026 | Two-player split-screen (owner headline) | P1 | L | 017, 018, 019, 020, 022.1 | DONE (couch co-op: 1P/2P start buttons, vertical split with a camera per hero, one shared world; WASD+Space vs Arrows+Slash on one keyboard, pads claim seats by moving — battle-paddle rules; per-player score/clock/combo/danger + per-viewer enemy edibility colors per half; per-player death → spectator partner-cam with WAITING chip; team death screen + TEAM RUNS coop board (teamScore-ranked), solo boards untouched; terrain/food/cloud streaming unions both anchors, midpoint rebase, per-seat enemy bubbles under coop cap 16; solo path byte-stable — 10-case coop.spec, suite 116→126) |
 | 027 | Test depth: debug.advance, scoring/pause/warn coverage, wall-clock retirement | P2 | M | 017; after 026 | DONE — debug.advance (rAF-paused real-update stepper) + 21 new cases (suite 129→150: exact bounty/combo/x5, pinned 8-slot rotation, pause invariants, spawnwarn.spec e2e, jump-growth/gravity lock, rumble spy, full bind sweep); all 17 non-audio wall-clock waits converted, 2 audio waits annotated, waitForTimeout lint-banned in tests/; B9 also drained hygiene H1-H5, H12, H14 |
-| 028 | Perf pass 2: water recolor, chunk tint, instancing — measured & gated | P3 | M-L | 020, 026 | TODO |
+| 028 | Perf pass 2: water recolor, chunk tint, instancing — measured & gated | P3 | M-L | 020, 026 | DONE — Step 0 measured first (H10 3-statue rig, solo+2P × 1x/5x, per-frame traces): ALL THREE gated steps SKIPPED by their own decision table — water recolor frames cost +0.5–0.6ms over quiet (max 2.7ms absolute; criterion was a >2ms jump), chunk-build frames +0.4–0.5ms at 5× (max 3.5ms; no spike), 2P steady-state draw calls 273–339 median (parked 286) under the >400 instancing gate. Shipped instead: the measured S-extras H8 (chunk-cull pooled-reacquire hardening on `userData.registered`) + H13 (biomeRegion identity/display split — per-frame hot path allocation-free of object/name/color). Full decision table + before/after numbers in the execution log (B10) |
 
 ### Dependency notes (017–028)
 

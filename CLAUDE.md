@@ -51,8 +51,8 @@ change. Run-ephemeral lessons live in `docs/elves/learnings.md`.
   condition-based polls.
 - Specs stay DOM-level or `window.__game`-level; don't couple to internals
   that refactors rename.
-- Suite is ~5 min on port 5173. Never run two suites at once (port clash +
-  load-induced flakes).
+- Suite is ~7 min on port 5173 (150 tests, 3 workers). Never run two suites
+  at once (port clash + load-induced flakes).
 
 ## Commands
 
