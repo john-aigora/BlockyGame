@@ -140,6 +140,99 @@ test('two rapid kills pay more than 2x the single-kill bounty (combo)', async ({
   expect(combo).toBeGreaterThanOrEqual(2); // The multiplier really escalated
 });
 
+// --- Exact scoring (plan 027 Step 2) ---
+// Deterministic kill choreography, shared by the three exactness cases:
+// silence the world (no bodies, no pending discs, no clock death), fix the
+// player at scale 3, hang them MID-JUMP over a debug-spawned grunt of a
+// FIXED scale, and step the real update. Enemy contact flattens the
+// player's collision box to the ground (a hop is never a dodge), so the
+// kill fires — but the PICKUP box does not flatten, so the 4 food blocks
+// the kill scatters (±1.5u, on the ground) cannot be collected in the same
+// frames. The score delta is therefore PURE kill payout: exact assertions,
+// not >=. (In-page; returns plain data.)
+function killFixedEnemyExactly(page, { enemyScale, seedCombo }) {
+  return page.evaluate(({ enemyScale_, seedCombo_ }) => {
+    const g = window.__game;
+    const s = g.state;
+    s.enemies.forEach((e) => s.scene.remove(e));
+    s.enemies = [];
+    g.debug.clearPendingSpawns();
+    s.players.forEach((p) => { p.collectTimeLeft = 900; });
+    s.playerScale = 3;
+    s.player.scale.set(3, 3, 3);
+    g.debug.applySpeedMultiplier();
+    if (seedCombo_) {
+      s.comboCount = seedCombo_.count;
+      s.players[0].comboTimeLeft = seedCombo_.timeLeft;
+    }
+    const p0 = s.players[0];
+    p0.jump.airborne = true;
+    p0.jump.offset = 2.5; // Well above the food cubes (top ~0.8), inside the arc
+    p0.jump.velocity = 0;
+    p0.jump.gravity = 45; // Positive → the locked-arc physics branch
+    g.debug.spawnSpecies('grunt', s.player.position.x, s.player.position.z, enemyScale_);
+    const before = s.score;
+    g.debug.advance(3 / 60); // The contact kill lands on the first stepped frame
+    return {
+      delta: s.score - before,
+      combo: s.comboCount,
+      comboTimeLeft: s.players[0].comboTimeLeft,
+      chip: document.getElementById('combo-chip').style.display
+    };
+  }, { enemyScale_: enemyScale, seedCombo_: seedCombo ?? null });
+}
+
+test('an isolated kill pays EXACTLY 25 + 5*floor(1.2*scale) (bounty formula, x1)', async ({ page }) => {
+  await startGame(page);
+  const r = await killFixedEnemyExactly(page, { enemyScale: 2 });
+  expect(r.combo).toBe(1); // No prior window → the multiplier is exactly x1
+  // KILL_POINTS + SIZE_BOUNTY_PER_UNIT * floor(enemyBaseHeight * scale.y):
+  expect(r.delta).toBe(25 + 5 * Math.floor(1.2 * 2)); // === 35, exactly
+});
+
+test('combo expiry: advance(4.5) past the 4s window zeroes the combo and hides the chip', async ({ page }) => {
+  await startGame(page);
+  // Two chained kills so the chip is actually VISIBLE before the expiry.
+  const first = await killFixedEnemyExactly(page, { enemyScale: 2 });
+  expect(first.combo).toBe(1);
+  const r = await page.evaluate(() => {
+    const g = window.__game;
+    const s = g.state;
+    // Second grunt under the still-airborne player: chained kill → x2.
+    g.debug.spawnSpecies('grunt', s.player.position.x, s.player.position.z, 2);
+    g.debug.advance(3 / 60);
+    const midCombo = s.comboCount;
+    const midChip = document.getElementById('combo-chip').style.display;
+    const midWindow = s.players[0].comboTimeLeft;
+    g.debug.advance(4.5); // COMBO_WINDOW is 4 — the whole window expires in here
+    return {
+      midCombo,
+      midChip,
+      midWindow,
+      combo: s.comboCount,
+      timeLeft: s.players[0].comboTimeLeft,
+      chip: document.getElementById('combo-chip').style.display
+    };
+  });
+  expect(r.midCombo).toBe(2); // The chain really escalated...
+  expect(r.midChip).toBe('block'); // ...and the chip showed
+  expect(r.midWindow).toBeGreaterThan(3.8); // Refreshed to ~4 by the second kill
+  expect(r.combo).toBe(0); // Expired on the game clock
+  expect(r.timeLeft).toBe(0);
+  expect(r.chip).toBe('none'); // timers.js hid the chip with the window
+});
+
+test('the combo multiplier caps at x5: a seeded x5 chain stays x5 and pays bounty*5', async ({ page }) => {
+  await startGame(page);
+  const r = await killFixedEnemyExactly(page, {
+    enemyScale: 2,
+    seedCombo: { count: 5, timeLeft: 4 } // COMBO_MAX with a live window
+  });
+  expect(r.combo).toBe(5); // min(5+1, COMBO_MAX) — never x6
+  expect(r.delta).toBe((25 + 5 * Math.floor(1.2 * 2)) * 5); // === 175: bounty*5, exactly
+  expect(r.comboTimeLeft).toBeGreaterThan(3.8); // The kill refreshed the window
+});
+
 test('spawnNewEnemies never grows the horde past the endless cap (12)', async ({ page }) => {
   // The game sits paused on the start overlay, so nothing else mutates the
   // array. Endless spawns are QUEUED as red warn discs first and pending

@@ -143,6 +143,124 @@ test('WASD alias: holding D moves the player toward +x', async ({ page }) => {
   expect(moved).toBeLessThan(expected * 1.3);
 });
 
+// --- Pause invariants (plan 027 Step 3) ---
+// Pause freezes the GAME clock; real (wall) time keeps passing. These
+// cases therefore wait on an in-page setTimeout — the one place wall time
+// is the honest axis, because the assertion is precisely "wall time passed
+// and the game state did NOT move".
+
+test('pause freezes a live combo window and the music; resume releases both', async ({ page }) => {
+  await startGame(page);
+  // Open a real combo window: silence the world, then a deterministic
+  // airborne kill over a debug-spawned grunt (same choreography as the
+  // balance exactness cases — the flattened enemy box makes the contact,
+  // the unflattened pickup box ignores the dropped food).
+  // Kill and pause in ONE evaluate — live frames between CDP round-trips
+  // would otherwise tick the window before the freeze lands.
+  const kill = await page.evaluate(() => {
+    const g = window.__game;
+    const s = g.state;
+    s.enemies.forEach((e) => s.scene.remove(e));
+    s.enemies = [];
+    g.debug.clearPendingSpawns();
+    s.players.forEach((p) => { p.collectTimeLeft = 900; });
+    const p0 = s.players[0];
+    s.playerScale = 3;
+    s.player.scale.set(3, 3, 3);
+    p0.jump.airborne = true;
+    p0.jump.offset = 2.5;
+    p0.jump.velocity = 0;
+    p0.jump.gravity = 45;
+    g.debug.spawnSpecies('grunt', s.player.position.x, s.player.position.z, 2);
+    g.debug.advance(3 / 60);
+    document.getElementById('pause-button').click(); // Freeze via the real path
+    return {
+      combo: s.comboCount,
+      window: s.players[0].comboTimeLeft, // The frozen value — nothing ticks past this line
+      isPaused: s.isPaused,
+      musicWhilePaused: g.debug.musicActive()
+    };
+  });
+  expect(kill.combo).toBe(1);
+  expect(kill.window).toBeGreaterThan(3.8); // A live ~4s window was on the clock
+  expect(kill.isPaused).toBe(true);
+  expect(kill.musicWhilePaused).toBe(false); // Music follows pause
+
+  // A full wall second passes; the frozen game must not notice it.
+  const frozen = await page.evaluate(() => new Promise((resolve) => {
+    const s = window.__game.state;
+    const before = { runTime: s.runTime, comboTimeLeft: s.players[0].comboTimeLeft };
+    setTimeout(() => resolve({
+      before,
+      runTime: s.runTime,
+      comboTimeLeft: s.players[0].comboTimeLeft
+    }), 1000);
+  }));
+  expect(frozen.before.comboTimeLeft).toBe(kill.window); // Nothing moved since the freeze
+  expect(frozen.runTime).toBe(frozen.before.runTime); // Game clock frozen solid
+  expect(frozen.comboTimeLeft).toBe(frozen.before.comboTimeLeft); // Combo window frozen with it
+
+  // Resume + step + read in ONE evaluate: the window ticks again on the
+  // game clock, and has moved by EXACTLY the stepped 0.2s — the wall
+  // second under pause cost it nothing.
+  const resumed = await page.evaluate(() => {
+    document.getElementById('pause-button').click(); // Real resume path
+    const musicAfterResume = window.__game.debug.musicActive();
+    window.__game.debug.advance(0.2);
+    return { musicAfterResume, comboTimeLeft: window.__game.state.players[0].comboTimeLeft };
+  });
+  expect(resumed.musicAfterResume).toBe(true); // Music returns with the run
+  expect(resumed.comboTimeLeft).toBeLessThan(kill.window - 0.15); // Ticking again...
+  expect(resumed.comboTimeLeft).toBeGreaterThan(kill.window - 0.35); // ...from where it froze, not 1s poorer
+});
+
+test('pause freezes the endless spawn cooldown: no burst on resume', async ({ page }) => {
+  await startGame(page);
+  await page.locator('#pause-button').click(); // Freeze first, then empty the world
+  expect(await page.evaluate(() => window.__game.state.isPaused)).toBe(true);
+  await page.evaluate(() => {
+    const s = window.__game.state;
+    s.enemies.forEach((e) => s.scene.remove(e));
+    s.enemies = [];
+    window.__game.debug.clearPendingSpawns();
+    s.players.forEach((p) => { p.collectTimeLeft = 900; });
+  });
+
+  // ~5 wall seconds of pause: the empty bubble must stay empty (a wall-
+  // clock cooldown would have banked 4 top-ups by now).
+  const paused = await page.evaluate(() => new Promise((resolve) => {
+    const g = window.__game;
+    const t0 = g.state.runTime;
+    setTimeout(() => resolve({
+      runTimeMoved: g.state.runTime - t0,
+      enemies: g.state.enemies.length,
+      pending: g.debug.pendingSpawnInfo().length
+    }), 5000);
+  }));
+  expect(paused.runTimeMoved).toBe(0);
+  expect(paused.enemies).toBe(0); // Nothing spawned...
+  expect(paused.pending).toBe(0); // ...nothing even scheduled
+
+  // Resume inside ONE evaluate (no live frames can interleave): the next
+  // frame changes nothing, and at most ONE top-up fits inside the first
+  // ENDLESS_SPAWN_INTERVAL (1.25s) — the cooldown resumed, it never banked.
+  const resumed = await page.evaluate(() => {
+    const g = window.__game;
+    const s = g.state;
+    document.getElementById('pause-button').click(); // Real resume path
+    g.debug.advance(1 / 60);
+    const nextFrameEnemies = s.enemies.length;
+    g.debug.advance(1.1); // Total stepped ≈ 1.117s < 1.25
+    const withinInterval = s.enemies.length + g.debug.pendingSpawnInfo().length;
+    g.debug.advance(0.25); // Total ≈ 1.37s > 1.25 — streaming must be alive again
+    const afterInterval = s.enemies.length + g.debug.pendingSpawnInfo().length;
+    return { nextFrameEnemies, withinInterval, afterInterval };
+  });
+  expect(resumed.nextFrameEnemies).toBe(0); // No burst on the resume frame
+  expect(resumed.withinInterval).toBeLessThanOrEqual(1); // ≤1 spawn in the first interval
+  expect(resumed.afterInterval).toBeGreaterThanOrEqual(1); // ...and streaming really resumed
+});
+
 test('debug.advance steps the game clock deterministically and hands back a single rAF loop', async ({ page }) => {
   await startGame(page);
   // One synchronous evaluate = zero CDP races: clear the world, schedule
