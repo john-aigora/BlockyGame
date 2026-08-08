@@ -1,4 +1,8 @@
 // --- Tuning Constants ---
+// NODE-IMPORTABLE CONTRACT: specs import this module in plain Node
+// (tests/fairness.spec.js, tests/toys.spec.js) — no unguarded browser
+// globals (window/document/navigator/location) at module scope, ever.
+// See the guarded `location` read near the bottom for the pattern.
 export const growthFactor = 0.1; // How much to grow by each block
 export const enemyBaseHeight = 1.2; // Base height of enemy
 

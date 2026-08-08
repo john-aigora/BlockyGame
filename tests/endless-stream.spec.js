@@ -214,7 +214,6 @@ test('a 400u walk: flat resource plateau, bounded ramped enemy bubble, land-only
 
 test('endless deaths record distance under their own key; the classic board is untouched', async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.setItem('blocky.worldMode', 'endless');
     localStorage.setItem('blocky.hiscores.v1', JSON.stringify([{ score: 50, date: '2026-01-01' }]));
   });
   await openGame(page);

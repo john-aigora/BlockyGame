@@ -626,8 +626,9 @@ canvas {
    ORIGINAL '25 link (top 10px, ~36px tall) and clear of the corner buttons. */
 .kill-indicator {
     position: absolute;
-    top: 46px;
-    /* Inside the canvas top edge, under #original-link */
+    top: 52px;
+    /* Inside the canvas top edge, with slack under #original-link (bottom
+       ~46px at desktop) so a fallback font's metrics can't collide (B4 rev) */
     left: 50%;
     /* Center horizontally */
     transform: translateX(-50%);
@@ -655,8 +656,8 @@ canvas {
    0.25s play retriggered from JS — no loop, no strobe). */
 .combo-chip {
     position: absolute;
-    top: 100px;
-    /* Just below the kill indicator (top: 46px + its ~48px height) */
+    top: 106px;
+    /* Just below the kill indicator (top: 52px + its ~48px height) */
     left: 50%;
     transform: translateX(-50%);
     z-index: 50;
@@ -833,6 +834,17 @@ canvas {
         font-size: 11px;
         min-width: 44px;
         min-height: 44px;
+    }
+
+    /* The mobile .game-button sizing grows #original-link to ~72px tall
+       (frame-y 10-82, z 120) — the KILL!/combo band must clear it or the
+       banner paints UNDER the opaque link (B4 review blocker B2). */
+    .kill-indicator {
+        top: 88px;
+    }
+
+    #combo-chip {
+        top: 142px;
     }
 
     #ui-container {

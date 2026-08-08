@@ -27,7 +27,6 @@ export const el = {
     startOverlay: null,
     startButton: null,
     endlessHint: null,
-    controlsHint: null,
     jumpButton: null,
     pauseButton: null,
     speedButton: null,
@@ -54,7 +53,6 @@ export function initUI() {
     el.startOverlay = document.getElementById('start-overlay');
     el.startButton = document.getElementById('start-button');
     el.endlessHint = document.getElementById('endless-hint');
-    el.controlsHint = document.getElementById('controls-hint');
     el.jumpButton = document.getElementById('jump-button');
     el.pauseButton = document.getElementById('pause-button');
     el.speedButton = document.getElementById('speed-cycle-button');

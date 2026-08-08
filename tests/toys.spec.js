@@ -320,7 +320,6 @@ test('endless jumps on Space and pauses on P', async ({ page }) => {
 
 test('the endless board ranks by distance (score per row) and re-ranks stored lists on read', async ({ page }) => {
   await page.addInitScript(() => {
-    localStorage.setItem('blocky.worldMode', 'endless');
     // Stored under the OLD score-ranked order: the far 500u run sits below
     // the rich 50u run. The distance rule must flip them on read.
     localStorage.setItem('blocky.hiscores.endless.v1', JSON.stringify([

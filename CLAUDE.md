@@ -14,8 +14,9 @@ change. Run-ephemeral lessons live in `docs/elves/learnings.md`.
 - The shipping mode is the endless world: a flat infinite plane with a
   floating origin. The retired classic arena (±100 torus) survives only as a
   test/debug path: `__game.debug.forceWorldMode('classic')`.
-- An in-app password gate (`src/gate.js`, password `blocky`) defers loading
-  the game module; `/original.html` is served outside it.
+- An in-app password gate defers loading the game module; the password's ONLY
+  source is `src/gate.js` (never re-declare the literal — audit SEC-3);
+  `/original.html` is served outside the gate.
 
 ## Closed decisions (do not re-litigate)
 
