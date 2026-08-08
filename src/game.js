@@ -15,7 +15,7 @@ import { initContinuousMovement, resetContinuousMovement, updateContinuousMoveme
 import { wrapPosition, torusDeltaComponent } from './worldmath.js';
 import { state } from './state.js';
 import { createPlayer, disposeCharacter } from './characters.js';
-import { createEnemy, updateEnemies, updateEnemyStreaming, resetEnemyStreaming, playerBox, scratchBox, beginMaterialize, updateSpawnWarnings, clearPendingSpawns, shiftPendingSpawns } from './enemies.js';
+import { createEnemy, updateEnemies, updateEnemyStreaming, resetEnemyStreaming, playerBox, scratchBox, beginMaterialize, updateSpawnWarnings, clearPendingSpawns, shiftPendingSpawns, reimagePendingSpawns } from './enemies.js';
 import { spawnNearPlayer, spawnAnywhere } from './collectibles.js';
 import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoomIn, zoomOut, updateGroundScroll } from './world.js';
 import { initTerrain, setTerrainActive, resetTerrainForNewRun, updateTerrain, shiftTerrain, groundHeightAt, slideMove, isRockWedged } from './terrain.js';
@@ -582,6 +582,20 @@ function reimageEntities() {
         collectible.position.x = p.x + torusDeltaComponent(p.x, collectible.position.x);
         collectible.position.z = p.z + torusDeltaComponent(p.z, collectible.position.z);
     }
+    // Pending warn discs cross the seam too (audit C-13): without this, a
+    // disc scheduled just across the wrap pulses ~worldSize away while its
+    // enemy still materializes at the un-imaged coordinate.
+    reimagePendingSpawns(nearestImageToPlayer);
+}
+
+// Scratch mapper for reimagePendingSpawns — classic-only per-frame path,
+// same no-alloc discipline as the rest of the hot loop.
+const reimageScratch = { x: 0, z: 0 };
+function nearestImageToPlayer(x, z) {
+    const p = state.player.position;
+    reimageScratch.x = p.x + torusDeltaComponent(p.x, x);
+    reimageScratch.z = p.z + torusDeltaComponent(p.z, z);
+    return reimageScratch;
 }
 
 // --- Perf measurement (plan 020 Step 1) ---

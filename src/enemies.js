@@ -216,6 +216,25 @@ export function shiftPendingSpawns(dx, dz) {
     }
 }
 
+// Classic seamless-torus support (audit C-13): pending warn discs cross the
+// seam like every other entity. game.js reimageEntities passes fn(x, z) →
+// nearest-image {x, z} (the same player-relative mapping live enemies get);
+// both the visible disc AND the scheduled materialize coordinate move, so a
+// monster never materializes ~worldSize away from its own warning. Endless
+// never calls this — there is no seam.
+export function reimagePendingSpawns(fn) {
+    for (const p of pendingSpawns) {
+        const img = fn(p.x, p.z);
+        if (img.x === p.x && img.z === p.z) continue;
+        p.x = img.x;
+        p.z = img.z;
+        if (p.mesh) {
+            p.mesh.position.x = img.x;
+            p.mesh.position.z = img.z;
+        }
+    }
+}
+
 // Advances warn discs; fires the real spawn when the timer ends.
 export function updateSpawnWarnings(dt) {
     // Shared material: one global pulse for all discs (per-disc opacity

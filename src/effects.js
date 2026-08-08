@@ -1,12 +1,11 @@
 import * as THREE from 'three';
 import {
-    worldSize,
     DUST_PARTICLES_PER_STEP, DUST_LIFE, DUST_SPEED, DUST_COLOR_FROM, DUST_COLOR_TO,
     POPUP_RISE, POPUP_LIFE, GROWTH_FRAME_FACTOR, PANIC_TIME, DEATH_SQUASH_TIME,
     WATER_LEVEL
 } from './constants.js';
 import { state } from './state.js';
-import { torusDelta, torusDistance } from './worldmath.js';
+import { torusDelta, torusDeltaComponent, torusDistance } from './worldmath.js';
 import { groundHeightAt } from './terrain.js';
 import { COLLECTIBLE_MATERIAL } from './collectibles.js';
 import { HERO_GLOW_MATERIAL, ENEMY_PUPIL_HUNT_MATERIAL, ENEMY_PUPIL_SCARED_MATERIAL } from './characters.js';
@@ -723,11 +722,12 @@ const JUMP_LEG_TUCK = 0.85; // Radians all four legs sweep back mid-air (a look,
 const walkScratch = { dx: 0, dz: 0 };
 
 function seamDelta(a, b) {
-    // Per-axis toroidal delta: the wrap seam must not read as a 200-unit sprint
-    let d = a - b;
-    if (d > worldSize / 2) d -= worldSize;
-    else if (d < -worldSize / 2) d += worldSize;
-    return d;
+    // Per-axis shortest delta via the ONE mode-aware dispatch point (audit
+    // C-13). Classic: the wrap seam must not read as a 200-unit sprint.
+    // Endless: plain subtraction — the old hardcoded worldSize/2 wrap here
+    // was NOT mode-aware, so any legitimate >100u endless step (teleporting
+    // specs, future dashes) would fold into a tiny phantom stride.
+    return torusDeltaComponent(b, a); // shortest signed b→a
 }
 
 function updateWalk(group, dt) {
