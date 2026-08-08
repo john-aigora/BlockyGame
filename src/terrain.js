@@ -180,11 +180,50 @@ function computeTint(tx, tz, h, out) {
         const band = 1 - (h - WATER_LEVEL) / SHORE_BAND_HEIGHT;
         tint += SHORE_BAND_BOOST * band * band; // Feather: bright edge, soft fade
     }
-    const biome = octave(tx, tz, BIOME_WAVELENGTH, 51.3, 27.9); // [-1, 1]
+    const biome = biomeAt(tx, tz); // [-1, 1]
     out.r = tint;
     out.g = tint * (1 + BIOME_TINT_STRENGTH * biome);
     out.b = tint * (1 - BIOME_TINT_STRENGTH * biome);
     return out;
+}
+
+// --- Named biome regions (plan 025 Step 3) ---
+// The tint's ultra-low-frequency octave IS the biome field — biomeAt exposes
+// it raw. Deterministic in TRUE coordinates: world-fixed, rebase-immune,
+// same everywhere the same seed is played.
+export function biomeAt(tx, tz) {
+    return octave(tx, tz, BIOME_WAVELENGTH, 51.3, 27.9);
+}
+
+const REGION_BINS = 5; // The biome octave quantized into 5 identity bands
+// Kid-friendly two-word region names. Which name a region wears is a seeded
+// hash pick — the TABLE is fixed, the MAP of it is per-world.
+const REGION_NAMES = [
+    'THE TEAL SHALLOWS', 'COPPER FLATS', 'MINT MEADOWS', 'THE LOST LAKES',
+    'PEBBLE PLAINS', 'WHISPER HILLS', 'THE JELLY FIELDS', 'BUMPY BADLANDS',
+    'THE SLEEPY SHORES', 'CLOVER COUNTRY', 'THE WOBBLY WILDS', 'SUGAR STEPPES'
+];
+
+// Region identity + display data at TRUE (tx, tz): the biome bin crossed
+// with a BIOME_WAVELENGTH-sized cell grid, so one huge biome band still
+// breaks into discoverable places. `key` is the identity game.js debounces
+// on; `name` is a seeded pick from the table (WORLD_SEED in the mix — a new
+// seed deals a fresh map of names); `color` is the biome's own tint
+// direction as a CSS color for the DISCOVERED popup (greener bins mint,
+// bluer bins sky-cyan — the teal family both ways, readable on any sky).
+export function biomeRegion(tx, tz) {
+    const biome = biomeAt(tx, tz);
+    const bin = Math.min(REGION_BINS - 1, Math.max(0, Math.floor(((biome + 1) / 2) * REGION_BINS)));
+    const cellX = Math.floor(tx / BIOME_WAVELENGTH);
+    const cellZ = Math.floor(tz / BIOME_WAVELENGTH);
+    let h = (Math.imul(bin + 1, 2246822519) ^ Math.imul(cellX, 374761393) ^
+        Math.imul(cellZ, 668265263) ^ Math.imul(WORLD_SEED, 144665)) | 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    h ^= h >>> 16;
+    const name = REGION_NAMES[(h >>> 0) % REGION_NAMES.length];
+    const t = (biome + 1) / 2;
+    const color = `rgb(${Math.round(96 + 30 * (1 - t))}, ${Math.round(200 + 45 * t)}, ${Math.round(255 - 70 * t)})`;
+    return { key: bin + ':' + cellX + ':' + cellZ, bin, cellX, cellZ, name, color };
 }
 
 const tintScratch = { r: 0, g: 0, b: 0 }; // Reused by every vertex loop

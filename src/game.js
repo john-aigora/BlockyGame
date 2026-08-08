@@ -8,7 +8,7 @@ import {
     enemyStartOffset, CONTINUOUS_MOVEMENT,
     CHUNK_SIZE, REBASE_DISTANCE,
     PLAYER_COLLIDER_HALF_WIDTH, RAMP_DISTANCE, RAMP_SPEED_STEP, RAMP_SPEED_MAX,
-    DISTANCE_MILESTONE_STEP,
+    DISTANCE_MILESTONE_STEP, REGION_DISCOVER_DEBOUNCE,
     JUMP_APEX_HEIGHT, JUMP_APEX_GROWTH, JUMP_AIRTIME, JUMP_AIRTIME_GROWTH
 } from './constants.js';
 import { initContinuousMovement, resetContinuousMovement, updateContinuousMovement } from './movement-continuous.js';
@@ -18,7 +18,7 @@ import { createPlayer, disposeCharacter } from './characters.js';
 import { createEnemy, updateEnemies, updateEnemyStreaming, resetEnemyStreaming, playerBox, scratchBox, beginMaterialize, updateSpawnWarnings, clearPendingSpawns, shiftPendingSpawns, reimagePendingSpawns } from './enemies.js';
 import { spawnNearPlayer, spawnAnywhere } from './collectibles.js';
 import { createWorld, onWindowResize, updateCameraPosition, resetCameraZoom, zoomIn, zoomOut, updateGroundScroll } from './world.js';
-import { initTerrain, setTerrainActive, resetTerrainForNewRun, updateTerrain, shiftTerrain, groundHeightAt, slideMove, isRockWedged } from './terrain.js';
+import { initTerrain, setTerrainActive, resetTerrainForNewRun, updateTerrain, shiftTerrain, groundHeightAt, slideMove, isRockWedged, biomeRegion } from './terrain.js';
 import { initClouds, setCloudMode, updateClouds, shiftClouds } from './clouds.js';
 import { initEffects, updateEffects, resetEffects, onCollect, onGrowthMilestone, shiftActiveParticles, spawnTextPopup, onJumpTakeoff, onJumpLand } from './effects.js';
 import { keys, moveVector, clearTransientInput, onKeyDown, onKeyUp, setupTouchControls, setupGamepad, pollGamepad } from './input.js';
@@ -210,6 +210,10 @@ function setupNewGame() {
             firstFoe.position.y = groundHeightAt(firstFoe.position.x, firstFoe.position.z);
         }
     }
+    // Region tracking (plan 025): seed the spawn region as visited — no
+    // DISCOVERED banner for the place you start. Needs worldOrigin reset
+    // above; biomeRegion is pure math, safe before terrain finishes building.
+    resetRegionTracking();
     // Spawn telegraph (tension pass): the boot enemy materializes too — it
     // starts scaling in on the first unpaused frame, right as the run begins.
     beginMaterialize(firstEnemy);
@@ -481,30 +485,82 @@ function updateJumpPhysics(dt) {
 // ramp never relaxes on the walk home. Crossing a RAMP_DISTANCE boundary
 // bumps the level, which feeds enemy target height and population
 // (enemies.js) and enemy speed (applySpeedMultiplier below).
-const milestoneOrigin = { x: 0, y: 0, z: 0 }; // Scratch — never allocated per milestone
+const milestoneOrigin = { x: 0, y: 0, z: 0 }; // Scratch shared by the progress popups (milestone / DISCOVERED) — never allocated per beat
+
+// --- Region discovery (plan 025 Step 3) ---
+// Tracks which named biome region (terrain.js biomeRegion — bin + cell in
+// TRUE coordinates) the player is CONFIRMED in. A candidate region must
+// hold for REGION_DISCOVER_DEBOUNCE game-seconds before it commits —
+// shoreline wiggles flicker the biome bin, and a stuttering banner is no
+// banner. First-ever visits (per run) earn the DISCOVERED popup in the
+// region's own tint color + the milestone jingle; re-entries just retarget
+// the key. The spawn region is pre-seeded by setupNewGame (no banner —
+// you start somewhere, you don't "discover" it), so REGIONS counts from 1.
+let regionCandidateKey = null;
+let regionCandidateSince = 0;
+
+function resetRegionTracking() {
+    regionCandidateKey = null;
+    regionCandidateSince = 0;
+    state.regionsVisited = new Set();
+    state.regionKey = null;
+    if (state.worldMode === 'endless') {
+        const home = biomeRegion(state.worldOrigin.x, state.worldOrigin.z); // Player is at local (0,0) on reset
+        state.regionKey = home.key;
+        state.regionsVisited.add(home.key);
+    }
+}
+
+function updateRegionDiscovery(p) {
+    const region = biomeRegion(p.x + state.worldOrigin.x, p.z + state.worldOrigin.z);
+    if (region.key === state.regionKey) {
+        regionCandidateKey = null; // Back home before the debounce ran out
+        return;
+    }
+    if (region.key !== regionCandidateKey) {
+        regionCandidateKey = region.key; // New candidate: start the clock
+        regionCandidateSince = state.runTime;
+        return;
+    }
+    if (state.runTime - regionCandidateSince < REGION_DISCOVER_DEBOUNCE) return;
+    state.regionKey = region.key; // Held long enough — the player really moved
+    regionCandidateKey = null;
+    if (!state.regionsVisited.has(region.key)) {
+        state.regionsVisited.add(region.key);
+        milestoneOrigin.x = p.x;
+        milestoneOrigin.y = p.y + state.playerScale + 0.6; // Above the head (milestone pattern)
+        milestoneOrigin.z = p.z;
+        spawnTextPopup(milestoneOrigin, `DISCOVERED: ${region.name}`, region.color);
+        sfx.milestone();
+    }
+}
 
 function updateEndlessProgress() {
     const p = state.player.position;
+    // Region tracking runs EVERY frame — wandering back into new lands must
+    // discover them even when no forward-progress record is being set.
+    updateRegionDiscovery(p);
     const dist = Math.hypot(p.x + state.worldOrigin.x, p.z + state.worldOrigin.z);
-    if (dist <= state.furthestDistance) return;
-    // Distance milestone (stage 3): crossing a DISTANCE_MILESTONE_STEP
-    // boundary earns a waypoint chime and a lime "DISTANCE N!" popup over
-    // the player's head — the exploration counterpart to the growth
-    // milestone. Fires once per boundary (furthestDistance only grows).
-    const milestone = Math.floor(dist / DISTANCE_MILESTONE_STEP);
-    if (milestone > Math.floor(state.furthestDistance / DISTANCE_MILESTONE_STEP)) {
-        milestoneOrigin.x = p.x;
-        milestoneOrigin.y = p.y + state.playerScale + 0.6; // Above the head; popup pool adds its own rise
-        milestoneOrigin.z = p.z;
-        spawnTextPopup(milestoneOrigin, `DISTANCE ${milestone * DISTANCE_MILESTONE_STEP}!`, '#76FF03'); // Food lime — reward color
-        sfx.distance();
-    }
-    state.furthestDistance = dist;
-    updateDistanceDisplay();
-    const level = Math.floor(dist / RAMP_DISTANCE);
-    if (level !== state.endlessRampLevel) {
-        state.endlessRampLevel = level;
-        applySpeedMultiplier(); // Enemy speed carries the ramp factor
+    if (dist > state.furthestDistance) {
+        // Distance milestone (stage 3): crossing a DISTANCE_MILESTONE_STEP
+        // boundary earns a waypoint chime and a lime "DISTANCE N!" popup over
+        // the player's head — the exploration counterpart to the growth
+        // milestone. Fires once per boundary (furthestDistance only grows).
+        const milestone = Math.floor(dist / DISTANCE_MILESTONE_STEP);
+        if (milestone > Math.floor(state.furthestDistance / DISTANCE_MILESTONE_STEP)) {
+            milestoneOrigin.x = p.x;
+            milestoneOrigin.y = p.y + state.playerScale + 0.6; // Above the head; popup pool adds its own rise
+            milestoneOrigin.z = p.z;
+            spawnTextPopup(milestoneOrigin, `DISTANCE ${milestone * DISTANCE_MILESTONE_STEP}!`, '#76FF03'); // Food lime — reward color
+            sfx.distance();
+        }
+        state.furthestDistance = dist;
+        updateDistanceDisplay();
+        const level = Math.floor(dist / RAMP_DISTANCE);
+        if (level !== state.endlessRampLevel) {
+            state.endlessRampLevel = level;
+            applySpeedMultiplier(); // Enemy speed carries the ramp factor
+        }
     }
 }
 

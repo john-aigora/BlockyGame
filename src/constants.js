@@ -43,6 +43,9 @@ export const SURVIVAL_BEAT_COOLDOWN = 6; // Game-seconds between survival popups
 export const PHEW_PEAK_MIN = 0.15; // dangerOpacity peak (max 0.22) that must be reached before its release earns a PHEW! — filters mere brushes with the danger radius
 export const NEAR_MISS_FACTOR = 1.5; // CLOSE ONE! arms inside this × (player+enemy collider half-width sum): just outside actual contact, so every fire was a real scare
 
+// --- World identity & late game (plan 025) ---
+export const REGION_DISCOVER_DEBOUNCE = 1.5; // Game-seconds a NEW biome region must hold before DISCOVERED fires — shoreline wiggles flicker the bin, and a banner that stutters is no banner
+
 // Tension systems (awesome pass): make danger and urgency legible.
 export const DANGER_MUSIC_THRESHOLD = 0.12; // dangerOpacity above this (with NO prey alive) lifts the music to the danger layer (2) — just past the vignette's first visible breath, so the pad arrives with the dread, not before
 export const PANIC_TIME = 5; // Collect-countdown seconds at/below which panic engages (red pulse, tick sfx, food arrow)

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { bypassGate, startGame, waitForGameOver } from './helpers.js';
+import { bypassGate, startGame, waitGameSeconds, waitForGameOver } from './helpers.js';
 
 // World identity & late game (plan 025): seeded worlds (?seed= / the DAILY
 // world), the daily board, named biome regions, gold food, and the 1000u
@@ -114,6 +114,51 @@ test("a daily death records BOTH boards, shows TODAY'S BEST, and prunes stale se
 
   await expect(page.locator('#hiscore-slot')).toContainText("TODAY'S BEST");
   await expect(page.locator('#hiscore-slot')).not.toContainText('9999'); // Stale row never renders
+});
+
+test('crossing into a new region fires DISCOVERED and the death screen counts REGIONS', async ({ page }) => {
+  await openWorld(page);
+  // Region identity is deterministic pure math in TRUE coords.
+  const region = await page.evaluate(() => ({
+    home: window.__game.debug.biomeRegion(0, 0),
+    again: window.__game.debug.biomeRegion(0, 0),
+    far: window.__game.debug.biomeRegion(400, 0)
+  }));
+  expect(region.again).toEqual(region.home);
+  expect(region.far.key).not.toBe(region.home.key); // 400u crosses the 300u cell grid
+  expect(region.far.name).toMatch(/^[A-Z' ]+$/);
+
+  await startGame(page);
+  expect(await page.evaluate(() => window.__game.state.regionsVisited.size)).toBe(1); // Spawn region pre-seeded, no banner
+  // Teleport 400u out: a different region cell for certain. The candidate
+  // must HOLD for the 1.5 game-second debounce before the banner fires
+  // (the idle player stays put, so it does).
+  await page.evaluate(() => {
+    const s = window.__game.state;
+    s.collectTimeLeft = 90; // The idle wait must not starve the run
+    s.player.position.x = 400;
+  });
+  await expect.poll(
+    () => page.evaluate(() => window.__game.debug.effectsInfo().lastPopupText),
+    { timeout: 60000 }
+  ).toMatch(/^DISCOVERED: [A-Z' ]+$/);
+  const seen = await page.evaluate(() => ({
+    count: window.__game.state.regionsVisited.size,
+    popup: window.__game.debug.effectsInfo().lastPopupText,
+    name: window.__game.debug.biomeRegion(400 + window.__game.state.worldOrigin.x, 0).name
+  }));
+  expect(seen.count).toBe(2);
+  expect(seen.popup).toBe(`DISCOVERED: ${seen.name}`); // The banner names the region under the player
+
+  // Wandering home is a RE-entry — no second discovery of a known place.
+  await page.evaluate(() => { window.__game.state.player.position.x = 0; });
+  await waitGameSeconds(page, 2.5);
+  expect(await page.evaluate(() => window.__game.state.regionsVisited.size)).toBe(2);
+
+  // The death screen's distance line carries the REGIONS stat.
+  await page.evaluate(() => { window.__game.state.collectTimeLeft = 0.05; });
+  await waitForGameOver(page);
+  await expect(page.locator('#final-distance-line')).toContainText('REGIONS 2');
 });
 
 test('?daily=1 resolves the daily seed without the toggle', async ({ page }) => {

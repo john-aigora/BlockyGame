@@ -22,6 +22,7 @@ export const el = {
     time: null,
     finalDistanceLine: null,
     finalDistance: null,
+    finalRegions: null,
     collectTime: null,
     collectTimerDisplay: null,
     killIndicator: null,
@@ -52,6 +53,7 @@ export function initUI() {
     el.time = document.getElementById('time');
     el.finalDistanceLine = document.getElementById('final-distance-line');
     el.finalDistance = document.getElementById('final-distance');
+    el.finalRegions = document.getElementById('final-regions');
     el.collectTime = document.getElementById('collect-time');
     el.collectTimerDisplay = document.getElementById('collect-timer-display');
     el.dangerVignette = document.getElementById('danger-vignette');
@@ -288,6 +290,9 @@ export function showDeathScreen(reason, hiscores = [], rank = -1, boardTitle = '
     if (el.finalDistanceLine) {
         if (state.worldMode === 'endless') {
             el.finalDistance.textContent = Math.floor(state.furthestDistance);
+            // REGIONS visited (plan 025): the run's exploration stat beside
+            // its distance — counts from 1 (the spawn region).
+            if (el.finalRegions) el.finalRegions.textContent = state.regionsVisited.size || 1;
             el.finalDistanceLine.style.display = '';
         } else {
             el.finalDistanceLine.style.display = 'none';

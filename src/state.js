@@ -16,6 +16,13 @@ export const state = {
   // height/speed/population — see enemies.js + applySpeedMultiplier).
   furthestDistance: 0,
   endlessRampLevel: 0,
+  // Named biome regions (plan 025): the CONFIRMED region key the player is
+  // in (debounced in game.js — shorelines flicker) and every region key
+  // visited this run (the death screen's REGIONS count). The spawn region
+  // seeds both at setupNewGame, without a banner — you start somewhere,
+  // you don't "discover" it.
+  regionKey: null,
+  regionsVisited: new Set(),
   // Jump (endless only; game.js owns the physics on the game clock).
   // jumpOffset is the height ABOVE the terrain — player y = ground + offset.
   // The retired classic test path never jumps (tryJump guards on the mode):
