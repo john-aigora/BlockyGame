@@ -18,7 +18,8 @@ export const state = {
   endlessRampLevel: 0,
   // Jump (endless only; game.js owns the physics on the game clock).
   // jumpOffset is the height ABOVE the terrain — player y = ground + offset.
-  // Classic never jumps: all three stay at rest there.
+  // The retired classic test path never jumps (tryJump guards on the mode):
+  // all four fields stay at rest there.
   jumpOffset: 0,
   jumpVelocity: 0,
   jumpGravity: 0, // Locked at takeoff so mid-air size changes do not warp the arc
@@ -46,11 +47,12 @@ export const state = {
   heartbeatClock: 0, // Game-clock seconds until the next danger heartbeat (0 = fire on danger entry)
   animationFrameId: null, // requestAnimationFrame handle
 
-  // Speed Multiplier Variables
+  // Speed Multiplier Variables — applySpeedMultiplier (game.js) recomputes
+  // both actual speeds from constants + device + ramp; they are the ONLY
+  // speed fields (a third, write-only field was deleted — audit D-10).
   currentSpeedMultiplierIndex: 0,
   actualPlayerSpeed: undefined, // Will store the fully adjusted player speed
   actualEnemySpeed: undefined, // Will store the fully adjusted enemy speed
-  playerSpeed: undefined, // To be set in init
 
   // Camera zoom model (bounded two-way zoom; camY/camZ are the smoothed
   // actual offsets, driven toward the zoom/growth target each frame)
@@ -60,13 +62,15 @@ export const state = {
 
   // Touch-anywhere control variables
   touchActive: false,
-  gameScreenContainer: null,
   touchStartPoint: { x: 0, y: 0 },
   currentTouchPoint: { x: 0, y: 0 },
   movementVector: { x: 0, y: 0 },
 
   // HTML Element references
-  gameContainer: null, // The div that will hold the Three.js canvas
+  // The div that holds the Three.js canvas AND doubles as the touch-drag
+  // control surface (the old duplicate screen-container ref is merged into
+  // this one — audit D-10).
+  gameContainer: null,
 
   // Collect Timer variables (runs on the game clock, in seconds)
   collectTimeLeft: initialCollectTime,

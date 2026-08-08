@@ -59,9 +59,6 @@ function init() {
     // ORDERING CONTRACT (plan 020 P-10): resolved BEFORE createWorld below —
     // the renderer's antialias/DPR/shadow tier reads state.isMobile.
     state.isMobile = window.matchMedia('(pointer: coarse)').matches;
-    state.playerSpeed = state.isMobile
-        ? BASE_PLAYER_SPEED * MOBILE_SPEED_MULTIPLIER
-        : BASE_PLAYER_SPEED;
 
     applySpeedMultiplier(); // Apply initial speed multiplier
 

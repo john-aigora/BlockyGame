@@ -671,12 +671,16 @@ export function onTouchEndOrCancel(e) {
 }
 
 export function setupTouchControls() {
-    state.gameScreenContainer = document.getElementById('game-container'); // Control area
+    // ONE container ref (audit D-10): the canvas host is also the touch
+    // control area. game.js init resolves state.gameContainer before calling
+    // this; the fallback lookup keeps any direct caller safe.
+    if (!state.gameContainer) state.gameContainer = document.getElementById('game-container');
+    const container = state.gameContainer;
 
-    if (state.gameScreenContainer) {
+    if (container) {
         // Calculate game container center once, and on resize
         const updateGameCanvasBounds = () => { // Renamed for clarity
-            const rect = state.gameScreenContainer.getBoundingClientRect();
+            const rect = container.getBoundingClientRect();
             state.gameCanvasRect = rect; // Store the whole rect
             state.gameCanvasCenterX = rect.left + rect.width / 2;
             state.gameCanvasCenterY = rect.top + rect.height / 2;
@@ -684,10 +688,10 @@ export function setupTouchControls() {
         updateGameCanvasBounds(); // Initial calculation
         window.addEventListener('resize', updateGameCanvasBounds); // Update on window resize
 
-        state.gameScreenContainer.addEventListener('touchstart', onTouchStart);
-        state.gameScreenContainer.addEventListener('touchmove', onTouchMove);
-        state.gameScreenContainer.addEventListener('touchend', onTouchEndOrCancel);
-        state.gameScreenContainer.addEventListener('touchcancel', onTouchEndOrCancel);
+        container.addEventListener('touchstart', onTouchStart);
+        container.addEventListener('touchmove', onTouchMove);
+        container.addEventListener('touchend', onTouchEndOrCancel);
+        container.addEventListener('touchcancel', onTouchEndOrCancel);
     } else {
         console.warn("Game container element not found for touch controls!");
     }
