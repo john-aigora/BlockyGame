@@ -504,7 +504,23 @@ function pollGamepadSeats() {
         return;
     }
     refreshSeatClaims(list);
+    // Collect intents first, then apply shared actions ONCE (Fugu P2):
+    // mutating start/death/pause inside the per-pad loop let pad 1 observe
+    // pad 0's reset as a fresh start overlay and auto-startRun same frame.
     let anyPad = null;
+    let wantStart = false;
+    let wantReset = false;
+    let wantPause = false;
+    let wantMute = false;
+    let wantSpeedUp = false;
+    let wantSpeedDown = false;
+    let wantZoomIn = false;
+    let wantZoomOut = false;
+    const jumpSeats = [];
+    const onStart = state.onStartScreen;
+    const inRun = state.gameActive && !state.onStartScreen;
+    const onDeath = !state.gameActive && !state.onStartScreen;
+
     for (let i = 0; i < list.length; i++) {
         const gp = list[i];
         if (!gp || !gp.connected) continue;
@@ -517,16 +533,19 @@ function pollGamepadSeats() {
         }
         const b = padButtons(gp);
 
-        // Start overlay: face/start begins the run (either pad).
-        if (state.onStartScreen) {
-            if (anyFaceEdge(gp)) startRun();
+        if (onStart) {
+            if (anyFaceEdge(gp)) wantStart = true;
             snapshotButtons(gp);
             continue;
         }
 
-        // Death screen: A or Start returns to the start overlay (either pad).
-        if (!state.gameActive) {
-            if (buttonEdge(gp, b.a) || buttonEdge(gp, b.start)) resetGame();
+        if (onDeath) {
+            if (buttonEdge(gp, b.a) || buttonEdge(gp, b.start)) wantReset = true;
+            snapshotButtons(gp);
+            continue;
+        }
+
+        if (!inRun) {
             snapshotButtons(gp);
             continue;
         }
@@ -534,55 +553,64 @@ function pollGamepadSeats() {
         // Start+Select chord = mid-run restart (priority over single binds).
         if (buttonPressed(gp, b.start) && buttonPressed(gp, b.back) &&
             (buttonEdge(gp, b.start) || buttonEdge(gp, b.back))) {
-            sfx.click();
-            resetGame();
+            wantReset = true;
             snapshotButtons(gp);
             continue;
         }
 
-        // Start = pause BOTH (plan 026). Select/Back = mute.
-        if (buttonEdge(gp, b.start)) {
-            sfx.click();
-            togglePause();
-        }
-        if (buttonEdge(gp, b.back)) {
-            toggleMuteFromUI();
-        }
+        // Start / B = pause BOTH. Select/Back = mute. Shared → one apply.
+        if (buttonEdge(gp, b.start)) wantPause = true;
+        if (buttonEdge(gp, b.back)) wantMute = true;
 
-        // A = jump for the pad's OWN seat (a claim requires directional
-        // input first — an unseated pad's A does nothing mid-run yet).
-        // B = pause, shared like Start.
+        // A = jump for the pad's OWN seat (claim required first).
         if (!CONTINUOUS_MOVEMENT) {
             if (buttonEdge(gp, b.a)) {
                 const seat = seatForPadIndex(gp.index);
-                if (seat >= 0) tryJump(seat);
+                if (seat >= 0) jumpSeats.push(seat);
             }
-            if (buttonEdge(gp, b.b)) {
-                sfx.click();
-                togglePause();
-            }
+            if (buttonEdge(gp, b.b)) wantPause = true;
         }
 
         // Speed and zoom are world-shared — either pad may drive them.
-        if (!state.isPaused && buttonEdge(gp, b.y)) {
-            sfx.click();
-            speedUp();
-        }
-        if (!state.isPaused && buttonEdge(gp, b.x)) {
-            sfx.click();
-            speedDown();
-        }
-        if (buttonEdge(gp, b.lb)) {
-            sfx.click();
-            zoomOut();
-        }
-        if (buttonEdge(gp, b.rb)) {
-            sfx.click();
-            zoomIn();
-        }
+        if (!state.isPaused && buttonEdge(gp, b.y)) wantSpeedUp = true;
+        if (!state.isPaused && buttonEdge(gp, b.x)) wantSpeedDown = true;
+        if (buttonEdge(gp, b.lb)) wantZoomOut = true;
+        if (buttonEdge(gp, b.rb)) wantZoomIn = true;
 
         snapshotButtons(gp);
     }
+
+    // Apply shared intents once. Reset wins over start (never same state).
+    if (wantReset) {
+        if (inRun) sfx.click();
+        resetGame();
+    } else if (wantStart) {
+        startRun();
+    } else {
+        if (wantPause) {
+            sfx.click();
+            togglePause();
+        }
+        if (wantMute) toggleMuteFromUI();
+        for (const seat of jumpSeats) tryJump(seat);
+        if (wantSpeedUp) {
+            sfx.click();
+            speedUp();
+        }
+        if (wantSpeedDown) {
+            sfx.click();
+            speedDown();
+        }
+        if (wantZoomOut) {
+            sfx.click();
+            zoomOut();
+        }
+        if (wantZoomIn) {
+            sfx.click();
+            zoomIn();
+        }
+    }
+
     padConnected = !!anyPad;
     updatePadHud(anyPad);
     updatePadDebug(anyPad);

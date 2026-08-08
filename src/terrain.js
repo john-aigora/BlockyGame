@@ -26,6 +26,11 @@ import { spawnChunkCloud, releaseChunkCloud } from './clouds.js';
 // chunks (and rocks) return to pools and are re-displaced in place. The
 // renderer's geometry count must plateau at pool size.
 
+// Water plane base footprint (world units) and extra radius beyond the
+// furthest living player so fog does not swallow the surface first.
+const WATER_BASE_SIZE = 560; // Solo default: half-extent 280 around the player
+const WATER_COVER_MARGIN = 220; // Past the furthest living player (fog far ~camDist*4.5)
+
 // --- Seeded value noise (deterministic, dependency-free) ---
 // Integer-lattice hash → bilinear interpolation with smoothstep fade.
 // Same (x, z) in TRUE world coordinates always yields the same height,
@@ -318,7 +323,10 @@ export function initTerrain() {
     // only bend at its corners) AND so the depth tint below has resolution:
     // 80x80 segments = 7-unit sampling. Gentle emissive shimmer, ~0.18Hz —
     // subtle and far from any photosensitivity limit.
-    const waterGeometry = new THREE.PlaneGeometry(560, 560, 80, 80);
+    // Base size is 560 (half-extent 280). In 2P the mesh scale grows with
+    // living-player separation so lakes under both heroes stay visible
+    // (union of camera footprints + fog margin; Fugu P1).
+    const waterGeometry = new THREE.PlaneGeometry(WATER_BASE_SIZE, WATER_BASE_SIZE, 80, 80);
     waterGeometry.rotateX(-Math.PI / 2);
     const waterVerts = waterGeometry.attributes.position.count;
     waterGeometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(waterVerts * 3).fill(1), 3));
@@ -356,9 +364,15 @@ function recolorWater() {
     const posArr = waterMesh.geometry.attributes.position.array;
     const colArr = waterMesh.geometry.attributes.color.array;
     const count = waterMesh.geometry.attributes.position.count;
+    // Geometry is unit-base; mesh.scale stretches the visible plane. Sample
+    // lakebed depth in the SCALED footprint so a 2P union plane tints fully.
+    const sx = waterMesh.scale.x;
+    const sz = waterMesh.scale.z;
     for (let i = 0; i < count; i++) {
         const i3 = i * 3;
-        const h = terrainHeight(waterSnapTrueX + posArr[i3], waterSnapTrueZ + posArr[i3 + 2]);
+        const h = terrainHeight(
+            waterSnapTrueX + posArr[i3] * sx,
+            waterSnapTrueZ + posArr[i3 + 2] * sz);
         const depth = WATER_LEVEL - h;
         let tint = 1;
         if (depth > 0) {
@@ -421,11 +435,12 @@ export function updateTerrain(dt) {
     processQueue(anchors, CHUNK_BUILDS_PER_FRAME);
 
     // Water follows the LIVING players' midpoint in WATER_SNAP steps (the
-    // midpoint of one player is the player — the exact solo behavior; in 2P
-    // the 560-wide plane covers both halves out to ~280u of separation each
-    // side, far beyond the fog). True-coordinate grid, so a rebase changes
-    // nothing; crossing a step re-tints the depth colors for the new
-    // footprint — world-fixed between steps, zero per-frame cost.
+    // midpoint of one player is the player — the exact solo behavior). In 2P
+    // the plane SCALEs to the union of living positions + WATER_COVER_MARGIN
+    // so lakes under both heroes stay visible even at 600u separation
+    // (fixed 560 left a dry gap past ~280u from midpoint — Fugu P1).
+    // True-coordinate grid, so a rebase changes nothing; crossing a step or
+    // a scale change re-tints the depth colors for the new footprint.
     waterClock += dt;
     let mx = 0, mz = 0, living = 0;
     for (const player of state.players) {
@@ -441,11 +456,25 @@ export function updateTerrain(dt) {
         mx /= living;
         mz /= living;
     }
+    // Furthest living hero from the midpoint (Chebyshev) drives the scale.
+    let maxReach = 0;
+    for (const player of state.players) {
+        if (!player.alive || !player.mesh) continue;
+        const dx = Math.abs(player.mesh.position.x - mx);
+        const dz = Math.abs(player.mesh.position.z - mz);
+        maxReach = Math.max(maxReach, dx, dz);
+    }
+    const halfBase = WATER_BASE_SIZE / 2;
+    const needHalf = maxReach + WATER_COVER_MARGIN;
+    const waterScale = Math.max(1, needHalf / halfBase);
+    const scaleChanged = Math.abs(waterMesh.scale.x - waterScale) > 0.01;
+    if (scaleChanged) waterMesh.scale.set(waterScale, 1, waterScale);
+
     const trueX = mx + state.worldOrigin.x;
     const trueZ = mz + state.worldOrigin.z;
     const snapX = Math.round(trueX / WATER_SNAP) * WATER_SNAP;
     const snapZ = Math.round(trueZ / WATER_SNAP) * WATER_SNAP;
-    if (snapX !== waterSnapTrueX || snapZ !== waterSnapTrueZ) {
+    if (snapX !== waterSnapTrueX || snapZ !== waterSnapTrueZ || scaleChanged) {
         waterSnapTrueX = snapX;
         waterSnapTrueZ = snapZ;
         recolorWater();
@@ -913,6 +942,9 @@ export function terrainInfo() {
         meshAllocs: meshAllocCount,
         rockAllocs: rockAllocCount,
         hasWater: !!waterMesh,
+        // Half-extent of the visible water plane in world units (base/2 * scale).
+        waterHalf: waterMesh ? (WATER_BASE_SIZE / 2) * waterMesh.scale.x : 0,
+        waterScale: waterMesh ? waterMesh.scale.x : 0,
         waterRecolors: waterRecolorCount,
         streaming
     };

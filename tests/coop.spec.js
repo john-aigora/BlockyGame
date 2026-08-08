@@ -155,6 +155,20 @@ test('terrain and food stream around BOTH heroes 600u apart (union window)', asy
   expect(info.p1Food).toBeGreaterThan(0); // Seeded chunk food grew near both
   expect(info.p2Food).toBeGreaterThan(0);
   expect(info.activeChunks).toBeGreaterThanOrEqual(90); // Two nearly-disjoint 7x7+ windows
+  // Water plane scales to the union footprint (Fugu P1): each hero at
+  // ±300 from midpoint must sit inside waterHalf (base 280 left a dry gap).
+  await page.evaluate(() => window.__game.debug.advance(0.1)); // One water update
+  const water = await page.evaluate(() => {
+    const t = window.__game.debug.terrainInfo();
+    const s = window.__game.state;
+    const midX = (s.players[0].mesh.position.x + s.players[1].mesh.position.x) / 2;
+    const reach = Math.max(
+      Math.abs(s.players[0].mesh.position.x - midX),
+      Math.abs(s.players[1].mesh.position.x - midX));
+    return { waterHalf: t.waterHalf, waterScale: t.waterScale, reach };
+  });
+  expect(water.waterScale).toBeGreaterThan(1);
+  expect(water.waterHalf).toBeGreaterThan(water.reach + 50); // Margin past each hero
 });
 
 test('rebase fires on the players\' midpoint and shifts both by the SAME delta', async ({ page }) => {
