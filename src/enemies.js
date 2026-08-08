@@ -4,6 +4,7 @@ import {
     enemyRandomDriftFactor, AVOID_SPEED_FACTOR, BASE_ENEMY_SPAWN_DISTANCE, SPAWN_DISTANCE_SCALE_FACTOR,
     KILL_POINTS, MAX_ENEMIES, ENEMIES_PER_KILL, ENEMY_HEIGHT_FACTOR,
     SPAWN_SIZE_PATTERN, PREY_HEIGHT_RANGE, PEER_HEIGHT_RANGE,
+    SPRINTER_HEIGHT_RANGE, JUJA_HEIGHT_FACTOR,
     SIZE_BOUNTY_PER_UNIT, COMBO_WINDOW, COMBO_MAX,
     SPAWN_MATERIALIZE_TIME, SPAWN_MATERIALIZE_START_SCALE,
     SPAWN_WARN_TIME, SPAWN_WARN_RADIUS,
@@ -155,7 +156,7 @@ export function beginMaterialize(enemyGroup) {
 // --- Pre-spawn red warn (owner request: notice before monsters appear) ---
 // A pulsing red disc on the ground for SPAWN_WARN_TIME, then the enemy
 // materializes there. Disc is pooled; nothing is allocated after warm-up.
-const pendingSpawns = []; // { x, z, scaleFactor, t, mesh }
+const pendingSpawns = []; // { x, z, scaleFactor, species, t, mesh }
 const warnDiscPool = [];
 let warnMaterial = null;
 const WARN_GEO = new THREE.RingGeometry(0.35, 1.0, 28);
@@ -192,8 +193,9 @@ function releaseWarnDisc(mesh) {
     warnDiscPool.push(mesh);
 }
 
-// Queue a monster: red ground flash first, then materialize.
-export function scheduleEnemySpawn(spawnX, spawnZ, scaleFactor) {
+// Queue a monster: red ground flash first, then materialize. speciesKey
+// rides the pending entry so the warn's monster keeps its species (plan 024).
+export function scheduleEnemySpawn(spawnX, spawnZ, scaleFactor, speciesKey = 'grunt') {
     if (!state.scene) return;
     const mesh = acquireWarnDisc();
     const y = state.worldMode === 'endless'
@@ -207,6 +209,7 @@ export function scheduleEnemySpawn(spawnX, spawnZ, scaleFactor) {
         x: spawnX,
         z: spawnZ,
         scaleFactor,
+        species: speciesKey,
         t: SPAWN_WARN_TIME,
         mesh
     });
@@ -272,7 +275,7 @@ export function updateSpawnWarnings(dt) {
         // Time's up: spawn the real monster and drop the warn disc.
         releaseWarnDisc(p.mesh);
         pendingSpawns.splice(i, 1);
-        const enemy = createEnemy();
+        const enemy = createEnemy(p.species);
         enemy.scale.setScalar(p.scaleFactor);
         enemy.position.set(
             p.x,
@@ -450,10 +453,14 @@ export function updateEnemies(dt) {
             if (killableNow) {
                 killEnemy(enemyGroup, i); // splice(i, 1) — safe going backwards
                 continue;
-            } else {
+            } else if (!ud.species.harmless) {
                 endGame('The enemy caught you.');
                 return; // NOW actually exits the enemy update
             }
+            // Harmless species (juja): a non-killable contact never ends the
+            // run. The rotation sizes jujas at 0.35x the player, so this is
+            // in practice unreachable — the guard exists for oversized test
+            // spawns and future tuning (plan 024).
         }
     }
 }
@@ -476,8 +483,9 @@ export function killEnemy(enemyGroup, index) {
     const payout = bounty * state.comboCount;
 
     // Death explosion (plan 015): burst in the enemy's CURRENT body color
-    // (yellow, since it was killable) transitioning to food-lime — the
-    // visual sentence "enemy becomes food". Origin at the body's center.
+    // (killable yellow — or the species base for a juja, which never flips)
+    // transitioning to food-lime — the visual sentence "enemy becomes food".
+    // Origin at the body's center.
     const bodyMesh = enemyGroup.userData.bodyMesh;
     const burstColor = bodyMesh ? bodyMesh.material.color.getHex() : 0xFFEB3B;
     // Body center — plus the terrain under the enemy in endless (y = 0 classic)
@@ -500,8 +508,10 @@ export function killEnemy(enemyGroup, index) {
     updateScoreDisplay();
     if (state.comboCount > 1) showComboChip(state.comboCount);
 
-    // Spawn 4 food particles
-    for (let i = 0; i < 4; i++) {
+    // Enemy becomes food — the drop count is species data (plan 024): grunts
+    // and sprinters keep the classic 4, the juja snack pays 2.
+    const foodDrop = enemyGroup.userData.species.foodDrop;
+    for (let i = 0; i < foodDrop; i++) {
         spawnAtPosition(enemyDeathPosition);
     }
 
@@ -669,13 +679,23 @@ export function updateEnemyStreaming(dt) {
     // Size band rotates deterministically (owner fix: the old always-1.5x rule
     // regenerated the bubble pre-grown — "I never get to eat anybody"). Giants
     // keep the classic rule + ramp; prey/peer scale to the player's CURRENT
-    // height so a hunt target is always on its way.
+    // height so a hunt target is always on its way. Species bands (plan 024):
+    // sprinter is small and ALWAYS edible — fast but killable (the danger is
+    // it reaches you, the answer is you eat it); juja is a fixed-size
+    // harmless critter, bonus food on legs.
     const band = SPAWN_SIZE_PATTERN[bubbleSpawnCounter % SPAWN_SIZE_PATTERN.length];
     let scaleFactor;
+    let speciesKey = 'grunt';
     if (band === 'giant') {
         scaleFactor = currentEnemyScaleFactor();
+    } else if (band === 'juja') {
+        speciesKey = 'juja';
+        scaleFactor = (state.playerScale * JUJA_HEIGHT_FACTOR) / enemyBaseHeight;
     } else {
-        const [lo, hi] = band === 'prey' ? PREY_HEIGHT_RANGE : PEER_HEIGHT_RANGE;
+        if (band === 'sprinter') speciesKey = 'sprinter';
+        const [lo, hi] = band === 'prey' ? PREY_HEIGHT_RANGE
+            : band === 'sprinter' ? SPRINTER_HEIGHT_RANGE
+                : PEER_HEIGHT_RANGE;
         const targetHeight = state.playerScale * (lo + Math.random() * (hi - lo));
         scaleFactor = targetHeight / enemyBaseHeight;
     }
@@ -686,7 +706,7 @@ export function updateEnemyStreaming(dt) {
         const spawnX = state.player.position.x + Math.cos(angle) * dist;
         const spawnZ = state.player.position.z + Math.sin(angle) * dist;
         if (!isWalkable(spawnX, spawnZ, radius)) continue;
-        scheduleEnemySpawn(spawnX, spawnZ, scaleFactor); // Red warn, then materialize
+        scheduleEnemySpawn(spawnX, spawnZ, scaleFactor, speciesKey); // Red warn, then materialize
         bubbleSpawnCounter++; // Advance the band rotation only on a real schedule
         return;
     }

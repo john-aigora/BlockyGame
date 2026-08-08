@@ -177,10 +177,13 @@ export const ENDLESS_ENEMY_TARGET = 4; // Enemies maintained in the bubble at ra
 // Bubble-spawn size bands (owner: "enemies bigger than me keep appearing, I
 // never get to eat anybody"). The classic 1.5x-your-height rule regenerated
 // the whole population pre-grown; this rotating pattern guarantees prey keeps
-// appearing: 1 in 4 spawns is edible now, 1 in 4 soon, half stay giants.
-export const SPAWN_SIZE_PATTERN = ['prey', 'giant', 'peer', 'giant']; // deterministic rotation per bubble spawn
+// appearing. Plan 024 widens it with the species bands: 3 in 8 spawns are
+// edible NOW (prey/sprinter/juja), 2 in 8 soon (peer), 3 in 8 stay giants.
+export const SPAWN_SIZE_PATTERN = ['prey', 'giant', 'peer', 'giant', 'sprinter', 'giant', 'juja', 'peer']; // deterministic rotation per bubble spawn
 export const PREY_HEIGHT_RANGE = [0.55, 0.85]; // prey band: x player height (edible immediately)
 export const PEER_HEIGHT_RANGE = [0.95, 1.25]; // peer band: x player height (edible after a snack or two)
+export const SPRINTER_HEIGHT_RANGE = [0.5, 0.7]; // sprinter band: x player height — ALWAYS edible (fast but killable: the danger is it reaches you, the answer is you eat it — plan 024)
+export const JUJA_HEIGHT_FACTOR = 0.35; // juja band: x player height, fixed — unmistakably a critter, never a wall
 export const ENDLESS_ENEMY_CAP = 12; // Hard endless population cap (ramp target never exceeds it)
 export const ENEMY_DESPAWN_RADIUS = 80; // Enemies beyond this distance are removed AND disposed
 export const ENDLESS_SPAWN_MIN = 35; // Bubble spawns land between MIN and MAX units from the player...
