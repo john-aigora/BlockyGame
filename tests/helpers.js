@@ -117,6 +117,19 @@ export function hudFor(page, seat) {
   };
 }
 
+// Waits for `count` RENDERED display frames (rAF chain in-page). The honest
+// axis for renderer-side settling — GPU resource registration happens at
+// render, not on any clock — and for "wall time passes while the game clock
+// is frozen" asserts (pause / death screens), where frames keep flowing but
+// the simulation must not. NEVER a stand-in for game time: anything the
+// game clock drives waits on waitGameSeconds/debug.advance instead.
+export async function settleFrames(page, count = 2) {
+  await page.evaluate((n) => new Promise((resolve) => {
+    const step = (left) => (left <= 0 ? resolve() : requestAnimationFrame(() => step(left - 1)));
+    step(n);
+  }), count);
+}
+
 // Waits until the simulation advances `seconds` more GAME-clock seconds
 // (state.runTime is dt-accumulated in update()). Use this — never a
 // wall-clock waitForTimeout — before asserting on anything the game clock
