@@ -355,6 +355,46 @@ test('2 PLAYERS and TODAY\'S WORLD are mutually exclusive (coop has no daily boa
   }))).toEqual({ daily: false, players: 2, playerCount: '2', dailyFlag: '0' });
 });
 
+test('live 2P widens the playfield so each half can match solo size', async ({ page }) => {
+  // Title with 2P selected stays solo-width (single attract view). Starting
+  // the run toggles coop-wide and roughly doubles the canvas max width.
+  await page.setViewportSize({ width: 1800, height: 900 });
+  await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+  await page.locator('#two-player-button').click();
+  const onTitle = await page.evaluate(() => {
+    const box = document.getElementById('game-container');
+    return {
+      wide: box.classList.contains('coop-wide'),
+      w: box.clientWidth,
+      bodyWide: document.body.classList.contains('coop-wide'),
+    };
+  });
+  expect(onTitle.wide).toBe(false);
+  expect(onTitle.bodyWide).toBe(false);
+  expect(onTitle.w).toBeLessThanOrEqual(800);
+
+  await page.locator('#start-button').click();
+  await expect(page.locator('#start-overlay')).toBeHidden();
+  const live = await page.evaluate(() => {
+    const box = document.getElementById('game-container');
+    const cams = window.__game.state.players.map((p) => p.camera?.aspect);
+    return {
+      wide: box.classList.contains('coop-wide'),
+      w: box.clientWidth,
+      h: box.clientHeight,
+      bodyWide: document.body.classList.contains('coop-wide'),
+      aspects: cams,
+    };
+  });
+  expect(live.wide).toBe(true);
+  expect(live.bodyWide).toBe(true);
+  expect(live.w).toBeGreaterThan(1200); // Toward 2× solo (1600 max at this viewport)
+  // Each half aspect ≈ (w/2)/h — close to a solo 800×h frame when wide.
+  const halfAspect = (live.w / 2) / live.h;
+  expect(live.aspects[0]).toBeCloseTo(halfAspect, 2);
+  expect(live.aspects[1]).toBeCloseTo(halfAspect, 2);
+});
+
 test('each seat has its own speed multiplier (pad Y/X and debug seat arg)', async ({ page }) => {
   await startTwoPlayerGame(page);
   await clearThreats(page);

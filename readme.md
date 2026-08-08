@@ -74,9 +74,10 @@ outside it.
 Pick **2 PLAYERS** on the start overlay (the choice is remembered for the
 session). One shared world, split vertically — **P1 (orange-red) on the
 left, P2 (teal) on the right** — with a hero, score, collect clock, and
-distance each. Enemies hunt whoever is nearest, and whether one is edible
-(yellow) is judged per player on each half of the screen: your half shows
-YOUR truth.
+distance each. During a live run the playfield widens (up to 2× the solo
+width) so each half is about the same size as a 1-player view, side by
+side. Enemies hunt whoever is nearest, and whether one is edible (yellow)
+is judged per player on each half of the screen: your half shows YOUR truth.
 
 | Control  | P1 (left)         | P2 (right)         |
 |----------|-------------------|--------------------|

@@ -39,6 +39,14 @@ body {
     /* For positioning UI elements like the message box inside */
 }
 
+/* Live 2P split: double the solo max width so each half is ~one solo frame
+   side by side (800×550 solo → 1600×550 coop). Height unchanged. body.coop-wide
+   is toggled with the container from onWindowResize (world.js). */
+#game-container.coop-wide {
+    width: min(98vw, 1600px);
+    max-width: 1600px;
+}
+
 /* Always-on screen vignette (spectacle pass): a whisper of corner darkening
    that focuses the eye center-frame, arcade-cabinet style. Deliberately far
    too faint to cost readability; the red danger vignette (z-index 40) and
@@ -171,6 +179,12 @@ canvas {
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
     width: 90vw;
     max-width: 800px;
+}
+
+/* Track the widened 2P canvas so P1/P2 HUD columns sit under each half */
+body.coop-wide #ui-container {
+    width: min(98vw, 1600px);
+    max-width: 1600px;
 }
 
 /* Controller detect line (Logitech F310 etc.) — quiet status under the HUD */
