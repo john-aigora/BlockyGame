@@ -690,3 +690,16 @@ All five steps landed; suite grew 95 → 102 (+4 tension, +3 audio).
   consecutively at workers:3 (7.2m, 7.1m) with ZERO flakes either run — the
   H4/H11 load-flake class did not reappear post-retirement; lint 0; build
   exit 0. Commits e8839d2, 1a2d926, e92d42a, f2a7c19, 650b716, 60f87bd.
+
+## 2026-08-08 — B9 driver reconcile
+
+- Verified: lint 0, tree clean, 150/150 x2 zero-flake (wall-clock retirement
+  drained the H4/H11 class — root fix confirmed). Hygiene H1-H5/H12/H14 all
+  drained; survival-guide list cleared below.
+- Drift reading CONFIRMED as intended: warn discs FREEZE on death (with the
+  whole world) and clear on restart — consistent with the death-freeze
+  aesthetic; the audit's C-1 note about them was a symptom description, not a
+  clear-on-death requirement. One-line endGame change if the family ever
+  prefers clearing.
+- B9 is tests-only: dedicated review SKIPPED in favor of the imminent
+  terminal cumulative review (recorded decision, elves proof-budget rule).
