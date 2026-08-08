@@ -594,3 +594,26 @@ All five steps landed; suite grew 95 → 102 (+4 tension, +3 audio).
   maxDistance tiebreak above the new run, trim to 5, is-new at rank 3), and
   per-half arrows (bounds + per-viewer colors). Session acceptance rows
   026-R1..R4 added with evidence.
+
+## 2026-08-08 — B8 delta re-review: CLEAN → Batch 8 fully closed
+
+- All 7 revision items verified: CSS specificity math (per-seat overrides win,
+  solo byte-identical), cap predicates character-identical at both sites,
+  onStartScreen flips at exactly two sites each followed by re-aspect, solo
+  indicator arithmetic identical by substitution, seam untouchable (arrow
+  half-diagonal 14.14px < 15px padding), pool 5/5 coverage incl. seat death,
+  per-viewer color, no new allocations, all three specs non-vacuous, scope
+  exact. Verdict CLEAN; zero blockers.
+- Delta advisory banked (H14 → B9): coop-board tiebreak spec leg is not
+  deletion-discriminating (stable sort masks it) — seed the high-distance
+  equal-score row AFTER the other so deleting the tiebreak term fails.
+- B8 review advisories routed: PLAYTEST BRIEF (16) beyond ~560u separation
+  the water surface is out of view range for both heroes — lakes still block
+  by math (shorelines read as invisible walls at extreme splits); (17) if one
+  hero dies and the survivor travels far, the fallen half's frozen backdrop
+  can show released terrain behind the death box. NOTES for a future pass:
+  popup sizing uses P1's camera scale (ADV-4), scared-face is
+  nearest-player not per-viewer (ADV-5), pickup box narrows ~13% during the
+  collect squash (ADV-6), perfInfo accumulates a paused-zoom render (ADV-8).
+  LEARNINGS: classic+2P via forceWorldMode is seat-0-only (ADV-10 — latent,
+  debug path only).
