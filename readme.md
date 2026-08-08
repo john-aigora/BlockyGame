@@ -43,7 +43,7 @@ outside it.
 - **Start**: click START (or press any key / pad button / tap the screen).
 - **Move**: Arrow keys / WASD / gamepad stick (or D-pad); touch-and-drag on mobile.
 - **Jump**: Space or pad **A** (hop rocks, not lakes).
-- **Speed**: F cycles; **R** or pad **X** slows one step; pad **Y** speeds up. Ladder: 0.5× → 1× → 1.5× → 2× → 3× → 5×.
+- **Speed**: F cycles P1; **R** or pad **X** slows one step; pad **Y** speeds up. Ladder: 0.5× → 1× → 1.5× → 2× → 3× → 5×. In **2 PLAYERS**, each pad's Y/X only changes that seat's speed (HUD shows `Speed: a× / b×`).
 - **Pad (F310 on Mac: back switch D)**: A jump, Start pause, Select mute, LB/RB zoom, Start+Select restart.
   Classic DB9 joysticks via dual-port USB adapters work — each port is a
   separate pad; wiggle the stick once to claim. The FIRST button press (or
@@ -74,9 +74,10 @@ outside it.
 Pick **2 PLAYERS** on the start overlay (the choice is remembered for the
 session). One shared world, split vertically — **P1 (orange-red) on the
 left, P2 (teal) on the right** — with a hero, score, collect clock, and
-distance each. Enemies hunt whoever is nearest, and whether one is edible
-(yellow) is judged per player on each half of the screen: your half shows
-YOUR truth.
+distance each. During a live run the playfield widens (up to 2× the solo
+width) so each half is about the same size as a 1-player view, side by
+side. Enemies hunt whoever is nearest, and whether one is edible (yellow)
+is judged per player on each half of the screen: your half shows YOUR truth.
 
 | Control  | P1 (left)         | P2 (right)         |
 |----------|-------------------|--------------------|
@@ -89,13 +90,12 @@ YOUR truth.
   (first pad takes P1 — unless P1 is already playing on WASD this run, then
   it politely takes P2). Ghost adapter ports never claim. Unplugging frees
   the seat.
-- **Pause pauses both** (P / Enter / Start on any pad); speed and zoom are
-  shared too. The field cap rises to **16** monsters with two heroes (solo
-  stays 12).
-- **Stay in the same neighborhood-ish**: past roughly 560 units of
-  separation the water surface falls out of view range — lakes still block
-  you (the world's rules don't bend), they just read as invisible walls
-  until you regroup.
+- **Pause pauses both** (P / Enter / Start on any pad). **Zoom is shared**;
+  **speed is per seat** (each pad's Y/X, F/R for P1). The field cap rises to
+  **16** monsters with two heroes (solo stays 12).
+- **Water scales with both heroes**: the lake plane grows so far-apart
+  partners still see water under their feet (collision always did; the
+  surface now follows the union).
 - **Death is personal**: whoever runs out of clock (or gets caught) squashes
   and spectates — their half follows the survivor under a WAITING chip. When
   both are down, one death screen shows both runs side by side, and the

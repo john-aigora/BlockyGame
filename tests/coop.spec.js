@@ -355,6 +355,107 @@ test('2 PLAYERS and TODAY\'S WORLD are mutually exclusive (coop has no daily boa
   }))).toEqual({ daily: false, players: 2, playerCount: '2', dailyFlag: '0' });
 });
 
+test('live 2P widens the playfield so each half can match solo size', async ({ page }) => {
+  // Title with 2P selected stays solo-width (single attract view). Starting
+  // the run toggles coop-wide and roughly doubles the canvas max width.
+  await page.setViewportSize({ width: 1800, height: 900 });
+  await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+  await page.locator('#two-player-button').click();
+  const onTitle = await page.evaluate(() => {
+    const box = document.getElementById('game-container');
+    return {
+      wide: box.classList.contains('coop-wide'),
+      w: box.clientWidth,
+      bodyWide: document.body.classList.contains('coop-wide'),
+    };
+  });
+  expect(onTitle.wide).toBe(false);
+  expect(onTitle.bodyWide).toBe(false);
+  expect(onTitle.w).toBeLessThanOrEqual(800);
+
+  await page.locator('#start-button').click();
+  await expect(page.locator('#start-overlay')).toBeHidden();
+  const live = await page.evaluate(() => {
+    const box = document.getElementById('game-container');
+    const cams = window.__game.state.players.map((p) => p.camera?.aspect);
+    return {
+      wide: box.classList.contains('coop-wide'),
+      w: box.clientWidth,
+      h: box.clientHeight,
+      bodyWide: document.body.classList.contains('coop-wide'),
+      aspects: cams,
+    };
+  });
+  expect(live.wide).toBe(true);
+  expect(live.bodyWide).toBe(true);
+  expect(live.w).toBeGreaterThan(1200); // Toward 2× solo (1600 max at this viewport)
+  // Each half aspect ≈ (w/2)/h — close to a solo 800×h frame when wide.
+  const halfAspect = (live.w / 2) / live.h;
+  expect(live.aspects[0]).toBeCloseTo(halfAspect, 2);
+  expect(live.aspects[1]).toBeCloseTo(halfAspect, 2);
+});
+
+test('each seat has its own speed multiplier (pad Y/X and debug seat arg)', async ({ page }) => {
+  await startTwoPlayerGame(page);
+  await clearThreats(page);
+  // Defaults: both 1x (index 0). Speed P2 only.
+  const stepped = await page.evaluate(() => {
+    const g = window.__game;
+    const ok = g.debug.speedUp(1);
+    g.debug.applySpeedMultiplier();
+    return {
+      ok,
+      i0: g.state.players[0].speedMultiplierIndex,
+      i1: g.state.players[1].speedMultiplierIndex,
+      s0: g.state.players[0].actualSpeed,
+      s1: g.state.players[1].actualSpeed,
+      label: document.getElementById('speed-cycle-button')?.textContent,
+      // Solo-compat surface still tracks seat 0
+      legacyIndex: g.state.currentSpeedMultiplierIndex,
+    };
+  });
+  expect(stepped.ok).toBe(true);
+  expect(stepped.i0).toBe(0);
+  expect(stepped.i1).toBeGreaterThan(0);
+  expect(stepped.s1).toBeGreaterThan(stepped.s0);
+  expect(stepped.legacyIndex).toBe(0);
+  expect(stepped.label).toMatch(/1x\s*\/\s*1\.5x/);
+
+  // Seat 0 cycles without pulling seat 1 back down.
+  const cycled = await page.evaluate(() => {
+    const g = window.__game;
+    g.debug.cycleSpeed(0);
+    return {
+      i0: g.state.players[0].speedMultiplierIndex,
+      i1: g.state.players[1].speedMultiplierIndex,
+      s0: g.state.players[0].actualSpeed,
+      s1: g.state.players[1].actualSpeed,
+    };
+  });
+  expect(cycled.i0).toBe(1);
+  expect(cycled.i1).toBe(stepped.i1);
+  expect(cycled.s0).toBeCloseTo(6 * 1.5, 5);
+  expect(cycled.s1).toBeCloseTo(stepped.s1, 5);
+
+  // Enemy mult uses max VALUE not max index ([1,1.5,2,3,5,0.5] — index 5 is 0.5x).
+  const enemyMult = await page.evaluate(() => {
+    const g = window.__game;
+    const s = g.state;
+    s.players[0].speedMultiplierIndex = 5; // 0.5x
+    s.players[1].speedMultiplierIndex = 4; // 5.0x
+    g.debug.applySpeedMultiplier();
+    // BASE_ENEMY_SPEED 1.5 × 5 at 1x ramp, endless may apply ramp factor ≥1
+    return {
+      enemy: s.actualEnemySpeed,
+      s0: s.players[0].actualSpeed,
+      s1: s.players[1].actualSpeed,
+    };
+  });
+  expect(enemyMult.s0).toBeCloseTo(6 * 0.5, 5);
+  expect(enemyMult.s1).toBeCloseTo(6 * 5, 5);
+  expect(enemyMult.enemy).toBeGreaterThanOrEqual(1.5 * 5 - 1e-6); // 5x wins over 0.5x
+});
+
 test('per-half danger vignette: a hunter stalking P2 reddens ONLY P2\'s half — and the CSS rule actually paints it', async ({ page }) => {
   await startTwoPlayerGame(page);
   await clearThreats(page);

@@ -222,6 +222,14 @@ export function createCameraFor(playerState) {
 export function onWindowResize() {
     if (!state.gameContainer || !state.renderer) return; // Ensure elements are initialized
 
+    // Live split: widen the shell so each half ≈ the solo frame side by side
+    // (solo max 800px → coop max 1600px). Title/attract stays solo-width even
+    // with a 2P roster selected (single full-rect view). Death keeps wide so
+    // both frozen halves stay full-size until restart.
+    const wide = state.players.length >= 2 && !state.onStartScreen;
+    state.gameContainer.classList.toggle('coop-wide', wide);
+    document.body.classList.toggle('coop-wide', wide);
+
     const newWidth = state.gameContainer.clientWidth;
     const newHeight = state.gameContainer.clientHeight;
 

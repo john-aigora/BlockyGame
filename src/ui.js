@@ -12,6 +12,7 @@ import { torusDistance } from './worldmath.js';
 import { unlockAudio, sfx, music, isMuted, setMuted, audioState } from './audio.js';
 import { onPlayerDeath, onNewBest, spawnTextPopup } from './effects.js';
 import { rumble } from './rumble.js';
+import { applySpeedMultiplier } from './game.js';
 
 // Cached DOM references, resolved once at init (plan 007) — the hot loop
 // must never call getElementById. game.js calls initUI() before any UI write.
@@ -523,6 +524,9 @@ export function killPlayer(player, reason) {
     onPlayerDeath(player); // Squash flat + burst for THIS hero only
     sfx.death();
     rumble(180, 0.7, player.seat); // The fallen hero's own pad takes the hit
+    // Enemy pace tracks max LIVING mult — drop a dead seat's 5x immediately
+    // so the survivor is not stuck fighting a pack tuned to the fallen hero.
+    applySpeedMultiplier();
     // Spectator mode (plan 026): their half switches to the partner cam
     // (world.js renderFrame) under the WAITING chip; resetIndicators (via
     // endGame/setupNewGame) retires the chip with the run.

@@ -833,11 +833,13 @@ export function setPlayerCount(count) {
             state.scene.add(p2.mesh);
         }
         if (!p2.camera) createCameraFor(p2);
-        applySpeedMultiplier(); // The new seat needs its actualSpeed resolved
     } else {
         const p2 = state.players.pop();
         if (p2 && p2.mesh) state.scene.remove(p2.mesh); // Parked, not disposed (cached above)
     }
+    // Always recompute: new seat needs actualSpeed; dropping P2 must clear a
+    // stale dual HUD label and any enemy mult that was max(P1,P2).
+    applySpeedMultiplier();
     onWindowResize(); // Re-aspect every camera for the new layout
     updateHudMode(); // Swap the solo id HUD ↔ the per-seat columns (plan 026)
     if (state.onStartScreen) setupNewGame(); // Fresh roster, fresh spawn positions
@@ -1016,28 +1018,44 @@ export function togglePause() {
     // freezes it and resuming does NOT reset it.
 }
 
-// Recomputes the actual speeds. The PLAYER's speed gains a size factor —
-// a big block should feel powerful, not sluggish — capped so a huge player
-// never outruns the fun. Enemies deliberately do NOT get the growth factor:
-// hunting getting slightly easier as you grow is the intended relief valve.
-// Called on init, on the speed button, and on every collect (playerScale
+// Recomputes the actual speeds. Each seat has its OWN speedMultiplierIndex
+// (independent 2P toys — pad Y/X for that seat, F/R and the Speed button for
+// seat 0). The size factor still rides each hero's scale. Enemies take the
+// MAX living player mult so solo is unchanged and a solo-style 5x still
+// ramps the world; a slow partner does not pull the pack down.
+// Called on init, on speed controls, and on every collect (playerScale
 // changes there, so the size factor must be recomputed).
 export function applySpeedMultiplier() {
     const baseSpeedForDevice = state.isMobile ? BASE_PLAYER_SPEED * MOBILE_SPEED_MULTIPLIER : BASE_PLAYER_SPEED;
-    // Per player (plan 026): the size speed bonus rides EACH hero's own
-    // scale — the big partner is faster, exactly like the solo rule.
+    // Compare MULTIPLIER VALUES, not indices: speedMultipliers is
+    // [1, 1.5, 2, 3, 5, 0.5] so index 5 (0.5x) is NOT "max" of index 4 (5x).
+    let enemyMult = 0;
+    let foundEnemySeat = false;
     for (const p of state.players) {
+        const idx = Number.isInteger(p.speedMultiplierIndex) ? p.speedMultiplierIndex : 0;
+        const safeIdx = ((idx % speedMultipliers.length) + speedMultipliers.length) % speedMultipliers.length;
+        if (safeIdx !== p.speedMultiplierIndex) p.speedMultiplierIndex = safeIdx;
+        const seatMult = speedMultipliers[safeIdx];
         const sizeFactor = Math.min(1 + (p.scale - 1) * SPEED_GROWTH_FACTOR, SPEED_GROWTH_CAP);
-        p.actualSpeed = baseSpeedForDevice * speedMultipliers[state.currentSpeedMultiplierIndex] * sizeFactor;
+        p.actualSpeed = baseSpeedForDevice * seatMult * sizeFactor;
+        // 2P live run: only living heroes set the enemy mult (a dead seat's
+        // 5x must not keep the pack hot for the survivor). Solo / overlay:
+        // every seat counts (there is only one).
+        if (state.players.length >= 2 && state.gameActive && !p.alive) continue;
+        if (!foundEnemySeat || seatMult > enemyMult) enemyMult = seatMult;
+        foundEnemySeat = true;
+    }
+    if (!foundEnemySeat) {
+        const i0 = state.players[0]?.speedMultiplierIndex ?? 0;
+        enemyMult = speedMultipliers[i0] ?? 1;
     }
     // Enemy speed is DECOUPLED from the player base (owner: the 2x player
     // rebase must not touch enemies). BASE_ENEMY_SPEED is the pre-rebase
     // effective value; the mobile boost stays so enemies are byte-identical
-    // to before on every device. Only the multiplier button (which scales
-    // the whole world) and the endless ramp below still apply.
+    // to before on every device. Toy mult = max living seat VALUE (solo = that seat).
     state.actualEnemySpeed = BASE_ENEMY_SPEED
         * (state.isMobile ? MOBILE_SPEED_MULTIPLIER : 1)
-        * speedMultipliers[state.currentSpeedMultiplierIndex];
+        * enemyMult;
     if (state.worldMode === 'endless') {
         // Distance difficulty ramp: +RAMP_SPEED_STEP per level, capped so a
         // ramped enemy (BASE_ENEMY_SPEED * RAMP_SPEED_MAX = 2.4 u/s) can
@@ -1046,14 +1064,21 @@ export function applySpeedMultiplier() {
     }
 
     if (el.speedButton) {
-        el.speedButton.textContent = `Speed: ${speedMultipliers[state.currentSpeedMultiplierIndex]}x`;
+        if (state.players.length >= 2) {
+            const a = speedMultipliers[state.players[0].speedMultiplierIndex];
+            const b = speedMultipliers[state.players[1].speedMultiplierIndex];
+            el.speedButton.textContent = `Speed: ${a}x / ${b}x`;
+        } else {
+            el.speedButton.textContent = `Speed: ${speedMultipliers[state.players[0].speedMultiplierIndex]}x`;
+        }
     }
 }
 
-// Speed cycle: the button's click handler AND the F key (input.js) — the
-// keyboard path must behave exactly like the mouse path.
-export function cycleSpeed() {
-    state.currentSpeedMultiplierIndex = (state.currentSpeedMultiplierIndex + 1) % speedMultipliers.length;
+// Speed cycle: the button's click handler AND the F key (input.js).
+// `seat` defaults to 0 (solo / P1 keyboard / Speed button).
+export function cycleSpeed(seat = 0) {
+    const p = state.players[seat] ?? state.players[0];
+    p.speedMultiplierIndex = (p.speedMultiplierIndex + 1) % speedMultipliers.length;
     applySpeedMultiplier();
 }
 
@@ -1073,23 +1098,25 @@ function indexForMultiplier(value) {
     return i;
 }
 
-export function speedUp() {
-    const cur = speedMultipliers[state.currentSpeedMultiplierIndex];
+export function speedUp(seat = 0) {
+    const p = state.players[seat] ?? state.players[0];
+    const cur = speedMultipliers[p.speedMultiplierIndex];
     const next = SPEED_LADDER.find((v) => v > cur + 1e-9);
     if (next == null) return false;
-    state.currentSpeedMultiplierIndex = indexForMultiplier(next);
+    p.speedMultiplierIndex = indexForMultiplier(next);
     applySpeedMultiplier();
     return true;
 }
 
-export function speedDown() {
-    const cur = speedMultipliers[state.currentSpeedMultiplierIndex];
+export function speedDown(seat = 0) {
+    const p = state.players[seat] ?? state.players[0];
+    const cur = speedMultipliers[p.speedMultiplierIndex];
     let prev = null;
     for (const v of SPEED_LADDER) {
         if (v < cur - 1e-9) prev = v;
     }
     if (prev == null) return false;
-    state.currentSpeedMultiplierIndex = indexForMultiplier(prev);
+    p.speedMultiplierIndex = indexForMultiplier(prev);
     applySpeedMultiplier();
     return true;
 }

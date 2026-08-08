@@ -1,4 +1,4 @@
-import { applySpeedMultiplier, speedUp, speedDown, forceWorldMode, perfInfo, setPlayerCount, advanceGameTime } from './game.js';
+import { applySpeedMultiplier, speedUp, speedDown, cycleSpeed, forceWorldMode, perfInfo, setPlayerCount, advanceGameTime } from './game.js';
 import { state } from './state.js';
 import { spawnNearPlayer, spawnAtPosition, spawnChunkFood } from './collectibles.js';
 import { spawnNewEnemies, updateEnemyStreaming, resetEnemyStreaming, updateSpawnWarnings, debugSpawnSpecies, pendingSpawnInfo, clearPendingSpawns } from './enemies.js';
@@ -40,6 +40,7 @@ window.__game = {
         applySpeedMultiplier, // Speed recompute path (balance spec — size speed bonus)
         speedUp,
         speedDown,
+        cycleSpeed,
         forceWorldMode, // Classic torus for wrap regression tests only
         // Deterministic game-clock stepper (plan 027): rAF-paused loop of
         // the REAL update(1/60). THE sanctioned way for specs to move game
