@@ -250,7 +250,8 @@ export function startRun() {
     if (!state.onStartScreen) return;
     unlockAudio(); // Browser autoplay policy: resume must ride a real gesture
     sfx.start();
-    music.start();
+    music.setVolume(1); // The run gets full volume (title bed played at half — plan 023)
+    music.start(); // No-op if the overlay bed is already looping — the ramp above carries it up
     hideStartOverlay();
     showGoFlourish(); // Big lime "GO!" — one 0.6s flash as the run begins
     if (state.isPaused) togglePause(); // Starts the clock and sets button text

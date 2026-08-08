@@ -316,6 +316,13 @@ canvas {
     margin: 0 0 25px;
 }
 
+/* FAMILY BEST line (plan 023): the household record wears the reward lime —
+   the one number on the menu worth beating. Specificity must outrank
+   #start-overlay .tagline, hence the compound selector. */
+#start-overlay #family-best {
+    color: #CCFF66;
+}
+
 /* The start button reuses .game-button visuals but sits in the flex flow
    (the class is position: absolute for the corner buttons). */
 #start-button {

@@ -8,7 +8,8 @@ import { state } from './state.js';
 import { canKillSpecificEnemy } from './enemies.js';
 import { recordScore } from './hiscores.js';
 import { torusDistance } from './worldmath.js';
-import { unlockAudio, sfx, music, isMuted, setMuted } from './audio.js';
+import { unlockAudio, sfx, music, isMuted, setMuted, audioState } from './audio.js';
+import { loadHiscores } from './hiscores.js';
 import { onPlayerDeath, onNewBest, spawnTextPopup } from './effects.js';
 import { rumble } from './rumble.js';
 
@@ -32,6 +33,8 @@ export const el = {
     startOverlay: null,
     startButton: null,
     endlessHint: null,
+    familyBest: null,
+    familyBestDistance: null,
     jumpButton: null,
     pauseButton: null,
     speedButton: null,
@@ -59,6 +62,8 @@ export function initUI() {
     el.startOverlay = document.getElementById('start-overlay');
     el.startButton = document.getElementById('start-button');
     el.endlessHint = document.getElementById('endless-hint');
+    el.familyBest = document.getElementById('family-best');
+    el.familyBestDistance = document.getElementById('family-best-distance');
     el.jumpButton = document.getElementById('jump-button');
     el.pauseButton = document.getElementById('pause-button');
     el.speedButton = document.getElementById('speed-cycle-button');
@@ -141,6 +146,21 @@ function initMuteToggle() {
     });
 }
 
+// FAMILY BEST on the start overlay (plan 023): the endless board's top
+// distance — the number the household actually chases — greets every boot
+// and every post-death menu. Hidden when the board is empty (fresh browser
+// or unavailable storage; loadHiscores already degrades to []).
+function updateFamilyBest() {
+    if (!el.familyBest) return;
+    const best = loadHiscores('endless')[0];
+    if (best) {
+        el.familyBestDistance.textContent = best.distance ?? 0;
+        el.familyBest.style.display = '';
+    } else {
+        el.familyBest.style.display = 'none';
+    }
+}
+
 // --- Start Overlay Functions (plan 008) ---
 // The overlay owns the boot (and post-death) UX: while it is visible the
 // game sits paused underneath and any key / click / tap starts the run.
@@ -148,6 +168,17 @@ export function showStartOverlay() {
     el.startOverlay.style.display = 'flex';
     state.onStartScreen = true;
     updateJumpButton(); // The menu never shows the touch JUMP control
+    updateFamilyBest();
+    // Title warmth (plan 023): a QUIET music bed under the menu — but only
+    // when a real gesture already unlocked the context (the gate submit
+    // counts; index.html rides unlockAudio on it). A bypassed gate or a
+    // rejected autoplay leaves ctx absent/suspended: skip SILENTLY, no
+    // retry — startRun's own gesture brings music up at full volume anyway.
+    // music.start() self-guards mute; a post-death overlay reuses this path.
+    if (audioState().state === 'running') {
+        music.setVolume(0.5); // HALF gain — a bed, not a performance
+        music.start();
+    }
 }
 
 export function hideStartOverlay() {

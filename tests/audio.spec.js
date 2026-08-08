@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openGame, startGame, waitForGameOver } from './helpers.js';
+import { openGame, startGame, waitForGameOver, GATE_PASSWORD } from './helpers.js';
 
 // Audio (plan 010): real output can't be asserted headlessly, so these
 // tests assert STATE (mute persistence, context lifecycle, music
@@ -47,6 +47,47 @@ test('full playthrough with mute ON stays silent-safe to the death screen', asyn
   await startGame(page);
   await waitForGameOver(page);
   expect(await page.evaluate(() => window.__game.debug.isMuted())).toBe(true);
+});
+
+test('title warmth: a real gate submit feeds the overlay bed at half gain; START restores full volume', async ({ page }) => {
+  // REAL gate flow — no bypass: the trusted submit CLICK is the audio
+  // gesture index.html rides unlockAudio on (plan 023 Step 5).
+  await page.goto('/');
+  await page.locator('#gate-password').fill(GATE_PASSWORD);
+  await page.locator('#gate-submit').click();
+  await expect(page.locator('#start-overlay')).toBeVisible();
+  await page.waitForFunction(() => window.__game?.state?.onStartScreen === true);
+
+  const audio = await page.evaluate(() => window.__game.debug.audioState());
+  expect(audio.state).not.toBe('none'); // The gate gesture at least created the context
+  if (audio.state === 'running') {
+    // Autoplay accepted the gesture: the quiet bed must actually be looping.
+    expect(await page.evaluate(() => window.__game.debug.musicActive())).toBe(true);
+    expect(audio.musicVolume).toBe(0.5);
+  } // 'suspended' (CI lag): the bed skips SILENTLY by design — nothing to assert.
+
+  await page.locator('#start-button').click();
+  await expect(page.locator('#start-overlay')).toBeHidden();
+  // startRun always restores full volume and starts (or keeps) the loop.
+  await expect
+    .poll(() => page.evaluate(() => window.__game.debug.audioState().musicVolume))
+    .toBe(1);
+  expect(await page.evaluate(() => window.__game.debug.musicActive())).toBe(true);
+});
+
+test('overlay FAMILY BEST shows the endless board top distance (distance-ranked)', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('blocky.hiscores.endless.v1', JSON.stringify([
+    { score: 40, distance: 1234, date: '2026-08-01' },
+    { score: 99, distance: 800, date: '2026-08-02' } // Richer but shorter — must NOT win
+  ])));
+  await openGame(page);
+  await expect(page.locator('#family-best')).toBeVisible();
+  await expect(page.locator('#family-best')).toContainText('1234u');
+});
+
+test('overlay FAMILY BEST stays hidden with no recorded runs', async ({ page }) => {
+  await openGame(page);
+  await expect(page.locator('#family-best')).toBeHidden();
 });
 
 test('music lifecycle: off before start, on during the run, off after death; never on while muted', async ({ page }) => {

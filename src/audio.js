@@ -46,7 +46,8 @@ export function audioState() {
     return {
         state: ctx?.state ?? 'none',
         intensity: pendingIntensity,
-        activeIntensity: intensity
+        activeIntensity: intensity,
+        musicVolume: volumeFactor
     };
 }
 
@@ -161,6 +162,7 @@ let nextStepTime = 0;
 let stepIndex = 0;
 let intensity = 0;        // applied layer (0 calm, 1 hunt, 2 danger); commits on bar lines
 let pendingIntensity = 0; // requested layer (clamped 0..2); adopted at the next bar line
+let volumeFactor = 1;     // Master music scale 0..1 (plan 023: title bed 0.5, runs 1); persists across start/stop
 let noiseBuf = null;      // shared 1s white-noise buffer for the hat
 
 function getNoiseBuffer() {
@@ -240,7 +242,8 @@ export const music = {
         if (!ctx || muted || musicTimer) return;
         musicGain = ctx.createGain();
         musicGain.gain.setValueAtTime(0.0001, ctx.currentTime);
-        musicGain.gain.exponentialRampToValueAtTime(MUSIC_VOL, ctx.currentTime + 0.1);
+        musicGain.gain.exponentialRampToValueAtTime(
+            Math.max(MUSIC_VOL * volumeFactor, 0.0001), ctx.currentTime + 0.1);
         musicGain.connect(ctx.destination);
         stepIndex = 0;
         intensity = 0;
@@ -267,6 +270,20 @@ export const music = {
         // Stores the clamped integer 0|1|2; scheduleStep adopts it at the
         // next bar line (never mid-bar — the musical-transition law).
         pendingIntensity = Math.max(0, Math.min(2, Math.round(Number(level) || 0)));
+    },
+    // Title warmth (plan 023): scales the ONE master music gain. The factor
+    // persists so a start() that follows (or already ran) plays at it —
+    // ui.js sets 0.5 for the overlay bed, startRun restores 1. Live changes
+    // ramp over 0.25s: a step would click.
+    setVolume(factor) {
+        volumeFactor = Math.max(0, Math.min(1, Number(factor) || 0));
+        if (ctx && musicGain) {
+            const t = ctx.currentTime;
+            musicGain.gain.cancelScheduledValues(t);
+            musicGain.gain.setValueAtTime(Math.max(musicGain.gain.value, 0.0001), t);
+            musicGain.gain.exponentialRampToValueAtTime(
+                Math.max(MUSIC_VOL * volumeFactor, 0.0001), t + 0.25);
+        }
     },
     isActive() {
         return musicTimer !== null;

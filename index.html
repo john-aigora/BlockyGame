@@ -54,6 +54,10 @@
             <p class="tagline">Endless world. Move: stick / arrows &mdash; or drag. <br>
                 Pad: A jump, X slow, Y fast. Eat LIME blocks. YELLOW enemies are yours!</p>
             <p class="tagline" id="endless-hint">Space or A: Jump &mdash; hop the rocks, not the lakes!</p>
+            <!-- Household record (plan 023): filled from the endless board by
+                 ui.js showStartOverlay; stays hidden when no runs exist. -->
+            <p class="tagline" id="family-best" style="display: none">FAMILY BEST: <span
+                    id="family-best-distance">0</span>u</p>
             <button id="start-button" class="game-button">&#9654; START</button>
             <p class="start-hint">or press any key / gamepad button</p>
         </div>
@@ -97,8 +101,18 @@
     </div>
 
     <script type="module">
-        import { unlockOrShowGate } from '/src/gate.js';
+        import { unlockOrShowGate, isUnlocked } from '/src/gate.js';
+        // Title warmth (plan 023): a REAL gate submit is a user gesture — ride
+        // it to unlock the AudioContext so the start overlay's quiet music bed
+        // may play. An already-unlocked session (or a test bypass) resolves
+        // with no gesture: skip the unlock, the title stays autoplay-silent
+        // (ui.js checks ctx state and skips the bed silently).
+        const gateWillPrompt = !isUnlocked();
         await unlockOrShowGate();
+        if (gateWillPrompt) {
+            const { unlockAudio } = await import('/src/audio.js');
+            unlockAudio();
+        }
         await import('/src/main.js');
     </script>
 </body>
