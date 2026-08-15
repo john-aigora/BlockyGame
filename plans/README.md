@@ -126,7 +126,7 @@ sections and the 2026-08-14 chat report.
 | 030 | Security hardening: per-page CSP scoping, npm audit fix (2 dev-tree highs), .env safety net | P2 | S | — | TODO |
 | 031 | 2P fairness: per-target enemy pace (C-15), canvas-rect truth (C-16/D-14/P-13), 58e3262 + pad Y/X coverage (T-12/T-13) | P1 | M | — | DONE — enemyPaceForSeat per-target rule (kinematic + arithmetic specs; P2 survives what the max rule killed); onWindowResize owns rect + viewW/H (renderFrame layout read gone); death/roster recompute + pad Y/X routing + coop-wide exit covered; suite 162→164 |
 | 032 | CI completes verification (build step, browser cache, single PR run) + docs truth (DOC-9..13, DX-7/8, T-17) | P2 | S-M | — | TODO |
-| 033 | Small-fix bundle: 2P input allocations (P-14), cloud closure (P-15), reflow guard (P-16), audio clamp (C-20/C-8), camera anchor (C-21), warn-ring clamp (C-22), knob extraction (C-23), ui→game cycle break (D-15), comment truth (D-17) | P3 | M | 031 | TODO |
+| 033 | Small-fix bundle: 2P input allocations (P-14), cloud closure (P-15), reflow guard (P-16), audio clamp (C-20/C-8), camera anchor (C-21), warn-ring clamp (C-22), knob extraction (C-23), ui→game cycle break (D-15), comment truth (D-17) | P3 | M | 031 | DONE — all nine landed (5 slices: disjoint steps own commits, file-overlapping steps thematic); knob values byte-identical; suite 164/164 |
 | 034 | Ghost runs — race the stored best on the same seeded world (catalog #9) | P2 | M | — (soft: after 029/031/033 merge-adjacency) | TODO |
 | 035 | Hero skins + milestone unlocks (CAP-3; Celestial skin reads 029's asc field) | P3 | S-M | — (soft: 029 for Celestial) | TODO |
 | 036 | Board honesty — record the run's speed multiplier on rows (DT-3) | P3 | S | — (merge-adjacent to 029/031) | TODO |

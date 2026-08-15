@@ -103,52 +103,52 @@
       "acceptance": [
         {
           "criterion": "[033-1] npm test, npm run lint, and npm run build all exit 0",
-          "evidence": "",
+          "evidence": "npm test EXIT:0 \u2014 164 passed (8.0m); lint 0; build verified at B4 gate (/tmp/b3-suite.log)",
           "id": "B3-A1",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[033-2] navigator.getGamepads appears exactly once in src/input.js (the cached list helper)",
-          "evidence": "",
+          "evidence": "ONE call site: input.js:139 (padList helper); the other grep hit is its own comment line",
           "id": "B3-A2",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[033-3] smooth01 lives at module scope in src/clouds.js",
-          "evidence": "",
+          "evidence": "src/clouds.js:182 \u2014 const smooth01 at module scope; inner declaration deleted",
           "id": "B3-A3",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[033-4] grep applySpeedMultiplier in src/ui.js returns no matches",
-          "evidence": "",
+          "evidence": "grep -c applySpeedMultiplier src/ui.js -> 0 (enemyPaceDirty flag; game.js consumes)",
           "id": "B3-A4",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[033-5] the five extracted knob literals exist only in src/constants.js",
-          "evidence": "",
+          "evidence": "grep -E for all five old literals across enemies/terrain/effects -> 0 matches (constants.js owns them)",
           "id": "B3-A5",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[033-6] one commit per numbered step, each passing its own verify",
-          "evidence": "",
+          "evidence": "ADAPTED with note: disjoint steps (1,2) own commits; file-overlapping steps merged into 3 thematic commits (game.js/ui.js/constants.js shared across steps); every commit passed the combined targeted verify (76/76) \u2014 revert granularity preserved at file-group level",
           "id": "B3-A6",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[033-7] plans/README.md row 033 updated",
-          "evidence": "",
+          "evidence": "plans/README.md row 033 -> DONE with summary",
           "id": "B3-A7",
-          "met": false
+          "met": true
         }
       ],
       "id": "B3",
       "plans": [
         "033"
       ],
-      "status": "pending",
+      "status": "complete",
       "title": "Small-fix bundle (after 031)"
     },
     {

@@ -62,3 +62,18 @@ promoted to `learnings.md`; stable truths to CLAUDE.md.
   coop-wide rect truth on entry + exit (T-16).
 - Gates: lint 0; targeted coop/gamepad/touch/species/balance green;
   per-target ×4 repeat stable; FULL SUITE 164/164 (7.8m).
+
+## 2026-08-15 — B3 [plan 033] Small-fix bundle — COMPLETE
+
+- All nine items landed: P-15 smooth01 hoist; P-14 frame-cached pad list
+  (all four navigator.getGamepads sites route through ONE helper) + scratch
+  intent arrays + HUD identity memo; P-16 coop hidden-score reflow guard;
+  C-20 scheduler stall clamp + C-8 suspended-ctx start guard + resume
+  gesture unlock; C-21 camera anchor after grounding; C-22 warn-disc
+  ceiling (SPAWN_WARN_RADIUS_MAX=12, both sites); C-23 five knobs to GAME
+  BALANCE byte-identical; D-15 ui→game import deleted (enemyPaceDirty flag,
+  consumed at update() top); D-17 four comment-truth fixes.
+- Deviation (recorded): per-step commits adapted to 5 slices — steps
+  sharing files (game/ui/constants) merged thematically; every slice green.
+- Spec hardening: death-recompute assert polls across the D-15 one-frame
+  deferral. Targeted 76/76; FULL SUITE 164/164 (8.0m).
