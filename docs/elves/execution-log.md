@@ -40,3 +40,25 @@ promoted to `learnings.md`; stable truths to CLAUDE.md.
   now; those specs test bounty/combo/display, not the ceremony. Full-suite
   failures before fix: balance kill trio; after: none.
 - Gates: lint 0, build 0, FULL SUITE 162/162 (8.4m) at close.
+
+## 2026-08-15 — B2 [plan 031] 2P fairness + canvas truth — COMPLETE
+
+- Per-target enemy pace: state.enemyPaceForSeat filled in applySpeedMultiplier
+  (enemyBase × seat mult × shared rampFactor); enemies.js speciesSpeed reads
+  the TARGET's slot in coop, classic global solo (byte-stable). Legacy
+  max-of-living actualEnemySpeed retained for world-level consumers.
+- Canvas geometry single owner: onWindowResize writes gameCanvasRect +
+  centers + NEW viewW/viewH (borderless render sizes — the rect is
+  border-inclusive and must never size a scissor; caught mid-batch when the
+  cached-rect width 1610 ≠ clientWidth 1600); input.js duplicate
+  listener/initial-call deleted; renderFrame split path reads the cache.
+- Specs: constants imported (T-14), i1 exact-index pin, per-target
+  arithmetic + enemyPaceForSeat asserts, NEW kinematic per-target test
+  (mesa-core arena — measured that z=0 is a LAKE from x≈30 on this seed;
+  6u gap + 1s advance makes P2-contact deterministically impossible; P2
+  survival asserted — the old rule's 5x hunter caught them), death-recompute
+  (P2 dies at 5x → pace drops to survivor), roster-drop (label + pace),
+  pad Y/X per-seat routing via 2 mock pads (pressEdge → helpers.js),
+  coop-wide rect truth on entry + exit (T-16).
+- Gates: lint 0; targeted coop/gamepad/touch/species/balance green;
+  per-target ×4 repeat stable; FULL SUITE 164/164 (7.8m).

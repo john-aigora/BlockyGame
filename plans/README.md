@@ -124,7 +124,7 @@ sections and the 2026-08-14 chat report.
 |------|-------|----------|--------|------------|--------|
 | 029 | Ascension — "going to heaven" ceremony ends runaway growth as a win (owner headline; DT-7/DT-8) | P1 | L | — | DONE — src/ascension.js ceremony (foreshadow halo at 9, beam/rise/starburst at 10, +500, ASCENDED! screen, ✦ rows, 2P settle chip); 8-case ascension.spec; suite 154→162; balance.spec giant-scale probes mark ascension spent (behavior-driven update, intent preserved) |
 | 030 | Security hardening: per-page CSP scoping, npm audit fix (2 dev-tree highs), .env safety net | P2 | S | — | TODO |
-| 031 | 2P fairness: per-target enemy pace (C-15), canvas-rect truth (C-16/D-14/P-13), 58e3262 + pad Y/X coverage (T-12/T-13) | P1 | M | — | TODO |
+| 031 | 2P fairness: per-target enemy pace (C-15), canvas-rect truth (C-16/D-14/P-13), 58e3262 + pad Y/X coverage (T-12/T-13) | P1 | M | — | DONE — enemyPaceForSeat per-target rule (kinematic + arithmetic specs; P2 survives what the max rule killed); onWindowResize owns rect + viewW/H (renderFrame layout read gone); death/roster recompute + pad Y/X routing + coop-wide exit covered; suite 162→164 |
 | 032 | CI completes verification (build step, browser cache, single PR run) + docs truth (DOC-9..13, DX-7/8, T-17) | P2 | S-M | — | TODO |
 | 033 | Small-fix bundle: 2P input allocations (P-14), cloud closure (P-15), reflow guard (P-16), audio clamp (C-20/C-8), camera anchor (C-21), warn-ring clamp (C-22), knob extraction (C-23), ui→game cycle break (D-15), comment truth (D-17) | P3 | M | 031 | TODO |
 | 034 | Ghost runs — race the stored best on the same seeded world (catalog #9) | P2 | M | — (soft: after 029/031/033 merge-adjacency) | TODO |

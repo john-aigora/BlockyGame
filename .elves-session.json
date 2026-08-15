@@ -57,46 +57,46 @@
       "acceptance": [
         {
           "criterion": "[031-1] npm test exits 0 (baseline plus new coop/gamepad cases)",
-          "evidence": "",
+          "evidence": "npm test EXIT:0 \u2014 164 passed (7.8m) = 162 + 2 new coop tests (/tmp/b2-suite.log)",
           "id": "B2-A1",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[031-2] no clientWidth read inside renderFrame's split-frame path",
-          "evidence": "",
+          "evidence": "renderFrame split path reads state.viewW/viewH (cached borderless sizes); no clientWidth read",
           "id": "B2-A2",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[031-3] grep updateGameCanvasBounds in src/input.js returns 0 matches",
-          "evidence": "",
+          "evidence": "grep -c updateGameCanvasBounds src/input.js -> 0 (single owner: world.js onWindowResize)",
           "id": "B2-A3",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[031-4] grep enemyPaceForSeat in src/enemies.js shows exactly the one paceBase site",
-          "evidence": "",
+          "evidence": "grep -c enemyPaceForSeat src/enemies.js -> 2 (condition+read of the ONE paceBase site)",
           "id": "B2-A4",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[031-5] tests/coop.spec.js imports speed constants (no hardcoded 6/1.5 literals)",
-          "evidence": "",
+          "evidence": "grep hardcoded \"6 *\"/\"1.5 *\" literals in tests/coop.spec.js -> 0 (constants imported)",
           "id": "B2-A5",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[031-6] plans/README.md row 031 updated",
-          "evidence": "",
+          "evidence": "plans/README.md row 031 -> DONE with summary",
           "id": "B2-A6",
-          "met": false
+          "met": true
         }
       ],
       "id": "B2",
       "plans": [
         "031"
       ],
-      "status": "pending",
+      "status": "complete",
       "title": "2P fairness + canvas truth + coverage"
     },
     {
