@@ -155,52 +155,52 @@
       "acceptance": [
         {
           "criterion": "[030-1] npm audit reports 0 vulnerabilities at the root",
-          "evidence": "",
+          "evidence": "npm audit fix (package-lock.json only) -> npm audit \"found 0 vulnerabilities\"",
           "id": "B4-A1",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[030-2] vercel.json parses as JSON with four header blocks and site-wide script-src exactly 'self'",
-          "evidence": "",
+          "evidence": "python3.12 json.load OK; 4 header blocks; site-wide block script-src exactly 'self'",
           "id": "B4-A2",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[030-3] unsafe-inline appears in script-src only for original.html, original/, and pad-test blocks",
-          "evidence": "",
+          "evidence": "script-src unsafe-inline present ONLY in /original.html, /original/(.*), /pad-test.html blocks; museum gets the exact pinned cdnjs three.js r128 path; dist/index.html verified: 0 cdnjs refs, external module script only, 4 inline style attrs (style-src keeps unsafe-inline)",
           "id": "B4-A3",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[030-4] a scratch .env is ignored by git (then removed)",
-          "evidence": "",
+          "evidence": "touch .env -> absent from git status (ignored by the new net); video/.env still resolves to video/.gitignore:8; removed after check",
           "id": "B4-A4",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[030-5] video/.env.example exists and contains no secret value",
-          "evidence": "",
+          "evidence": "video/.env.example = \"GEMINI_API_KEY=\" (name only, no value; var name verified against video/README.md:60)",
           "id": "B4-A5",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[030-6] npm test and npm run build exit 0",
-          "evidence": "",
+          "evidence": "npm test EXIT:0 \u2014 164 passed (8.2m); npm run build \"built in 175ms\" (/tmp/b4-suite.log)",
           "id": "B4-A6",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[030-7] plans/README.md row 030 updated",
-          "evidence": "",
+          "evidence": "plans/README.md row 030 -> DONE with summary + post-deploy check note",
           "id": "B4-A7",
-          "met": false
+          "met": true
         }
       ],
       "id": "B4",
       "plans": [
         "030"
       ],
-      "status": "pending",
+      "status": "complete",
       "title": "Security hardening"
     },
     {

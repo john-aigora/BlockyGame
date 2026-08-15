@@ -77,3 +77,18 @@ promoted to `learnings.md`; stable truths to CLAUDE.md.
   sharing files (game/ui/constants) merged thematically; every slice green.
 - Spec hardening: death-recompute assert polls across the D-15 one-frame
   deferral. Targeted 76/76; FULL SUITE 164/164 (8.0m).
+
+## 2026-08-15 — B4 [plan 030] Security hardening — COMPLETE
+
+- npm audit fix: lockfile-only; root now 0 vulnerabilities. video/ tree
+  RECORDED (not fixed — local-only, off the deploy path): 3 high.
+- vercel.json → four per-page CSP blocks: site-wide script-src 'self' (the
+  game page needs no inline/CDN — verified against dist/index.html);
+  /original.html + /pad-test.html keep inline allowances; /original/(.*)
+  gets the EXACT pinned cdnjs three.js r128 path (SRI impossible — museum
+  is byte-frozen) + Google Fonts (original/index.html:9 uses them);
+  form-action 'self' added everywhere (no default-src fallback).
+- Root .gitignore env net (+!.env.example) verified with a scratch .env;
+  video/.env.example created (name only). readme deploy note rewritten,
+  incl. the mandatory post-deploy console check (headers production-only).
+- Gates: lint 0, build 0, FULL SUITE 164/164 (8.2m).

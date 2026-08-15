@@ -17,3 +17,9 @@ docs/audit/
 .claude/
 .elves/
 .vercel
+
+# Env files: never commit credentials (video/.env holds a real API key;
+# this is the repo-wide net so a future .env anywhere is caught too)
+.env
+.env.*
+!.env.example

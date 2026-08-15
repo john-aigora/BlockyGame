@@ -191,8 +191,16 @@ The repo is a standard Vite app — Vercel detects it automatically.
 3. Framework preset shows **Vite** (build `vite build`, output `dist/`) —
    accept and **Deploy**.
 4. Every push to `main` now auto-deploys. The repo's `vercel.json` adds
-   security headers (nosniff, referrer policy, and a site-wide CSP covering the
-   live game and the `/original` archive). The build itself needs no configuration.
+   security headers (nosniff, referrer policy) and a **per-page-scoped CSP**
+   (plan 030): the live game page allows scripts from `self` only (Vite
+   externalizes everything), while `/original*` and `/pad-test.html` carry
+   their own inline-script allowances — and the `/original` archive uses a
+   path-scoped CDN allowance for its one pinned three.js file instead of
+   SRI, because the museum build is byte-frozen and cannot carry an
+   `integrity` attribute. Headers are production-only (neither `vite dev`
+   nor `vite preview` serves them): after a deploy, load `/`,
+   `/original.html`, and `/pad-test.html` with the console open — zero CSP
+   violations expected. The build itself needs no configuration.
 
 Alternatively, from a machine with the Vercel CLI logged in: `npx vercel` then
 `npx vercel --prod`.
