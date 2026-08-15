@@ -240,6 +240,22 @@ export function onWindowResize() {
     }
     state.renderer.setPixelRatio(Math.min(window.devicePixelRatio, state.isMobile ? 1.5 : 2)); // Same tier rule as createWorld; the window may have moved displays
     state.renderer.setSize(newWidth, newHeight); // Resize renderer
+
+    // Canvas geometry cache — SINGLE OWNER (plan 031, audit C-16/D-14): the
+    // coop-wide class flip above changes the container size WITHOUT any
+    // window resize event, so the indicator/touch rect must refresh here —
+    // the one function every layout change (window resize, roster flip,
+    // start/restart) already calls. input.js's old duplicate listener is
+    // deleted; game.js binds window resize to THIS function.
+    const rect = state.gameContainer.getBoundingClientRect();
+    state.gameCanvasRect = rect;
+    state.gameCanvasCenterX = rect.left + rect.width / 2;
+    state.gameCanvasCenterY = rect.top + rect.height / 2;
+    // Render-buffer sizes for renderFrame's split path (P-13): EXACTLY what
+    // setSize received — the rect above is border-inclusive and must never
+    // size a viewport/scissor.
+    state.viewW = newWidth;
+    state.viewH = newHeight;
 }
 
 // The camera offset the current zoom level and THIS player's size ask for.
@@ -396,8 +412,13 @@ export function renderFrame() {
         renderer.render(state.scene, state.camera);
         return;
     }
-    const w = state.gameContainer.clientWidth;
-    const h = state.gameContainer.clientHeight;
+    // Cached sizes (plan 031, audit P-13): reading clientWidth here forced a
+    // synchronous layout every split frame, sandwiched between this frame's
+    // style writes. onWindowResize owns the cache; every path that can
+    // change the canvas size calls it. viewW/viewH — never the rect, which
+    // is border-inclusive.
+    const w = state.viewW;
+    const h = state.viewH;
     const halfW = Math.floor(w / 2);
     const p1 = state.players[0];
     // Spectator halves (plan 026 Stage E): a dead hero's half shows the

@@ -104,6 +104,18 @@ export async function installMockPads(page, pads = [{}]) {
   }, pads);
 }
 
+// Press → poll → release → poll: one clean button edge on a mock pad.
+// Extracted from tests/gamepad.spec.js (plan 031) and extended with a pad
+// slot for the dual-pad per-seat scenarios. Requires installMockPads first.
+export function pressEdge(page, button, slot = 0) {
+  return page.evaluate(([b, s]) => {
+    window.__mockPads.setButton(s, b, true);
+    window.__game.debug.pollGamepad();
+    window.__mockPads.setButton(s, b, false);
+    window.__game.debug.pollGamepad();
+  }, [button, slot]);
+}
+
 // One seat's 2P HUD locators (plan 026). Solo keeps the classic ids
 // (#score, #collect-time, ...) — this helper is for the coop columns only.
 export function hudFor(page, seat) {

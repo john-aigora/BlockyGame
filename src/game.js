@@ -1094,14 +1094,21 @@ export function applySpeedMultiplier() {
     // rebase must not touch enemies). BASE_ENEMY_SPEED is the pre-rebase
     // effective value; the mobile boost stays so enemies are byte-identical
     // to before on every device. Toy mult = max living seat VALUE (solo = that seat).
-    state.actualEnemySpeed = BASE_ENEMY_SPEED
-        * (state.isMobile ? MOBILE_SPEED_MULTIPLIER : 1)
-        * enemyMult;
-    if (state.worldMode === 'endless') {
-        // Distance difficulty ramp: +RAMP_SPEED_STEP per level, capped so a
-        // ramped enemy (BASE_ENEMY_SPEED * RAMP_SPEED_MAX = 2.4 u/s) can
-        // never outrun the player's base 6. Classic never reads the ramp.
-        state.actualEnemySpeed *= Math.min(1 + state.endlessRampLevel * RAMP_SPEED_STEP, RAMP_SPEED_MAX);
+    const enemyBase = BASE_ENEMY_SPEED * (state.isMobile ? MOBILE_SPEED_MULTIPLIER : 1);
+    // Distance difficulty ramp: +RAMP_SPEED_STEP per level, capped so a
+    // ramped enemy (BASE_ENEMY_SPEED * RAMP_SPEED_MAX = 2.4 u/s) can
+    // never outrun the player's base 6. Classic never reads the ramp.
+    const rampFactor = state.worldMode === 'endless'
+        ? Math.min(1 + state.endlessRampLevel * RAMP_SPEED_STEP, RAMP_SPEED_MAX)
+        : 1;
+    state.actualEnemySpeed = enemyBase * enemyMult * rampFactor;
+    // Per-seat enemy pace (plan 031, audit C-15): in coop, a hunter runs at
+    // the pace of the hero it is CURRENTLY chasing (enemies.js reads the
+    // TARGET's slot) — P1's 5x still heats P1's own hunters, and P2 at 1x
+    // stays honestly outrunnable. Dead/ascending seats keep a stale slot
+    // (harmless — nothing targets them). Solo never reads the array.
+    for (const p of state.players) {
+        state.enemyPaceForSeat[p.seat] = enemyBase * speedMultipliers[p.speedMultiplierIndex] * rampFactor;
     }
 
     if (el.speedButton) {

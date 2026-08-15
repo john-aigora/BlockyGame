@@ -512,7 +512,15 @@ export function updateEnemies(dt) {
         // species can't outrun its own separation steering. Random drift and
         // avoidance deliberately stay on the GLOBAL speed (plan 024: only
         // the four sites thread the factor).
-        const speciesSpeed = state.actualEnemySpeed * ud.species.speedFactor;
+        // Per-target pace (plan 031, audit C-15): in coop this hunter runs
+        // at the pace ITS target's speed toy sets — no seat's 5x can make
+        // another seat's hunters unoutrunnable. Solo reads the classic
+        // global (byte-stable). Random drift and separation deliberately
+        // stay on the GLOBAL speed (plan 024's four-site rule).
+        const paceBase = state.players.length >= 2 && state.enemyPaceForSeat[target.seat] !== undefined
+            ? state.enemyPaceForSeat[target.seat]
+            : state.actualEnemySpeed;
+        const speciesSpeed = paceBase * ud.species.speedFactor;
 
         // --- Random Movement Component (calculated for all states) ---
         enemyGroup.timeToChangeRandomVelocity -= dt;

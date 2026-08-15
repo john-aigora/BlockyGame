@@ -159,6 +159,11 @@ export const state = {
     // applySpeedMultiplier (game.js) recomputes player actualSpeed (per seat)
     // and actualEnemySpeed (world: max living player mult + ramp).
     actualEnemySpeed: undefined, // Will store the fully adjusted enemy speed
+    // Coop per-seat enemy pace (plan 031, audit C-15): a hunter runs at the
+    // pace its TARGET's seat multiplier sets, so no seat's 5x toy can make
+    // another seat's hunters unoutrunnable. Solo never reads this array
+    // (enemies.js falls through to actualEnemySpeed — byte-stable).
+    enemyPaceForSeat: [undefined, undefined],
 
     // Camera zoom model: the LEVEL is shared (per-player zoom is out of v1);
     // the smoothed camY/camZ offsets live per player.
@@ -194,6 +199,11 @@ export const state = {
     gameCanvasRect: { left: 0, top: 0, width: 0, height: 0 }, // Store game container dimensions
     gameCanvasCenterX: 0,
     gameCanvasCenterY: 0,
+    // Render-buffer sizes (plan 031, audit P-13): clientWidth/Height as of
+    // the last onWindowResize — what renderer.setSize used. DISTINCT from
+    // gameCanvasRect (border-inclusive, for touch/indicator screen math).
+    viewW: 0,
+    viewH: 0,
 };
 
 // Living players, in seat order. Allocates — fine for per-event paths; the

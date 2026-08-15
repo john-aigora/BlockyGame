@@ -1,5 +1,8 @@
 import { test, expect } from '@playwright/test';
-import { openGame, installMockPads, waitGameSeconds, waitForGameOver, hudFor } from './helpers.js';
+import { openGame, installMockPads, waitGameSeconds, waitForGameOver, hudFor, pressEdge } from './helpers.js';
+// Tuning truths come from the source (plan 031, audit T-14) — hardcoded 6/1.5
+// literals broke for the wrong reason whenever a constant was retuned.
+import { BASE_PLAYER_SPEED, BASE_ENEMY_SPEED, speedMultipliers } from '../src/constants.js';
 
 // Two-player split-screen (plan 026). The roster flips via
 // debug.startTwoPlayer() on the start overlay (the Stage F entry buttons
@@ -230,12 +233,24 @@ test('2P HUD: per-seat columns replace the solo row and track their own runs', a
   await expect(p2Hud.score).not.toHaveText('0', { timeout: 30000 });
   await expect(p1Hud.score).toHaveText('0');
 
-  // Back to solo: the classic id row returns, the columns retire.
+  // Back to solo: the classic id row returns, the columns retire — and the
+  // roster-drop recompute (plan 031, audit T-12) clears P2's 5x from both
+  // the label and the enemy pace.
   await page.locator('#restart-game-button').click();
   await expect(page.locator('#start-overlay')).toBeVisible();
+  await page.evaluate((hi) => {
+    window.__game.state.players[1].speedMultiplierIndex = hi;
+    window.__game.debug.applySpeedMultiplier();
+  }, speedMultipliers.indexOf(5));
   await page.evaluate(() => window.__game.debug.setPlayerCount(1));
   await expect(page.locator('#coop-hud')).toBeHidden();
   await expect(page.locator('#score-display')).toBeVisible();
+  const solo = await page.evaluate(() => ({
+    label: document.getElementById('speed-cycle-button')?.textContent,
+    enemy: window.__game.state.actualEnemySpeed,
+  }));
+  expect(solo.label).toMatch(/^Speed: [\d.]+x$/); // Solo form — no stale dual label
+  expect(solo.enemy).toBeCloseTo(BASE_ENEMY_SPEED, 5); // P2's 5x is gone from the pace
 });
 
 test('per-player death: spectator chip while the partner plays, then the team death screen + coop board', async ({ page }) => {
@@ -256,9 +271,19 @@ test('per-player death: spectator chip while the partner plays, then the team de
   });
   await waitGameSeconds(page, 0.3); // The distance frame registers 40u
 
+  // Death-recompute coverage (plan 031, audit T-12): P2 dies holding 5x —
+  // the enemy pace must drop to the SURVIVOR's rule the moment they fall.
+  await page.evaluate((hi) => {
+    window.__game.state.players[1].speedMultiplierIndex = hi;
+    window.__game.debug.applySpeedMultiplier();
+  }, speedMultipliers.indexOf(5));
   // P2's collect clock expires — THEIR death only: the run continues.
   await page.evaluate(() => { window.__game.state.players[1].collectTimeLeft = 0.05; });
   await page.waitForFunction(() => window.__game.state.players[1].alive === false, null, { timeout: 60000 });
+  // killPlayer's recompute (58e3262): the dead seat's 5x no longer drives
+  // the pack — the survivor at 1x sets the world pace (ramp level 0 here).
+  expect(await page.evaluate(() => window.__game.state.actualEnemySpeed))
+    .toBeCloseTo(BASE_ENEMY_SPEED, 5);
   const mid = await page.evaluate(() => ({
     gameActive: window.__game.state.gameActive,
     p1Alive: window.__game.state.players[0].alive,
@@ -393,6 +418,33 @@ test('live 2P widens the playfield so each half can match solo size', async ({ p
   const halfAspect = (live.w / 2) / live.h;
   expect(live.aspects[0]).toBeCloseTo(halfAspect, 2);
   expect(live.aspects[1]).toBeCloseTo(halfAspect, 2);
+
+  // Canvas-geometry truth (plan 031, audit C-16): the cached rect the
+  // arrow layer builds its seam/clamps from must track the WIDENED canvas
+  // — the class flip fires no window resize event, so this pins the
+  // single-owner refresh in onWindowResize.
+  const rectLive = await page.evaluate(() => ({
+    cached: window.__game.state.gameCanvasRect.width,
+    real: document.getElementById('game-container').getBoundingClientRect().width,
+    viewW: window.__game.state.viewW, // Render-buffer cache (borderless)
+    clientW: document.getElementById('game-container').clientWidth,
+  }));
+  expect(rectLive.cached).toBe(rectLive.real); // Screen-math rect (border-inclusive)
+  expect(rectLive.viewW).toBe(rectLive.clientW); // Scissor/viewport sizes
+
+  // The EXIT path (audit T-16): restart returns to the solo-width title —
+  // the class clears and the cached rect narrows with it.
+  await page.locator('#restart-game-button').click();
+  await expect(page.locator('#start-overlay')).toBeVisible();
+  const back = await page.evaluate(() => ({
+    wide: document.getElementById('game-container').classList.contains('coop-wide'),
+    cached: window.__game.state.gameCanvasRect.width,
+    real: document.getElementById('game-container').getBoundingClientRect().width,
+    clientW: document.getElementById('game-container').clientWidth,
+  }));
+  expect(back.wide).toBe(false);
+  expect(back.clientW).toBeLessThanOrEqual(800);
+  expect(back.cached).toBe(back.real);
 });
 
 test('each seat has its own speed multiplier (pad Y/X and debug seat arg)', async ({ page }) => {
@@ -416,7 +468,7 @@ test('each seat has its own speed multiplier (pad Y/X and debug seat arg)', asyn
   });
   expect(stepped.ok).toBe(true);
   expect(stepped.i0).toBe(0);
-  expect(stepped.i1).toBeGreaterThan(0);
+  expect(stepped.i1).toBe(speedMultipliers.indexOf(1.5)); // speedUp from 1x lands EXACTLY on 1.5x (T-14: >0 accepted any index)
   expect(stepped.s1).toBeGreaterThan(stepped.s0);
   expect(stepped.legacyIndex).toBe(0);
   expect(stepped.label).toMatch(/1x\s*\/\s*1\.5x/);
@@ -434,26 +486,118 @@ test('each seat has its own speed multiplier (pad Y/X and debug seat arg)', asyn
   });
   expect(cycled.i0).toBe(1);
   expect(cycled.i1).toBe(stepped.i1);
-  expect(cycled.s0).toBeCloseTo(6 * 1.5, 5);
+  expect(cycled.s0).toBeCloseTo(BASE_PLAYER_SPEED * 1.5, 5);
   expect(cycled.s1).toBeCloseTo(stepped.s1, 5);
 
-  // Enemy mult uses max VALUE not max index ([1,1.5,2,3,5,0.5] — index 5 is 0.5x).
-  const enemyMult = await page.evaluate(() => {
+  // Enemy mult uses max VALUE not max index (index of 0.5x is not "max").
+  const slowIdx = speedMultipliers.indexOf(0.5);
+  const fastIdx = speedMultipliers.indexOf(5);
+  const enemyMult = await page.evaluate(([lo, hi]) => {
     const g = window.__game;
     const s = g.state;
-    s.players[0].speedMultiplierIndex = 5; // 0.5x
-    s.players[1].speedMultiplierIndex = 4; // 5.0x
+    s.players[0].speedMultiplierIndex = lo; // 0.5x
+    s.players[1].speedMultiplierIndex = hi; // 5.0x
     g.debug.applySpeedMultiplier();
-    // BASE_ENEMY_SPEED 1.5 × 5 at 1x ramp, endless may apply ramp factor ≥1
+    // Legacy world pace: max VALUE over living seats (× ramp factor ≥ 1)
     return {
       enemy: s.actualEnemySpeed,
       s0: s.players[0].actualSpeed,
       s1: s.players[1].actualSpeed,
+      pace0: s.enemyPaceForSeat[0],
+      pace1: s.enemyPaceForSeat[1],
     };
+  }, [slowIdx, fastIdx]);
+  expect(enemyMult.s0).toBeCloseTo(BASE_PLAYER_SPEED * 0.5, 5);
+  expect(enemyMult.s1).toBeCloseTo(BASE_PLAYER_SPEED * 5, 5);
+  expect(enemyMult.enemy).toBeGreaterThanOrEqual(BASE_ENEMY_SPEED * 5 - 1e-6); // 5x wins over 0.5x
+  // Per-TARGET pace (plan 031, audit C-15): each seat's hunters run at THAT
+  // seat's pace — P2's 5x must not doom P1 at 0.5x (ramp level 0 at start).
+  expect(enemyMult.pace0).toBeCloseTo(BASE_ENEMY_SPEED * 0.5, 5);
+  expect(enemyMult.pace1).toBeCloseTo(BASE_ENEMY_SPEED * 5, 5);
+});
+
+test('per-target pace: a hunter chasing the slow seat moves at THAT seat\'s pace', async ({ page }) => {
+  await startTwoPlayerGame(page);
+  await clearThreats(page);
+  // P1 fast (5x), P2 slow (1x); a pure hunter parked near P2 on the dry
+  // spawn mesa. Its target resolves to P2 (10u vs 40u), so its pace must be
+  // P2's 1x — under the old max rule it ran at P1's 5x (7.5 u/s) and P2
+  // could never escape.
+  const fastIdx = speedMultipliers.indexOf(5);
+  await page.evaluate((hi) => {
+    const g = window.__game;
+    const s = g.state;
+    s.players[0].speedMultiplierIndex = hi; // P1 5x — the toy under suspicion
+    s.players[1].speedMultiplierIndex = 0; // P2 1x
+    // Stay in the MESA CORE: the lift feathers out well inside its 48u
+    // radius (measured: z=0 is a LAKE from x≈30 on this seed — a hunter
+    // parked out there is honestly cornered by water and moves 0u). Near
+    // the origin the ground is guaranteed dry and rocks are cleared to 8u.
+    s.players[1].mesh.position.x = 12;
+    g.debug.applySpeedMultiplier();
+    // Pick a WALKABLE stand for a NORMAL-SIZED hunter near P2 (radius 0.9
+    // threads rocks like any ordinary grunt; height 1.8 hunts both heroes).
+    // Gap ≥6u: at the honest 1x pace (cap 1.875 u/s) ONE game-second of
+    // chase cannot reach contact (reach ~1.44u) — a caught P2 would die,
+    // retarget the hunter onto 5x P1, and fail this spec for a correct
+    // reason that isn't what it measures.
+    const spots = [[18, 0], [18, 3], [18, -3], [19, 4], [19, -4], [17, 5], [17, -5]];
+    const open = spots.find(([x, z]) => g.debug.isWalkable(x, z, 0.9)) ?? [18, 0];
+    g.debug.spawnSpecies('grunt', open[0], open[1], 1.5); // Targets P2 (~6u) over P1 (~18u)
+  }, fastIdx);
+  const start = await page.evaluate(() => {
+    const e = window.__game.state.enemies[0];
+    return { x: e.position.x, z: e.position.z };
   });
-  expect(enemyMult.s0).toBeCloseTo(6 * 0.5, 5);
-  expect(enemyMult.s1).toBeCloseTo(6 * 5, 5);
-  expect(enemyMult.enemy).toBeGreaterThanOrEqual(1.5 * 5 - 1e-6); // 5x wins over 0.5x
+  await page.evaluate(() => window.__game.debug.advance(1));
+  const moved = await page.evaluate(() => {
+    const e = window.__game.state.enemies[0];
+    return { x: e.position.x, z: e.position.z };
+  });
+  const dist = Math.hypot(moved.x - start.x, moved.z - start.z);
+  const diag = await page.evaluate(() => ({
+    pace: window.__game.state.enemyPaceForSeat,
+    world: window.__game.state.actualEnemySpeed,
+    runTime: window.__game.state.runTime,
+    enemies: window.__game.state.enemies.map((e) => ({
+      key: e.userData.speciesKey, y: e.scale.y, mat: e.userData.materializing,
+      x: Math.round(e.position.x * 10) / 10, z: Math.round(e.position.z * 10) / 10,
+      wedge: e.userData.wedgeTime
+    })),
+    p2x: window.__game.state.players[1].mesh.position.x
+  }));
+  // 1 game-second at P2's pace: ≤ BASE_ENEMY_SPEED × 1.25 headroom (+ slide
+  // slack). The OLD max rule moved it ~7.5u — P1's 5x pace.
+  expect(dist, JSON.stringify(diag)).toBeLessThanOrEqual(BASE_ENEMY_SPEED * 1.25 + 1);
+  expect(dist, JSON.stringify(diag)).toBeGreaterThan(0.4); // It IS chasing — just at the honest pace
+  // And P2 SURVIVED the honest chase (the old rule's 5x hunter caught them).
+  expect(await page.evaluate(() => window.__game.state.players[1].alive)).toBe(true);
+});
+
+test('pad Y/X route to the pressing pad\'s own seat only', async ({ page }) => {
+  await installMockPads(page, [{ id: 'Pad A' }, { id: 'Pad B' }]);
+  await startTwoPlayerGame(page);
+  // Claim seats by moving (battle-paddle rules): pad 0 → seat 0, pad 1 → seat 1.
+  await page.evaluate(() => {
+    window.__mockPads.setAxis(0, 1, 0);
+    window.__game.debug.pollGamepad();
+    window.__mockPads.setAxis(0, 0, 0);
+    window.__mockPads.setAxis(1, 1, 0);
+    window.__game.debug.pollGamepad();
+    window.__mockPads.setAxis(1, 0, 0);
+  });
+  await expect.poll(() => page.evaluate(() => window.__game.debug.seatInfo().claims))
+    .toEqual([0, 1]);
+  // Pad B's Y (button 3) speeds up SEAT 1 only.
+  await pressEdge(page, 3, 1);
+  let idx = await page.evaluate(() => window.__game.state.players.map((p) => p.speedMultiplierIndex));
+  expect(idx[1]).toBe(speedMultipliers.indexOf(1.5));
+  expect(idx[0]).toBe(0);
+  // Pad B's X (button 2) slows seat 1 back down; seat 0 still untouched.
+  await pressEdge(page, 2, 1);
+  idx = await page.evaluate(() => window.__game.state.players.map((p) => p.speedMultiplierIndex));
+  expect(idx[1]).toBe(0);
+  expect(idx[0]).toBe(0);
 });
 
 test('per-half danger vignette: a hunter stalking P2 reddens ONLY P2\'s half — and the CSS rule actually paints it', async ({ page }) => {

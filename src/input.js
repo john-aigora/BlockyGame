@@ -968,16 +968,11 @@ export function setupTouchControls() {
     const container = state.gameContainer;
 
     if (container) {
-        // Calculate game container center once, and on resize
-        const updateGameCanvasBounds = () => { // Renamed for clarity
-            const rect = container.getBoundingClientRect();
-            state.gameCanvasRect = rect; // Store the whole rect
-            state.gameCanvasCenterX = rect.left + rect.width / 2;
-            state.gameCanvasCenterY = rect.top + rect.height / 2;
-        };
-        updateGameCanvasBounds(); // Initial calculation
-        window.addEventListener('resize', updateGameCanvasBounds); // Update on window resize
-
+        // Canvas geometry (rect + centers) is owned by world.js
+        // onWindowResize since plan 031 (audit C-16): the coop-wide class
+        // flip resizes the container with NO window resize event, so the
+        // old listener here went stale on every 1P<->2P transition. Every
+        // layout change already routes through onWindowResize.
         container.addEventListener('touchstart', onTouchStart);
         container.addEventListener('touchmove', onTouchMove);
         container.addEventListener('touchend', onTouchEndOrCancel);
