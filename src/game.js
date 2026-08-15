@@ -14,6 +14,8 @@ import {
     DAILY_WORLD, ASCENSION_BONUS
 } from './constants.js';
 import { initAscensionFx, resetAscension, maybeForeshadow, maybeBeginAscension, updateAscension } from './ascension.js';
+import { resetGhostRecording, tickGhostRecording, finalizeGhostRecording, startGhostReplay, hideGhost, updateGhostReplay, ghostInfo } from './ghost.js';
+export { ghostInfo }; // Debug surface re-export (plan 034) — keeps ghost.js's importer count at exactly one
 import { initContinuousMovement, resetContinuousMovement, updateContinuousMovement } from './movement-continuous.js';
 import { wrapPosition, torusDeltaComponent } from './worldmath.js';
 import { state, makePlayerState } from './state.js';
@@ -305,6 +307,9 @@ function setupNewGame() {
     hideMessage();
     resetEffects(); // Park all particles; reset squash/walk transients (plan 015)
     resetAscension(); // Park halo/beam, re-arm the foreshadow (plan 029)
+    resetGhostRecording(); // Fresh path buffer (plan 034)
+    hideGhost(); // The race ends with the run
+    state.runEnded = false; // A restart must not carry a pending finalize signal
     if (CONTINUOUS_MOVEMENT) resetContinuousMovement(); // Full energy, default heading (plan 014 spike)
 
     // Every new session — fresh boot or post-death restart — returns to the
@@ -333,6 +338,7 @@ export function startRun() {
     music.setVolume(1); // The run gets full volume (title bed played at half — plan 023)
     music.start(); // No-op if the overlay bed is already looping — the ramp above carries it up
     hideStartOverlay();
+    startGhostReplay(); // Race the stored best on this seed, if one exists (plan 034)
     // The overlay is single-view; the run may be split (B8 review BLOCK-3):
     // onStartScreen just flipped, so re-derive every camera's aspect for the
     // layout the next renderFrame will actually draw (halves in 2P).
@@ -375,6 +381,10 @@ function update(dt) {
     // ascension.js never imports ui.js (no new import cycles).
     for (const player of updateAscension(dt)) finishAscension(player);
     if (!state.gameActive) return; // A solo ascension just crowned the run
+
+    // Ghost runs (plan 034): record this run's path; replay the stored best.
+    tickGhostRecording(dt);
+    updateGhostReplay(dt);
 
     // Update kill indicator and enemy colors (visuals first)
     updateKillIndicator(dt);
@@ -1024,6 +1034,14 @@ function animate(now) {
     // Gamepad runs every frame — start/death/pause need button edges even
     // when update() early-returns (paused or no active run).
     pollGamepad();
+    // Ghost finalize (plan 034): ui.js endGame raises the signal (it cannot
+    // import ghost.js — the D-15 cycle law); the next frame lands here,
+    // where the run's true stats are still intact. saveGhost keeps only a
+    // best; resetGhostRecording clears the latch on restart.
+    if (state.runEnded) {
+        state.runEnded = false;
+        finalizeGhostRecording();
+    }
     if (!state.isPaused) {
         update(dt);
         // Visual effects run on the same clock but OUTSIDE the gameActive

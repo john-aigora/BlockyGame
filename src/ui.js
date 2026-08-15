@@ -7,7 +7,7 @@ import {
 } from './constants.js';
 import { state } from './state.js';
 import { canKillSpecificEnemy } from './enemies.js';
-import { recordScore, recordCoopScore, loadHiscores } from './hiscores.js';
+import { recordScore, recordCoopScore, loadHiscores, loadGhost } from './hiscores.js';
 import { torusDistance } from './worldmath.js';
 import { unlockAudio, sfx, music, isMuted, setMuted, audioState } from './audio.js';
 import { onPlayerDeath, onNewBest, spawnTextPopup } from './effects.js';
@@ -48,6 +48,8 @@ export const el = {
     goFlourish: null,
     dailyToggle: null,
     seedValue: null,
+    ghostLine: null, // RACING THE GHOST overlay line (plan 034)
+    ghostDistance: null,
     // --- 2P dual-mode elements (plan 026) ---
     onePlayerButton: null, // Start-overlay roster picker
     twoPlayerButton: null,
@@ -107,6 +109,8 @@ export function initUI() {
     el.goFlourish = document.getElementById('go-flourish');
     el.dailyToggle = document.getElementById('daily-toggle');
     el.seedValue = document.getElementById('seed-value');
+    el.ghostLine = document.getElementById('ghost-line');
+    el.ghostDistance = document.getElementById('ghost-distance');
     el.onePlayerButton = document.getElementById('one-player-button');
     el.twoPlayerButton = document.getElementById('two-player-button');
     el.scoreDisplay = document.getElementById('score-display');
@@ -285,6 +289,20 @@ function updateFamilyBest() {
         el.familyBest.style.display = '';
     } else {
         el.familyBest.style.display = 'none';
+    }
+    // Ghost line (plan 034): announce the race when a stored ghost exists
+    // for THIS seed and replay is on. The tiny ?ghost=0 read is duplicated
+    // here on purpose — ui.js must not import ghost.js (importer-count
+    // law), and this runs only on overlay shows.
+    if (el.ghostLine) {
+        const ghostOff = new URLSearchParams(location.search).get('ghost') === '0';
+        const ghost = !ghostOff && !coopMode() ? loadGhost(WORLD_SEED) : null;
+        if (ghost) {
+            el.ghostDistance.textContent = ghost.distance;
+            el.ghostLine.style.display = '';
+        } else {
+            el.ghostLine.style.display = 'none';
+        }
     }
 }
 
@@ -608,6 +626,9 @@ export function endGame(reason, dyingPlayer = state.players[0], { ascended = fal
         if (state.gameActive || state.onStartScreen) return; // A restart beat us to it
         showDeathScreen(reason, list, rank, boardTitle, crowned);
     }, DEATH_SCREEN_DELAY * 1000);
+    // Ghost finalize signal (plan 034): consumed by game.js's frame loop —
+    // this module must not import ghost.js (the D-15 cycle law).
+    state.runEnded = true;
 }
 
 // Settles an ASCENDED hero while a partner still fights (plan 029): the

@@ -78,6 +78,14 @@ export const BOSS_BOUNTY_MULT = 3; // Titan kill payout multiplier — the late-
 export const BOSS_FOOD_DROP = 10; // Titan death feast: food pieces on the ring below (replaces the species drop)
 export const BOSS_FOOD_RING_RADIUS = 2.65; // Mean feast ring radius (~6u circle across, jittered) — a banquet, not a pile
 
+// --- Ghost runs (plan 034): race the stored best on the same seed ---
+// The world is deterministic per seed, so the best run's PATH is replayable:
+// a translucent spectral hero re-runs it against the live game clock. One
+// ghost per seed, best-distance wins; recording is solo-endless only.
+export const GHOST_SAMPLE_INTERVAL = 0.15; // Game-seconds between path samples (~7/s — smooth replay, ~26KB per 10 min after quantization)
+export const GHOST_MAX_SAMPLES = 4000; // Buffer cap: hitting it drops every 2nd sample and DOUBLES the live interval (long runs keep full shape at half resolution)
+export const GHOST_OPACITY = 0.38; // Spectral but unmistakable — never confusable with a live hero
+
 // Tension systems (awesome pass): make danger and urgency legible.
 export const DANGER_MUSIC_THRESHOLD = 0.12; // dangerOpacity above this (with NO prey alive) lifts the music to the danger layer (2) — just past the vignette's first visible breath, so the pad arrives with the dread, not before
 export const PANIC_TIME = 5; // Collect-countdown seconds at/below which panic engages (red pulse, tick sfx, food arrow)

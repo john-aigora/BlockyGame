@@ -1,4 +1,4 @@
-import { applySpeedMultiplier, speedUp, speedDown, cycleSpeed, forceWorldMode, perfInfo, setPlayerCount, advanceGameTime } from './game.js';
+import { applySpeedMultiplier, speedUp, speedDown, cycleSpeed, forceWorldMode, perfInfo, setPlayerCount, advanceGameTime, ghostInfo } from './game.js';
 import { state } from './state.js';
 import { spawnNearPlayer, spawnAtPosition, spawnChunkFood } from './collectibles.js';
 import { spawnNewEnemies, updateEnemyStreaming, resetEnemyStreaming, updateSpawnWarnings, debugSpawnSpecies, pendingSpawnInfo, clearPendingSpawns } from './enemies.js';
@@ -66,6 +66,7 @@ window.__game = {
         spawnScorePopup, // Score-popup pool-discipline checks (effects spec)
         effectsInfo, // { reducedMotion, activeParticles, poolSize }
         ascensionInfo, // Per-seat ceremony state (plan 029) — plain data for the ascension spec
+        ghostInfo, // Ghost record/replay state (plan 034) — re-exported through game.js
         perfInfo, // { calls, triangles, geometries, textures, frameMsAvg } — plan 020 measurement hook
         // The resolved world seed + whether the daily flag drove it (plan
         // 025) — the worldfun spec pins ?seed=/daily resolution through this.

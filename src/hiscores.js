@@ -131,6 +131,40 @@ export function recordScore(score, mode = 'endless', distance = 0, asc = false) 
     return { list: trimmed, rank };
 }
 
+// --- Ghost runs (plan 034) ---
+// One stored ghost per seed: { v: 1, seed, distance, score, date, interval,
+// asc, points: [x0,z0,s0, x1,z1,s1, ...] } (TRUE coordinates, quantized).
+// Best DISTANCE wins; ties keep the incumbent. This module owns the
+// localStorage I/O (the storage-owner law) — ghost.js owns the machinery.
+function ghostKey(seed) {
+    return `blocky.ghost.${seed}.v1`;
+}
+
+export function loadGhost(seed) {
+    try {
+        const raw = localStorage.getItem(ghostKey(seed));
+        if (!raw) return null;
+        const g = JSON.parse(raw);
+        if (!g || g.v !== 1 || !Number.isFinite(g.distance) ||
+            !Number.isFinite(g.interval) || g.interval <= 0 ||
+            !Array.isArray(g.points) || g.points.length % 3 !== 0 ||
+            g.points.length < 6 || !g.points.every(Number.isFinite)) {
+            return null; // Tampered/corrupt ghost: no replay, never a crash
+        }
+        return g;
+    } catch { return null; /* private mode / corrupt JSON / disabled storage */ }
+}
+
+// Persists only when strictly BETTER (distance); returns whether it saved.
+export function saveGhost(seed, ghost) {
+    const incumbent = loadGhost(seed);
+    if (incumbent && incumbent.distance >= ghost.distance) return false;
+    try {
+        localStorage.setItem(ghostKey(seed), JSON.stringify(ghost));
+        return true;
+    } catch { return false; /* storage unavailable — the run still counted */ }
+}
+
 // --- World-mode preference ---
 // Product is endless-only: load always returns endless. The old saveWorldMode
 // 'blocky.worldMode' write is deleted (audit D-5) — nothing ever read it back

@@ -21,7 +21,11 @@ The world itself is a **seed**: the start overlay shows the number
 (`SEED 20260726`), `?seed=<int>` in the URL summons any world on demand, and
 the **TODAY'S WORLD** toggle switches everyone onto the same date-seeded map —
 the family races one shared world all day, and those runs also rank on their
-own **TODAY'S BEST** board (stale days prune themselves). Out in the wild:
+own **TODAY'S BEST** board (stale days prune themselves). And the race is
+now visible: every solo run records its path, and the best run per seed
+comes back as a **ghost** — a translucent spectral hero re-running it live
+beside you (`RACING THE GHOST: 843u` on the title screen; a marker where it
+fell or ascended; `?ghost=0` hides it). Beat the ghost and YOU become it. Out in the wild:
 biome regions now have **names** — hold a new region for a moment and a
 `DISCOVERED: THE TEAL SHALLOWS` banner fires (the death screen counts your
 REGIONS) — rare glowing **gold blocks** pay 5 points (worth a detour, not a

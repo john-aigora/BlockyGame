@@ -111,3 +111,21 @@ promoted to `learnings.md`; stable truths to CLAUDE.md.
 - DX-8: eslint exemption comment names the two known unlinted inline
   scripts. T-17: bootEndless deduped into helpers (3 specs, 23/23 green).
 - Gates: lint 0; stale-docs greps clean; FULL SUITE 164/164 (7.8m).
+
+## 2026-08-15 — B6 [plan 034] Ghost runs — COMPLETE
+
+- src/ghost.js: recorder (TRUE-coordinate quantized flat samples on the game
+  clock; GHOST_MAX_SAMPLES decimation + cadence doubling), one-time spectral
+  mesh (hero rig re-skinned to ONE additive material, shadows off), replay
+  interpolated against state.runTime (rebase-proof: local = true − origin),
+  end-of-path GHOST FELL HERE / GHOST ASCENDED HERE marker + 1s fade.
+- Storage in hiscores.js (loadGhost/saveGhost, shape-validated, best-wins);
+  finalize rides a state.runEnded signal from endGame consumed in animate()
+  (ui.js cannot import ghost.js — cycle law); ghost.js imported ONLY by
+  game.js (ghostInfo re-exported for the debug handle).
+- Overlay RACING THE GHOST line (?ghost=0 read duplicated in ui.js by
+  design); readme seeded-world paragraph extended.
+- Spec: 8 cases, first-try green (record cadence, persist+never-worse-
+  overwrite, path tracking at runTime 2.5, ?ghost=0, foreign seed, 2P
+  exclusion, GPU plateau, cap/decimation via 48 chunked advances).
+- Gates: lint 0; ghost.spec 8/8; FULL SUITE 172/172 (8.4m).

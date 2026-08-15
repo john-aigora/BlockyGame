@@ -169,6 +169,10 @@ export const state = {
     // from game.js (that import closed a cycle through the entry module);
     // update() consumes it at the top of the next frame.
     enemyPaceDirty: false,
+    // Run-ended signal (plan 034): endGame (ui.js) raises it; game.js's
+    // frame loop consumes it to finalize the ghost recording — ui.js must
+    // not import ghost.js (cycle law), so the field IS the interface.
+    runEnded: false,
 
     // Camera zoom model: the LEVEL is shared (per-player zoom is out of v1);
     // the smoothed camY/camZ offsets live per player.
