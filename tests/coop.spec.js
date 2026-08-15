@@ -280,10 +280,12 @@ test('per-player death: spectator chip while the partner plays, then the team de
   // P2's collect clock expires — THEIR death only: the run continues.
   await page.evaluate(() => { window.__game.state.players[1].collectTimeLeft = 0.05; });
   await page.waitForFunction(() => window.__game.state.players[1].alive === false, null, { timeout: 60000 });
-  // killPlayer's recompute (58e3262): the dead seat's 5x no longer drives
-  // the pack — the survivor at 1x sets the world pace (ramp level 0 here).
-  expect(await page.evaluate(() => window.__game.state.actualEnemySpeed))
-    .toBeCloseTo(BASE_ENEMY_SPEED, 5);
+  // killPlayer's recompute (58e3262, dirty-flag deferred one frame since
+  // plan 033): the dead seat's 5x no longer drives the pack — the survivor
+  // at 1x sets the world pace (ramp level 0 here). Poll across the frame.
+  await page.waitForFunction(
+    (base) => Math.abs(window.__game.state.actualEnemySpeed - base) < 1e-5,
+    BASE_ENEMY_SPEED, { timeout: 10000 });
   const mid = await page.evaluate(() => ({
     gameActive: window.__game.state.gameActive,
     p1Alive: window.__game.state.players[0].alive,

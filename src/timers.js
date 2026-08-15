@@ -8,8 +8,8 @@ import { sfx } from './audio.js';
 // animation loop), so pausing inherently freezes it and resuming does NOT
 // reset it. PER PLAYER since plan 026: each hero races their own 15s clock;
 // expiry kills THAT hero (killPlayer — the last death is the solo endGame
-// path). The DOM readout/panic/tick stay bound to seat 0 until Stage E
-// splits the HUD per half.
+// path). The HUD is per-seat in 2P (the .hud-collect columns below) and the
+// classic seat-0 elements solo — Stage E landed; this file writes both.
 
 // No argument = every player (setupNewGame); a player = just their clock
 // (their collect resets only their own countdown).
@@ -80,7 +80,7 @@ export function tickCollectClock(dt) {
 // Runs on the game clock like the collect countdown, so pausing freezes a
 // live combo instead of silently eating it. killEnemy (enemies.js) starts /
 // refreshes each player's window; expiry here drops their multiplier back
-// to nothing. The chip element shows seat 0's chain until Stage E.
+// to nothing. The chip resolves per seat in 2P (ui.js hideComboChip).
 export function tickComboClock(dt) {
     for (const p of state.players) {
         if (p.comboTimeLeft <= 0) continue;
