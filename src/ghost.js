@@ -41,6 +41,8 @@ let replayDone = false;
 let fadeLeft = 0;
 const popupOrigin = { x: 0, y: 0, z: 0 }; // Scratch — never allocated per beat
 
+const GHOST_FADE_TIME = 1; // Seconds the spirit takes to dissolve at its path's end (a look, not balance)
+
 function q(v) {
     return Math.round(v * 100) / 100; // Centimeter grid — plenty for a replay
 }
@@ -156,17 +158,20 @@ export function updateGhostReplay(dt) {
     if (replayDone) {
         if (fadeLeft > 0) {
             fadeLeft -= dt;
-            ghostMaterial.opacity = Math.max(0, GHOST_OPACITY * (fadeLeft / 1));
+            ghostMaterial.opacity = Math.max(0, GHOST_OPACITY * (fadeLeft / GHOST_FADE_TIME));
             if (fadeLeft <= 0) ghostMesh.visible = false;
         }
         return;
     }
-    const t = state.runTime / replay.interval;
+    // Sample 0 was recorded at runTime ≈ interval (the recorder fires after
+    // its first full period), so replay shifts back one period — without it
+    // the spirit led the recorded path by a constant interval (ADV-2).
+    const t = Math.max(0, state.runTime / replay.interval - 1);
     const i = Math.floor(t);
     if (i >= replay.count - 1) {
         // The stored run ends HERE: mark the spot and fade the spirit out.
         replayDone = true;
-        fadeLeft = 1;
+        fadeLeft = GHOST_FADE_TIME;
         popupOrigin.x = ghostMesh.position.x;
         popupOrigin.y = ghostMesh.position.y + 1.6;
         popupOrigin.z = ghostMesh.position.z;

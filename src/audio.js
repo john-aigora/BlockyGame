@@ -265,10 +265,12 @@ function schedulerTick() {
 export const music = {
     start() {
         if (!ctx || muted || musicTimer) return;
-        // Suspended context (iOS/Safari — prior audit C-8): a scheduler on a
-        // dead clock burst-fires everything on resume. The caller's gesture
-        // path (unlockAudio) is responsible for resuming first.
-        if (ctx.state !== 'running') return;
+        // NO ctx.state gate here (terminal review ADV-1): unlockAudio's
+        // resume() is async, so a gesture path calling start() right after
+        // it still sees 'suspended' on iOS — an early return would leave
+        // the whole run silent with no retry. Starting on a suspended
+        // context is safe NOW because schedulerTick's backlog clamp drops
+        // (never replays) everything missed while the clock was frozen.
         musicGain = ctx.createGain();
         musicGain.gain.setValueAtTime(0.0001, ctx.currentTime);
         musicGain.gain.exponentialRampToValueAtTime(

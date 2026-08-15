@@ -40,7 +40,10 @@ let beamMaterial = null;
 const halos = [null, null];
 const beams = [null, null];
 const foreshadowShown = [false, false]; // One THE SKY AWAITS... per seat per run
-let reducedMotion = false;
+// (Reduced-motion handling for the ceremony lives where the motion lives:
+// the camera lift gates on world.js's shakeEnabled; the rise/particles are
+// object motion and stay — terminal review ADV-4 removed a do-nothing
+// matchMedia capture here.)
 let fxClock = 0; // Local pulse clock (game dt) — halo bob/spin phase
 
 const BEAM_HEIGHT = ASCENSION_RISE_HEIGHT + 4;
@@ -51,7 +54,6 @@ const fxOrigin = { x: 0, y: 0, z: 0 };
 const settledScratch = []; // updateAscension's per-frame result — reused
 
 export function initAscensionFx() {
-    reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (haloMaterial) return; // Idempotent — resources live for the app's lifetime
     haloMaterial = new THREE.MeshBasicMaterial({
         color: ASCEND_GOLD,
@@ -292,12 +294,6 @@ export function updateAscension(dt) {
     return settledScratch;
 }
 
-// True while this player's ceremony wants the camera lift (world.js reads
-// the FIELD player.ascension directly; this helper is for game.js/tests).
-export function isAscending(player) {
-    return player.ascension !== null && player.ascension !== undefined;
-}
-
 // Debug/test introspection (main.js) — plain data only, never THREE objects.
 export function ascensionInfo() {
     return {
@@ -308,8 +304,7 @@ export function ascensionInfo() {
             rise: p.ascension ? p.ascension.rise : 0,
             ascended: p.ascended,
             foreshadowShown: foreshadowShown[p.seat] === true,
-            haloVisible: !!(halos[p.seat] && halos[p.seat].visible),
-            reducedMotion
+            haloVisible: !!(halos[p.seat] && halos[p.seat].visible)
         }))
     };
 }

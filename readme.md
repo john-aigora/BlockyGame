@@ -167,6 +167,8 @@ src/
   rumble.js         gamepad vibration (isolated to avoid import cycles)
   hiscores.js       local top-5 storage (per-mode boards)
   input.js          keyboard + gamepad + multitouch-safe drag controls
+  ascension.js      the scale-10 crowning ceremony (halo, beam, rise, starburst)
+  ghost.js          ghost runs: per-seed path record + spectral replay
   movement-continuous.js  plan-014 design spike (LBS-style movement + boost),
                     active only behind ?move=continuous
   gate.js           in-app password gate (session-scoped unlock)
@@ -176,7 +178,7 @@ tests/              Playwright specs (smoke, timing, gameover, world, camera,
                     resources, hiscores, audio, balance, touch, effects,
                     endless + endless-stream + endless-polish, gate, gamepad,
                     fairness, hitbox, tension, toys, species, worldfun, coop,
-                    spawnwarn, ascension) + shared helpers
+                    spawnwarn, ascension, ghost, skins) + shared helpers
 public/
   favicon.svg       site icon
   original.html     wrapper page for the museum build (served OUTSIDE the gate)

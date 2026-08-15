@@ -31,9 +31,11 @@ change. Run-ephemeral lessons live in `docs/elves/learnings.md`.
 ## Invariants
 
 - The end-screen title (`#death-title`) is written per show (plan 029):
-  death shows ALWAYS restore exactly "GAME OVER" (smoke + gameover + coop +
-  hiscores specs assert the exact text); an ascension end shows "ASCENDED!"
-  (ascension spec pins both directions).
+  a run containing NO ascension always restores exactly "GAME OVER" (smoke +
+  gameover + coop + hiscores specs assert the exact text); an ascension end
+  shows "ASCENDED!" — and a 2P run where EITHER seat ascended is a crowned
+  team run and shows "ASCENDED!" even when the final end was the partner's
+  death (deliberate; ascension spec pins both directions).
 - Growth ends at `ASCENSION_SCALE` (10): the ascension ceremony is the run's
   win condition — new features must respect an ascending player's stand-down
   (untargetable, uncollidable, clock-frozen; grep `player.ascension` gates).
@@ -73,7 +75,7 @@ change. Run-ephemeral lessons live in `docs/elves/learnings.md`.
   condition-based polls.
 - Specs stay DOM-level or `window.__game`-level; don't couple to internals
   that refactors rename.
-- Suite is ~8 min on port 5173 (164 tests, 3 workers — THIS file owns the
+- Suite is ~8-9 min on port 5173 (180 tests, 3 workers — THIS file owns the
   exact count; other docs say "~150+"). `npm run test:one -- tests/<file>`
   runs one spec (same port — never alongside a full run). Never run two suites
   at once (port clash + load-induced flakes).
