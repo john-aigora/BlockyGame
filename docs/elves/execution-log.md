@@ -129,3 +129,21 @@ promoted to `learnings.md`; stable truths to CLAUDE.md.
   overwrite, path tracking at runTime 2.5, ?ghost=0, foreign seed, 2P
   exclusion, GPU plateau, cap/decimation via 48 chunked advances).
 - Gates: lint 0; ghost.spec 8/8; FULL SUITE 172/172 (8.4m).
+
+## 2026-08-15 — B7 [plan 035] Skins + milestone unlocks — COMPLETE
+
+- SKIN_PALETTES (characters.js look-table: ember/lime/midnight/gold/
+  celestial — teal reserved for P2) + GAME BALANCE thresholds; unlocks
+  DERIVED live from endless+daily rows (distance/score/asc) — no unlock
+  storage; selection under blocky.skin.v1 via hiscores.js (storage-owner
+  law); resolveSkinColor keeps seat-0 default byte-identical (locked/
+  missing/invalid all → ember).
+- SKIN button in #mode-picker (Speed-button cycle, overlay-only): rebuilds
+  the hero in place through the real createPlayer path; label refreshes on
+  every overlay show so fresh unlocks appear post-run.
+- Spec: 7 cases (byte-stable default, locked no-op cycle, live unlock+
+  reskin, reload persistence, locked-selection fallback, 2-lap leak check
+  with stream-settled sampling + established ±1 registration jitter,
+  P2-always-teal). Debugged: scene-children sampling had to wait out the
+  title-screen terrain/cloud stream (boot builds ~2 chunks/frame).
+- Gates: lint 0; skins x2 repeat green; FULL SUITE 179/179 (8.7m).

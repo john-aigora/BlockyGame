@@ -5,7 +5,10 @@
 // Keys are versioned: any future schema change (names, per-mode boards)
 // bumps to .v2 with a migration read of .v1.
 
-import { dailySeed, WORLD_SEED } from './constants.js';
+import {
+    dailySeed, WORLD_SEED,
+    SKIN_UNLOCK_DISTANCE_1, SKIN_UNLOCK_DISTANCE_2, SKIN_UNLOCK_SCORE
+} from './constants.js';
 
 const KEY = 'blocky.hiscores.v1'; // Classic board — untouched by endless runs
 const KEY_ENDLESS = 'blocky.hiscores.endless.v1'; // Endless board — its own ladder
@@ -129,6 +132,44 @@ export function recordScore(score, mode = 'endless', distance = 0, asc = false) 
     try { localStorage.setItem(keyForMode(mode), JSON.stringify(trimmed)); }
     catch { /* storage may be unavailable; still return the in-memory result */ }
     return { list: trimmed, rank };
+}
+
+// --- Hero skins (plan 035) ---
+// Selection persists under one key; UNLOCKS are DERIVED live from the solo
+// board rows (endless + daily — the boards this household actually plays),
+// so there is no unlock storage to corrupt or migrate.
+const KEY_SKIN = 'blocky.skin.v1';
+
+export function loadSelectedSkin() {
+    try {
+        const id = localStorage.getItem(KEY_SKIN);
+        return typeof id === 'string' && id.length > 0 && id.length < 32 ? id : null;
+    } catch { return null; /* private mode — default skin */ }
+}
+
+export function saveSelectedSkin(id) {
+    try { localStorage.setItem(KEY_SKIN, id); }
+    catch { /* storage unavailable — the pick still applies this session */ }
+}
+
+// Ordered unlocked skin ids (always starts with ember). Order matches
+// characters.js SKIN_PALETTES so the cycle button walks it stably.
+export function computeUnlockedSkins() {
+    const rows = [...loadHiscores('endless'), ...loadHiscores('daily')];
+    let bestDistance = 0;
+    let bestScore = 0;
+    let anyAscended = false;
+    for (const r of rows) {
+        if (Number.isFinite(r.distance) && r.distance > bestDistance) bestDistance = r.distance;
+        if (Number.isFinite(r.score) && r.score > bestScore) bestScore = r.score;
+        if (r.asc === true) anyAscended = true;
+    }
+    const unlocked = ['ember'];
+    if (bestDistance >= SKIN_UNLOCK_DISTANCE_1) unlocked.push('lime');
+    if (bestDistance >= SKIN_UNLOCK_DISTANCE_2) unlocked.push('midnight');
+    if (bestScore >= SKIN_UNLOCK_SCORE) unlocked.push('gold');
+    if (anyAscended) unlocked.push('celestial');
+    return unlocked;
 }
 
 // --- Ghost runs (plan 034) ---

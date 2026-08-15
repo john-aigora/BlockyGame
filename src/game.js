@@ -28,9 +28,9 @@ import { initClouds, setCloudMode, updateClouds, shiftClouds } from './clouds.js
 import { initEffects, updateEffects, resetEffects, onCollect, onGrowthMilestone, shiftActiveParticles, spawnTextPopup, onJumpTakeoff, onJumpLand } from './effects.js';
 import { keys, moveVector, clearTransientInput, resetSeatActivity, onKeyDown, onKeyUp, setupTouchControls, setupGamepad, pollGamepad } from './input.js';
 import { rumble } from './rumble.js';
-import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension, resetIndicators, showGoFlourish, updateModeHud, updateDistanceDisplay, resetDistanceDisplay, updateSeatDistanceDisplay, updateHudMode, updateTimeDisplay, resetTimeDisplay, endGame, settleAscendedPlayer } from './ui.js';
+import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension, resetIndicators, showGoFlourish, updateModeHud, updateDistanceDisplay, resetDistanceDisplay, updateSeatDistanceDisplay, updateHudMode, updateTimeDisplay, resetTimeDisplay, endGame, settleAscendedPlayer, refreshSkinButton } from './ui.js';
 import { resetCollectClock, tickCollectClock, tickComboClock } from './timers.js';
-import { loadWorldMode } from './hiscores.js';
+import { loadWorldMode, loadSelectedSkin, saveSelectedSkin, computeUnlockedSkins } from './hiscores.js';
 import { unlockAudio, sfx, music } from './audio.js';
 
 // --- Simulation Clock ---
@@ -163,6 +163,33 @@ function init() {
                 return;
             }
             setPlayerCount(count);
+        });
+    }
+
+    // Hero skin cycle (plan 035): overlay-only, the Speed-button pattern —
+    // stop the press (the overlay's own pointerdown starts runs), act on
+    // the click, rebuild the hero in place with the next EARNED palette.
+    const skinButton = document.getElementById('skin-button');
+    if (skinButton) {
+        skinButton.addEventListener('pointerdown', (e) => e.stopPropagation());
+        skinButton.addEventListener('click', () => {
+            if (!state.onStartScreen) return;
+            sfx.click();
+            const unlocked = computeUnlockedSkins();
+            const current = loadSelectedSkin();
+            const idx = Math.max(0, unlocked.indexOf(current));
+            saveSelectedSkin(unlocked[(idx + 1) % unlocked.length]);
+            const p = state.players[0];
+            if (p.mesh) {
+                state.scene.remove(p.mesh);
+                p.mesh = null;
+            }
+            createPlayer(p); // Resolves the newly selected skin (characters.js)
+            p.mesh.position.set(p.seat * 2.5, 0, 0);
+            if (state.worldMode === 'endless') {
+                p.mesh.position.y = groundHeightAt(p.mesh.position.x, p.mesh.position.z);
+            }
+            refreshSkinButton();
         });
     }
 

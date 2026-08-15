@@ -7,7 +7,8 @@ import {
 } from './constants.js';
 import { state } from './state.js';
 import { canKillSpecificEnemy } from './enemies.js';
-import { recordScore, recordCoopScore, loadHiscores, loadGhost } from './hiscores.js';
+import { recordScore, recordCoopScore, loadHiscores, loadGhost, loadSelectedSkin, computeUnlockedSkins } from './hiscores.js';
+import { SKIN_PALETTES } from './characters.js';
 import { torusDistance } from './worldmath.js';
 import { unlockAudio, sfx, music, isMuted, setMuted, audioState } from './audio.js';
 import { onPlayerDeath, onNewBest, spawnTextPopup } from './effects.js';
@@ -50,6 +51,7 @@ export const el = {
     seedValue: null,
     ghostLine: null, // RACING THE GHOST overlay line (plan 034)
     ghostDistance: null,
+    skinButton: null, // SKIN: <NAME> cycle button (plan 035)
     // --- 2P dual-mode elements (plan 026) ---
     onePlayerButton: null, // Start-overlay roster picker
     twoPlayerButton: null,
@@ -111,6 +113,7 @@ export function initUI() {
     el.seedValue = document.getElementById('seed-value');
     el.ghostLine = document.getElementById('ghost-line');
     el.ghostDistance = document.getElementById('ghost-distance');
+    el.skinButton = document.getElementById('skin-button');
     el.onePlayerButton = document.getElementById('one-player-button');
     el.twoPlayerButton = document.getElementById('two-player-button');
     el.scoreDisplay = document.getElementById('score-display');
@@ -216,6 +219,19 @@ export function showGoFlourish() {
     el.goFlourish.classList.add('go-play');
 }
 
+// --- Skin button label (plan 035) ---
+// "SKIN: <NAME>" — the selected palette when unlocked, ember otherwise
+// (matching resolveSkinColor's fallback in characters.js). Refreshed on
+// every overlay show so a run's fresh unlocks appear immediately.
+export function refreshSkinButton() {
+    if (!el.skinButton) return;
+    const unlocked = computeUnlockedSkins();
+    const selected = loadSelectedSkin();
+    const id = selected && unlocked.includes(selected) ? selected : 'ember';
+    const palette = SKIN_PALETTES.find((s) => s.id === id);
+    el.skinButton.textContent = `SKIN: ${palette ? palette.name : 'EMBER'}`;
+}
+
 // --- Per-mode HUD visibility (audit D-4) ---
 // The mode-picker UI is retired (classic is a test/debug path via
 // forceWorldMode only); what survives is the LIVE per-mode HUD state: the
@@ -314,6 +330,7 @@ export function showStartOverlay() {
     state.onStartScreen = true;
     updateJumpButton(); // The menu never shows the touch JUMP control
     updateFamilyBest();
+    refreshSkinButton(); // The label reflects skins the LAST run may have unlocked (plan 035)
     // Title warmth (plan 023): a QUIET music bed under the menu — but only
     // when a real gesture already unlocked the context (the gate submit
     // counts; index.html rides unlockAudio on it). A bypassed gate or a

@@ -71,6 +71,10 @@ outside it.
 - **Die**: get caught by a blue enemy or let the collect clock hit zero. Your
   run joins the local **BEST RUNS** top-5 (saved in your browser) — ranked by
   distance, score breaking ties.
+- **Skins**: the SKIN button on the title screen cycles your hero's EARNED
+  palettes — LIME at 500u, MIDNIGHT at 1000u, GOLD at 1,000 points, and the
+  CELESTIAL palette only an ascended run unlocks. Earned from your saved
+  boards (clearing browser data clears skins with them); P2 is always teal.
 - **Ascend**: keep growing and the sky notices. At size 9 a golden halo
   appears (`THE SKY AWAITS...`); at size 10 — the 90th block — the run
   crowns itself: a beam of light, a spinning rise into the clouds, a
