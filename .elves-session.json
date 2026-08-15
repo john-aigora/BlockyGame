@@ -420,7 +420,21 @@
     "push_allowed": true,
     "push_branch": "feat/audit-2026-08",
     "push_remote": "fork",
-    "reason": "origin (john-aigora/BlockyGame) read-only for this account; fork-PR flow is the precedent (PRs #4/#5/#19); terminal = landable PR, user merges"
+    "readiness": {
+      "acceptance_complete": true,
+      "attested_at": "2026-08-15",
+      "attested_by": "host driver (Claude Code, Fable 5)",
+      "basis": "plan Acceptance with proof: B1-B9 + M-A1..A4 evidence; suite 180/180 twice at this tip; lint 0; build 0; independent cumulative review 0 blockers; advisory revision delta-verified",
+      "blockers_resolved": true,
+      "exact_tip_review_clean": true,
+      "head": "e4b0ba34f88a75646dea9ebfbd15ae8226366ed6",
+      "inputs_digest": "1dc2a6e0f956adcf0397981484cc24096d2f810e4291c8926aa3c779ccea3fb7",
+      "ready": true,
+      "required_checks_green": true,
+      "worktree_clean": true
+    },
+    "reason": "origin (john-aigora/BlockyGame) read-only for this account; fork-PR flow is the precedent (PRs #4/#5/#19); terminal = landable PR, user merges",
+    "worker_merge_authority": false
   },
   "master_acceptance": [
     {
