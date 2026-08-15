@@ -287,40 +287,40 @@
       "acceptance": [
         {
           "criterion": "[035-1] npm test exits 0 (baseline plus at least 7 skin tests)",
-          "evidence": "",
+          "evidence": "npm test EXIT:0 \u2014 179 passed (8.7m) = 172 + 7 skins.spec cases (/tmp/b7-suite.log)",
           "id": "B7-A1",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[035-2] a fresh profile's hero color is byte-identical to today's",
-          "evidence": "",
+          "evidence": "skins.spec case 1: fresh profile bodyMesh color === 0xFF4500 exactly; SKIN: EMBER label",
           "id": "B7-A2",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[035-3] grep localStorage in src/characters.js and src/game.js returns no matches",
-          "evidence": "",
+          "evidence": "grep -c localStorage src/characters.js src/game.js -> 0 each (selection/unlocks via hiscores.js)",
           "id": "B7-A3",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[035-4] material/geometry plateaus hold across skin cycling",
-          "evidence": "",
+          "evidence": "skins.spec leak case: scene children EXACT across 2 full cycle laps; geometries within the established +1 registration jitter",
           "id": "B7-A4",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[035-5] plans/README.md row 035 updated",
-          "evidence": "",
+          "evidence": "plans/README.md row 035 -> DONE with summary",
           "id": "B7-A5",
-          "met": false
+          "met": true
         }
       ],
       "id": "B7",
       "plans": [
         "035"
       ],
-      "status": "pending",
+      "status": "complete",
       "title": "Skins + milestone unlocks"
     },
     {
