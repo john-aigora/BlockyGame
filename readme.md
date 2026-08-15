@@ -64,6 +64,12 @@ outside it.
 - **Die**: get caught by a blue enemy or let the collect clock hit zero. Your
   run joins the local **BEST RUNS** top-5 (saved in your browser) — ranked by
   distance, score breaking ties.
+- **Ascend**: keep growing and the sky notices. At size 9 a golden halo
+  appears (`THE SKY AWAITS...`); at size 10 — the 90th block — the run
+  crowns itself: a beam of light, a spinning rise into the clouds, a
+  starburst, **+500 points**, and an **ASCENDED!** screen instead of GAME
+  OVER. Ascended runs wear a permanent ✦ on the board. In 2 PLAYERS one hero
+  can ascend while the partner plays on.
 - **Pause**: **P** or **Enter** (or pad Start, or the on-screen button). Space
   is jump, not pause.
 - **Extras**: game-speed cycle, two-way zoom, mute (sound effects and the

@@ -504,7 +504,9 @@ function update(dt) {
         // minus decoration margins), un-flattened so a jump still sails
         // over ground food; the food box from its own cube size.
         for (const player of state.players) {
-            if (!player.alive || !player.mesh) continue;
+            // An ascending hero (plan 029) is done eating — the ceremony owns
+            // their score from here (the crowning bonus lands at settle).
+            if (!player.alive || !player.mesh || player.ascension) continue;
             setPlayerCollisionBox(playerBox, player, player.mesh.scale.y, false);
             for (let i = state.collectibles.length - 1; i >= 0; i--) {
                 const collectible = state.collectibles[i];

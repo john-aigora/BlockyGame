@@ -30,8 +30,13 @@ change. Run-ephemeral lessons live in `docs/elves/learnings.md`.
 
 ## Invariants
 
-- Game-over message text always contains "GAME OVER" (smoke + gameover specs
-  assert on it).
+- The end-screen title (`#death-title`) is written per show (plan 029):
+  death shows ALWAYS restore exactly "GAME OVER" (smoke + gameover + coop +
+  hiscores specs assert the exact text); an ascension end shows "ASCENDED!"
+  (ascension spec pins both directions).
+- Growth ends at `ASCENSION_SCALE` (10): the ascension ceremony is the run's
+  win condition — new features must respect an ascending player's stand-down
+  (untargetable, uncollidable, clock-frozen; grep `player.ascension` gates).
 - ALL entity-to-entity direction/distance math routes through
   `src/worldmath.js` (mode dispatch). Raw `subVectors`/`distanceTo` on world
   positions is the recurring bug class.
