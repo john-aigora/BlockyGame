@@ -19,3 +19,24 @@ promoted to `learnings.md`; stable truths to CLAUDE.md.
 - Push policy for this run: fork branch only; the previous run's LOCAL-ONLY
   rule is dead (PRs #4/#5/#19 precedent). Merge stays user-owned.
 - Staged, NOT launched — awaiting kickoff.
+
+## 2026-08-15 — B1 [plan 029] Ascension — COMPLETE
+
+- Implemented per plan: constants (7 knobs), per-player ascension/ascended
+  state, src/ascension.js (halo/beam pooled meshes, lift/rise/burst phases,
+  settled-players return), game.js wiring (trigger in collect path, tick in
+  update(), finishAscension settle owns endGame/settleAscendedPlayer routing
+  — ascension.js stays ui-free), threat-surface stand-down (targeting,
+  collision, collect clock, danger, indicators, pickup loop, jump, enemy
+  mult), endGame ascended path (+recorder asc/ascCount marks, ✦ rows,
+  ASCENDED!/GAME OVER per-show title), camera lift (reduced-motion gated),
+  sfx.ascend/ascendBurst, debug ascensionInfo.
+- Spec: tests/ascension.spec.js — 8 cases green (incl. exact-title restore
+  invariant, 2P settle, pause freeze, GPU plateau ±1 chunk-pool jitter).
+- DISCOVERY mid-batch: the food-pickup loop needed the same ascension
+  stand-down (mid-ceremony sweeps drifted score) — added with comment.
+- Behavior-driven spec update: balance.spec giant-scale probes (scale 20/35)
+  now mark ascension spent — any collect at ≥10 legitimately crowns the run
+  now; those specs test bounty/combo/display, not the ceremony. Full-suite
+  failures before fix: balance kill trio; after: none.
+- Gates: lint 0, build 0, FULL SUITE 162/162 (8.4m) at close.

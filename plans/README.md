@@ -122,7 +122,7 @@ sections and the 2026-08-14 chat report.
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 029 | Ascension — "going to heaven" ceremony ends runaway growth as a win (owner headline; DT-7/DT-8) | P1 | L | — | TODO |
+| 029 | Ascension — "going to heaven" ceremony ends runaway growth as a win (owner headline; DT-7/DT-8) | P1 | L | — | DONE — src/ascension.js ceremony (foreshadow halo at 9, beam/rise/starburst at 10, +500, ASCENDED! screen, ✦ rows, 2P settle chip); 8-case ascension.spec; suite 154→162; balance.spec giant-scale probes mark ascension spent (behavior-driven update, intent preserved) |
 | 030 | Security hardening: per-page CSP scoping, npm audit fix (2 dev-tree highs), .env safety net | P2 | S | — | TODO |
 | 031 | 2P fairness: per-target enemy pace (C-15), canvas-rect truth (C-16/D-14/P-13), 58e3262 + pad Y/X coverage (T-12/T-13) | P1 | M | — | TODO |
 | 032 | CI completes verification (build step, browser cache, single PR run) + docs truth (DOC-9..13, DX-7/8, T-17) | P2 | S-M | — | TODO |

@@ -19,6 +19,10 @@ async function killOneEnemy(page) {
     const s = window.__game.state;
     s.playerScale = 20;
     s.player.scale.set(20, 20, 20);
+    // Giant-scale probe: mark the ascension as already spent (plan 029) so
+    // a swept food drop cannot start the ceremony mid-kill — the ceremony
+    // has its own spec (ascension.spec.js); THIS spec is about the bounty.
+    s.players[0].ascended = true;
   });
   await startGame(page);
   await page.evaluate(() => {
@@ -53,6 +57,10 @@ test('two rapid kills pay more than 2x the single-kill bounty (combo)', async ({
     s.player.scale.set(20, 20, 20);
     s.collectibles.forEach((c) => s.scene.remove(c));
     s.collectibles = [];
+    // Ascension already spent (plan 029): the kills below DROP food the
+    // giant sweeps, and a scale-20 collect would otherwise start the
+    // ceremony and void the combo. Ceremony coverage: ascension.spec.js.
+    s.players[0].ascended = true;
   });
   await startGame(page);
   // The wave read rides INSIDE the first poll that observes the kill (B3

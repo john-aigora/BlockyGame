@@ -5,52 +5,52 @@
       "acceptance": [
         {
           "criterion": "[029-1] npm run lint exits 0 and npm run build exits 0",
-          "evidence": "",
+          "evidence": "npm run lint exit 0; npm run build \"built in ~160ms\" exit 0 (post-implement chunk + close)",
           "id": "B1-A1",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[029-2] npm test exits 0 \u2014 154 baseline tests plus at least 7 new ascension tests",
-          "evidence": "",
+          "evidence": "npm test EXIT:0 \u2014 162 passed (8.4m) = 154 baseline + 8 ascension.spec cases (/tmp/b1-suite2.log)",
           "id": "B1-A2",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[029-3] Node-import check on constants prints 10 for ASCENSION_SCALE",
-          "evidence": "",
+          "evidence": "node --input-type=module import printed \"10 9 500\" (SCALE, FORESHADOW, BONUS)",
           "id": "B1-A3",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[029-4] grep shows all 7 ASCENSION knobs in the GAME BALANCE block",
-          "evidence": "",
+          "evidence": "grep -c \"^export const ASCENSION\" src/constants.js -> 7 (all in GAME BALANCE with rationale)",
           "id": "B1-A4",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[029-5] grep waitForTimeout in tests/ascension.spec.js returns nothing",
-          "evidence": "",
+          "evidence": "grep -c waitForTimeout tests/ascension.spec.js -> 0",
           "id": "B1-A5",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[029-6] git status shows only in-scope files modified",
-          "evidence": "",
+          "evidence": "git status at close: only in-scope files (src/, tests/ascension+balance, readme, CLAUDE.md, plans/README, run docs)",
           "id": "B1-A6",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[029-7] plans/README.md row 029 updated",
-          "evidence": "",
+          "evidence": "plans/README.md row 029 -> DONE with summary",
           "id": "B1-A7",
-          "met": false
+          "met": true
         }
       ],
       "id": "B1",
       "plans": [
         "029"
       ],
-      "status": "pending",
+      "status": "complete",
       "title": "Ascension ceremony (owner headline)"
     },
     {
