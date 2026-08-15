@@ -158,3 +158,21 @@ promoted to `learnings.md`; stable truths to CLAUDE.md.
 - Spec learning: the seat's speed index persists across restarts BY DESIGN —
   the "clean 1x second run" case must drop the toy before restarting.
 - Gates: lint 0; hiscores 5/5 + coop mult assert; FULL SUITE 180/180 (8.7m).
+
+## 2026-08-15 — B9 Terminal — readiness
+
+- Final docs re-touch: CLAUDE.md 180 tests / ~8-9 min (both terminal runs
+  matched exactly); readme maps gain ascension.js/ghost.js + ghost/skins
+  specs; all plans/README rows 029-036 DONE.
+- Independent cumulative review (fresh subagent, Confidence-triage over all
+  8 Close trailers, deeper passes on flagged surfaces): ZERO blockers, 8
+  advisories. Revision landed: ADV-1 suspended-ctx music.start gate REMOVED
+  (the same-batch scheduler backlog clamp is the real burst fix; the gate
+  silenced iOS runs — headless could never see it), ADV-2 ghost replay
+  one-interval phase shift, ADV-3/4 ascension dead helper + inert
+  reducedMotion capture removed, ADV-5 CLAUDE.md crowned-team carve-out,
+  ADV-8 named ghost fade constant. DECLINED with reason: ADV-6 (SKIN_PALETTES
+  stays in characters.js — plan 035's recorded look-not-balance decision).
+  Delta re-review: targeted ghost/ascension/audio specs 24/24 + full suite.
+- Terminal proof at final tip: suite 180/180 TWICE (8.6m each), lint 0,
+  build 0. Deferred hygiene: none banked; nothing to drain.

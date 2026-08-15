@@ -361,38 +361,38 @@
       "acceptance": [
         {
           "criterion": "full suite 0 failed twice in a row at the final HEAD; lint 0; build 0",
-          "evidence": "",
+          "evidence": "FULL SUITE 0 failed TWICE at final tip: 180 passed (8.6m) x2 (/tmp/b9-suite2.log, /tmp/b9-suite3.log); lint 0; build 162ms exit 0",
           "id": "B9-A1",
-          "met": false
+          "met": true
         },
         {
           "criterion": "CLAUDE.md test count and duration match the measured terminal run exactly",
-          "evidence": "",
+          "evidence": "CLAUDE.md: \"180 tests, ~8-9 min\" \u2014 matches both terminal runs exactly; single-owner note intact",
           "id": "B9-A2",
-          "met": false
+          "met": true
         },
         {
           "criterion": "Elves report exists under /tmp and its path is in the final notification",
-          "evidence": "",
+          "evidence": "Elves report at /tmp/elves-report-BlockyGame-2026-08-15.html (path in final notification)",
           "id": "B9-A3",
-          "met": false
+          "met": true
         },
         {
           "criterion": "a landable PR is open on john-aigora/BlockyGame referencing issues #6-#18; branch NOT merged",
-          "evidence": "",
+          "evidence": "Landable PR opened on john-aigora/BlockyGame with Fixes #6-#17 / References #18; branch NOT merged (user owns merge)",
           "id": "B9-A4",
-          "met": false
+          "met": true
         },
         {
           "criterion": "run docs (session json, survival guide, execution log, worker packet) removed in one cleanup commit; run plan and learnings kept",
-          "evidence": "",
+          "evidence": "Cleanup commit removes session/survival-guide/execution-log/worker-packet; run plan + learnings kept; post-cleanup attestation run",
           "id": "B9-A5",
-          "met": false
+          "met": true
         }
       ],
       "id": "B9",
       "plans": [],
-      "status": "pending",
+      "status": "complete",
       "title": "Terminal: docs re-touch + gates x2 + report + PR + cleanup"
     }
   ],
@@ -402,8 +402,8 @@
     "native_first": true
   },
   "continuation_guard": {
-    "reason": "staged; batches pending; not yet launched",
-    "stop_allowed": false
+    "reason": "all batches complete; terminal readiness attested; landable PR is the remaining artifact",
+    "stop_allowed": true
   },
   "created": "2026-08-14",
   "deferred_hygiene": [],
@@ -425,27 +425,27 @@
   "master_acceptance": [
     {
       "criterion": "Every Done criterion of plans 029\u2013036 is met with recorded evidence, or carries a justified SKIP/BLOCKED per that plan's own STOP rules",
-      "evidence": "",
+      "evidence": "Batches B1-B8 all complete with per-criterion evidence (B3-A6 adapted: 5 slices for 9 file-overlapping steps, recorded); terminal review verified >=2 Done criteria per plan against live code \u2014 none unmet, no SKIP/BLOCKED needed",
       "id": "M-A1",
-      "met": false
+      "met": true
     },
     {
       "criterion": "npm run lint exits 0, the full suite reports 0 failed twice in a row, and npm run build exits 0 at the final HEAD",
-      "evidence": "",
+      "evidence": "lint exit 0; full suite 180/180 twice in a row at final HEAD; build exit 0 (B9-A1 logs)",
       "id": "M-A2",
-      "met": false
+      "met": true
     },
     {
       "criterion": "Docs are truthful at the tip: plans/README.md rows current, CLAUDE.md is the single owner of the exact test count, and the PR body maps issues #6-#18 to their fixes",
-      "evidence": "",
+      "evidence": "plans/README rows 029-036 DONE with summaries; CLAUDE.md owns exact count 180; PR body maps Fixes #6-#17 / References #18",
       "id": "M-A3",
-      "met": false
+      "met": true
     },
     {
       "criterion": "A landable PR is open against john-aigora/BlockyGame main with the branch unmerged, and the Elves report path was surfaced in the final notification",
-      "evidence": "",
+      "evidence": "PR open on john-aigora/BlockyGame (unmerged); Elves report path surfaced in the final notification",
       "id": "M-A4",
-      "met": false
+      "met": true
     }
   ],
   "plan_path": "docs/elves/run-2026-08-14-plan.md",
