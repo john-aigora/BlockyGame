@@ -1,10 +1,14 @@
-# CI gate (plan 017): lint + full Playwright suite on every push and PR.
-# The suite went red on main because feature merges ran only their own
-# specs — this workflow makes the full run unskippable.
+# CI gate (plan 017; hardened in plan 032): lint + build + full Playwright
+# suite. The suite once went red on main because feature merges ran only
+# their own specs — this workflow makes the full run unskippable. The build
+# step exists because Vercel auto-deploys main via `vite build` with a
+# downlevel es2019 target only the production build exercises — a bundle-only
+# break must fail here, in seconds, not at the deploy.
 name: CI
 
 on:
   push:
+    branches: [main] # PRs already run below — unscoped push double-ran every PR branch
   pull_request:
 
 permissions:
@@ -17,7 +21,9 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The suite is ~8 min at 3 local workers; CI serializes (workers: 1) with
+    # one retry, so give real headroom before the kill (plan 032, DX-6).
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,6 +32,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
+      - run: npm run build
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
       - run: npx playwright install --with-deps chromium
       - run: npm test
       - name: Upload failure report

@@ -92,3 +92,22 @@ promoted to `learnings.md`; stable truths to CLAUDE.md.
   video/.env.example created (name only). readme deploy note rewritten,
   incl. the mandatory post-deploy console check (headers production-only).
 - Gates: lint 0, build 0, FULL SUITE 164/164 (8.2m).
+
+## 2026-08-15 — B5 [plan 032] CI + docs truth — COMPLETE
+
+- ci.yml: build step (fails in seconds, before the 8-min suite), Playwright
+  browser cache keyed by lockfile, push trigger scoped to main (PR double-run
+  gone), timeout 30→45 with rationale. YAML parse-checked (ruby).
+- test:one script + docs (readme commands, CLAUDE.md). CLAUDE.md now owns
+  the exact test count (164 at this batch; B9 re-touches after the fun wave).
+- Docs truth: learnings.md restructured (five live lessons rehomed from
+  "Retired", never-push rule superseded with the fork-PR workflow, GAME OVER
+  invariant amended for ascension); todo.md species/juja/titan/daily checked
+  with shipped annotations, Roblox section banner REJECTED per CLAUDE.md,
+  override header added; readme structure map gains public/ (incl.
+  pad-test.html), vercel.json, CI, docs/elves; pad-test surfaced in How to
+  play + the plan-018 hardware-check row; plans/README historical never-push
+  note struck through with supersession.
+- DX-8: eslint exemption comment names the two known unlinted inline
+  scripts. T-17: bootEndless deduped into helpers (3 specs, 23/23 green).
+- Gates: lint 0; stale-docs greps clean; FULL SUITE 164/164 (7.8m).

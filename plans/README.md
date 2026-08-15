@@ -57,7 +57,7 @@ which hardened BlockyGame's own pad code for dual-port DB9 adapters).
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
 | 017 | Baseline repair: green lint+tests, failure artifacts, CI | P1 | M | — (GATES ALL) | DONE |
-| 018 | Gamepad reliability: rescan-first selection, honest scoring, per-pad edges | P1 | M | 017 | DONE — code+tests landed, gamepad spec 10/10, hardware check pending family; full-suite criterion BLOCKED by pre-existing balance.spec.js:42 combo race (exposed by schedule shift; see execution log 2026-08-08 B2) |
+| 018 | Gamepad reliability: rescan-first selection, honest scoring, per-pad edges | P1 | M | 017 | DONE — code+tests landed, gamepad spec 10/10, hardware check pending family (**the tool for it is `/pad-test.html`** — live pad/axis/button readout; in-game `?paddebug=1`); the balance.spec combo race was fixed in the 017-028 run |
 | 019 | Fairness pass: honest hitboxes, truthful arrows, input integrity | P1 | M | 017 | DONE |
 | 020 | Perf pass 1: perfInfo hook, shadow diet, culling, hot-loop hygiene, mobile tier | P1 | M | 017 | DONE |
 | 021 | Docs truth + root CLAUDE.md + Node pinning | P2 | S | 017 | DONE |
@@ -95,8 +95,11 @@ which hardened BlockyGame's own pad code for dual-port DB9 adapters).
 [017] → [018, 021] → [019, 020] → [022, 023] → [024, 027-step-1-only?] → no —
 keep it simple: [017] → [018, 021] → [019, 020] → [022] → [023] → [024] →
 [025] → [026] → [027] → [028 + final docs re-touch]. 022 lands before 023
-because item 12 moves the HUD nodes 023 writes beside. Never push to origin
-(read-only remote + owner rule); LOCAL-ONLY run on one feature branch.
+because item 12 moves the HUD nodes 023 writes beside. *(Historical note —
+the "never push / LOCAL-ONLY" rule below described THAT run and is dead:
+the live workflow since PR #4 is push to the fork + land via PR.)* ~~Never
+push to origin (read-only remote + owner rule); LOCAL-ONLY run on one
+feature branch.~~
 
 ### Deliberately deferred (recorded so the run doesn't improvise them)
 
@@ -125,7 +128,7 @@ sections and the 2026-08-14 chat report.
 | 029 | Ascension — "going to heaven" ceremony ends runaway growth as a win (owner headline; DT-7/DT-8) | P1 | L | — | DONE — src/ascension.js ceremony (foreshadow halo at 9, beam/rise/starburst at 10, +500, ASCENDED! screen, ✦ rows, 2P settle chip); 8-case ascension.spec; suite 154→162; balance.spec giant-scale probes mark ascension spent (behavior-driven update, intent preserved) |
 | 030 | Security hardening: per-page CSP scoping, npm audit fix (2 dev-tree highs), .env safety net | P2 | S | — | DONE — 4-block CSP (game page script-src 'self' only; museum gets the exact pinned cdnjs path; form-action everywhere); root audit 0 vulns (lockfile-only fix); video/ tree audit RECORDED (3 high, local-only); .env net + video/.env.example; POST-DEPLOY manual console check required (headers are production-only) |
 | 031 | 2P fairness: per-target enemy pace (C-15), canvas-rect truth (C-16/D-14/P-13), 58e3262 + pad Y/X coverage (T-12/T-13) | P1 | M | — | DONE — enemyPaceForSeat per-target rule (kinematic + arithmetic specs; P2 survives what the max rule killed); onWindowResize owns rect + viewW/H (renderFrame layout read gone); death/roster recompute + pad Y/X routing + coop-wide exit covered; suite 162→164 |
-| 032 | CI completes verification (build step, browser cache, single PR run) + docs truth (DOC-9..13, DX-7/8, T-17) | P2 | S-M | — | TODO |
+| 032 | CI completes verification (build step, browser cache, single PR run) + docs truth (DOC-9..13, DX-7/8, T-17) | P2 | S-M | — | DONE — ci.yml build+cache+scoped-push+45m; test:one script documented; learnings/todo/readme/CLAUDE.md truth pass (CLAUDE.md owns exact count: 164 at this batch; B9 re-touches); eslint exemption recorded; bootEndless -> helpers |
 | 033 | Small-fix bundle: 2P input allocations (P-14), cloud closure (P-15), reflow guard (P-16), audio clamp (C-20/C-8), camera anchor (C-21), warn-ring clamp (C-22), knob extraction (C-23), ui→game cycle break (D-15), comment truth (D-17) | P3 | M | 031 | DONE — all nine landed (5 slices: disjoint steps own commits, file-overlapping steps thematic); knob values byte-identical; suite 164/164 |
 | 034 | Ghost runs — race the stored best on the same seeded world (catalog #9) | P2 | M | — (soft: after 029/031/033 merge-adjacency) | TODO |
 | 035 | Hero skins + milestone unlocks (CAP-3; Celestial skin reads 029's asc field) | P3 | S-M | — (soft: 029 for Celestial) | TODO |

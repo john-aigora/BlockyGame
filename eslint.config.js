@@ -3,6 +3,12 @@ import globals from 'globals';
 
 export default [
   js.configs.recommended,
+  // KNOWN UNLINTED FIRST-PARTY CODE (plan 032, DX-8 — deliberate, recorded):
+  // the two inline scripts in `index.html` (gate bootstrap) and
+  // `public/pad-test.html` (standalone controller diagnostic) sit outside
+  // this scope and no HTML processor is configured. Extracting pad-test's
+  // script to a linted .js file is a possible future step (it would also
+  // let the CSP drop that page's 'unsafe-inline').
   {
     files: ['src/**/*.js', 'tests/**/*.js', '*.config.js'],
     languageOptions: { globals: { ...globals.browser, ...globals.node } },

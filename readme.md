@@ -49,6 +49,9 @@ outside it.
   separate pad; wiggle the stick once to claim. The FIRST button press (or
   stick wiggle) on a not-yet-active pad only claims that pad and is
   deliberately not acted on — press or wiggle once, then play.
+  **Controllers acting up?** Open `/pad-test.html` — a standalone live
+  readout of every pad, axis, and button the browser sees (in-game,
+  `?paddebug=1` overlays the same data).
 - **Grow**: grab a LIME block at least every 15 seconds — food is worth 1 point
   and makes you taller.
 - **Hunt**: when you're taller than an enemy it turns YELLOW and runs. Touch it
@@ -123,7 +126,8 @@ export PATH="$HOME/.local/elves-tools/node/bin:$PATH"
 ```bash
 npm install
 npm run dev        # dev server at http://localhost:5173
-npm test           # Playwright test suite (see `npx playwright test --list`)
+npm test           # FULL Playwright suite (~8 min; runs alone on port 5173)
+npm run test:one -- tests/coop.spec.js   # one spec (same port — never alongside a full run)
 npm run lint       # ESLint
 npm run build      # production build into dist/
 npm run preview    # serve the production build locally
@@ -163,8 +167,17 @@ tests/              Playwright specs (smoke, timing, gameover, world, camera,
                     resources, hiscores, audio, balance, touch, effects,
                     endless + endless-stream + endless-polish, gate, gamepad,
                     fairness, hitbox, tension, toys, species, worldfun, coop,
-                    spawnwarn) + shared helpers
-plans/              the audit + implementation plans this overhaul followed
+                    spawnwarn, ascension) + shared helpers
+public/
+  favicon.svg       site icon
+  original.html     wrapper page for the museum build (served OUTSIDE the gate)
+  original/         byte-for-byte May 2025 original — never edit, never lint
+  pad-test.html     standalone controller diagnostic (live pad/axis/button readout)
+plans/              the audits + implementation plans + ROADMAP this overhaul follows
+vercel.json         per-page security headers (CSP — see Deploying below)
+.github/workflows/  CI: lint + build + full suite on PRs and main pushes
+docs/elves/         autonomous-run docs (learnings + run plans)
+CLAUDE.md           durable repo truth for agents (owns the exact test count)
 ```
 
 Key technical facts:

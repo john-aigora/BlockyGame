@@ -73,7 +73,9 @@ change. Run-ephemeral lessons live in `docs/elves/learnings.md`.
   condition-based polls.
 - Specs stay DOM-level or `window.__game`-level; don't couple to internals
   that refactors rename.
-- Suite is ~7 min on port 5173 (150 tests, 3 workers). Never run two suites
+- Suite is ~8 min on port 5173 (164 tests, 3 workers — THIS file owns the
+  exact count; other docs say "~150+"). `npm run test:one -- tests/<file>`
+  runs one spec (same port — never alongside a full run). Never run two suites
   at once (port clash + load-induced flakes).
 
 ## Commands

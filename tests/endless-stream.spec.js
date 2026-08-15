@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openGame, startGame, waitForGameOver, waitGameSeconds } from './helpers.js';
+import { openGame, startGame, waitForGameOver, waitGameSeconds, bootEndless } from './helpers.js';
 
 // Endless world, stage 2 (gameplay streaming): water/rock impassability,
 // the per-chunk food + monster-bubble streaming (with resource plateau),
@@ -12,11 +12,6 @@ const WL = -0.9; // WATER_LEVEL (constants.js) — inlined for in-page scans
 test.beforeEach(async ({ page }) => {
   page.on('pageerror', (err) => { throw new Error(`Page error: ${err.message}`); });
 });
-
-async function bootEndless(page) {
-  await openGame(page);
-  await startGame(page);
-}
 
 test('water is impassable: neither the player nor a chasing enemy ever crosses a lake', async ({ page }) => {
   test.setTimeout(150000);

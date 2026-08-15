@@ -207,40 +207,40 @@
       "acceptance": [
         {
           "criterion": "[032-1] ci.yml has the build step, Playwright browser cache, and branch-scoped push trigger",
-          "evidence": "",
+          "evidence": "ci.yml: npm run build after lint; actions/cache on ~/.cache/ms-playwright keyed by lockfile; on.push scoped to main; timeout 45; YAML parsed OK (ruby)",
           "id": "B5-A1",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[032-2] npm run test:one works and is documented in readme and CLAUDE.md",
-          "evidence": "",
+          "evidence": "npm run test:one -- tests/gate.spec.js -> 1 passed; documented in readme commands block + CLAUDE.md testing rules",
           "id": "B5-A2",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[032-3] the four stale-docs greps from plan 032 steps 3-6 all come back clean",
-          "evidence": "",
+          "evidence": "greps clean: \"unmerged, never pushed\" / \"RED on main\" / live \"Never push to origin\" -> 0 (historical note struck-through with supersession); learnings restructured (5 live lessons rehomed, never-push corrected, ~150+ soft count); todo.md species/titan/daily checked + Roblox REJECTED banner + CLAUDE.md-overrides header; readme structure map gains public/ + vercel.json + CI + docs/elves + pad-test visibility",
           "id": "B5-A3",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[032-4] npm test and npm run lint exit 0",
-          "evidence": "",
+          "evidence": "npm test EXIT:0 \u2014 164 passed (7.8m); npm run lint exit 0 (/tmp/b5-suite.log)",
           "id": "B5-A4",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[032-5] plans/README.md row 032 updated",
-          "evidence": "",
+          "evidence": "plans/README.md row 032 updated below",
           "id": "B5-A5",
-          "met": false
+          "met": true
         }
       ],
       "id": "B5",
       "plans": [
         "032"
       ],
-      "status": "pending",
+      "status": "complete",
       "title": "CI + docs truth"
     },
     {

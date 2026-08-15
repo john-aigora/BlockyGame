@@ -42,6 +42,14 @@ export async function startGame(page) {
   await expect(page.locator('#start-overlay')).toBeHidden();
 }
 
+// Boot + start in one call (plan 032, T-17): three specs carried identical
+// private copies. NOTE the name is historical — endless IS the default mode;
+// no mode switch happens here (that misdirection was T-17's real complaint).
+export async function bootEndless(page) {
+  await openGame(page);
+  await startGame(page);
+}
+
 // Classic torus for wrap/AI suites (product UI no longer exposes it).
 export async function forceClassic(page) {
   await page.evaluate(() => window.__game.debug.forceWorldMode('classic'));

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openGame, startGame, waitGameSeconds } from './helpers.js';
+import { openGame, startGame, waitGameSeconds, bootEndless } from './helpers.js';
 import { PLAYER_COLLIDER_HALF_WIDTH, ENEMY_COLLIDER_HALF_WIDTH } from '../src/constants.js';
 
 // Fairness pass (owner playtest, escalated): honest collision — "respect
@@ -14,11 +14,6 @@ const MARGIN = 0.02; // WATER_WALK_MARGIN (constants.js)
 test.beforeEach(async ({ page }) => {
   page.on('pageerror', (err) => { throw new Error(`Page error: ${err.message}`); });
 });
-
-async function bootEndless(page) {
-  await openGame(page);
-  await startGame(page);
-}
 
 // Teleport, wait for the chunk window to build, and sterilize the scene
 // (no collect-death, no hunters near the scripted path).
