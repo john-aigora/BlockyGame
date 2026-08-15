@@ -38,7 +38,7 @@ export function loadCoopScores() {
     } catch { return []; /* private mode / corrupt JSON / disabled storage */ }
 }
 
-export function recordCoopScore(p1Score, p2Score, maxDistance, ascCount = 0) {
+export function recordCoopScore(p1Score, p2Score, maxDistance, ascCount = 0, mult = 1) {
     const list = loadCoopScores();
     const entry = {
         p1Score,
@@ -50,6 +50,8 @@ export function recordCoopScore(p1Score, p2Score, maxDistance, ascCount = 0) {
     // Ascension mark (plan 029): additive optional field — loaders filter on
     // teamScore only, so old rows and old readers are untouched. No key bump.
     if (ascCount > 0) entry.ascCount = ascCount;
+    // Speed-multiplier honesty (plan 036): the team's fastest chosen toy.
+    if (mult > 1) entry.mult = mult;
     list.push(entry);
     sortCoopBoard(list);
     const trimmed = list.slice(0, MAX);
@@ -114,12 +116,14 @@ export function loadHiscores(mode = 'endless') {
 // own board AND its own ladder rule (sortBoard): a monster endless run must
 // not bury the classic ladder, and endless NEW BEST means furthest, not
 // richest.
-export function recordScore(score, mode = 'endless', distance = 0, asc = false) {
+export function recordScore(score, mode = 'endless', distance = 0, asc = false, mult = 1) {
     const list = loadHiscores(mode);
     const entry = { score, date: new Date().toISOString().slice(0, 10) };
     if (mode === 'endless' || mode === 'daily') entry.distance = Math.max(0, Math.floor(distance));
     // Ascension mark (plan 029): additive optional field, ranking untouched.
     if (asc) entry.asc = true;
+    // Speed-multiplier honesty (plan 036): additive, ranking untouched.
+    if (mult > 1) entry.mult = mult;
     // Daily rows carry the world they were RUN ON (the resolved seed), not
     // the clock at death time: a run finishing just past midnight stamps
     // yesterday's world and the read-side prune correctly retires it from

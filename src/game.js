@@ -238,6 +238,7 @@ function setupNewGame() {
     resetDistanceDisplay(); // Zero the HUD and show/hide it per the current mode
     for (const p of state.players) updateSeatDistanceDisplay(p); // 2P columns re-zero (no-op solo)
     resetTimeDisplay(); // Fresh 0:00 (runTime was reset above)
+    state.runMaxMult = 1; // Fresh high-water — the recompute below re-seeds it (plan 036)
     applySpeedMultiplier(); // playerScale reset → drop any size speed bonus from the last run
     resetCombo(); // A mid-run restart must not carry a live combo into the new run
     resetTension(); // Nor a pulsing panic timer, red vignette, or racing heartbeat
@@ -1146,6 +1147,9 @@ export function applySpeedMultiplier() {
         // 5x must not keep the pack hot for the survivor). Solo / overlay:
         // every seat counts (there is only one).
         if (state.players.length >= 2 && state.gameActive && (!p.alive || p.ascension)) continue;
+        // Run high-water for the board rows (plan 036): every recompute
+        // routes through here, so the max chosen mult is always current.
+        if (seatMult > state.runMaxMult) state.runMaxMult = seatMult;
         if (!foundEnemySeat || seatMult > enemyMult) enemyMult = seatMult;
         foundEnemySeat = true;
     }

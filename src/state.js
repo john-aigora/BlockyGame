@@ -173,6 +173,11 @@ export const state = {
     // frame loop consumes it to finalize the ghost recording — ui.js must
     // not import ghost.js (cycle law), so the field IS the interface.
     runEnded: false,
+    // Board honesty (plan 036, audit DT-3): the highest CHOSEN speed
+    // multiplier any seat touched from the overlay onward — recorded on
+    // board rows (" · 5x") so family bests compare honestly. The mobile
+    // device boost is a device class, not a chosen toy: excluded by design.
+    runMaxMult: 1,
 
     // Camera zoom model: the LEVEL is shared (per-player zoom is out of v1);
     // the smoothed camY/camZ offsets live per player.

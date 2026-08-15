@@ -327,34 +327,34 @@
       "acceptance": [
         {
           "criterion": "[036-1] npm test exits 0 (baseline plus at least 4 new assertions)",
-          "evidence": "",
+          "evidence": "npm test EXIT:0 \u2014 180 passed (8.7m) = 179 + 1 hiscores case; coop team-mult assert added inside the existing spectator test (/tmp/b8-suite.log)",
           "id": "B8-A1",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[036-2] a 5x death's row ends with the 5x suffix, a 1x row has none, legacy rows render unchanged",
-          "evidence": "",
+          "evidence": "hiscores.spec: fresh 2x row mult===2 + \" \u00b7 2x\" rendered; legacy row untouched (no field, no suffix); 1x run stores no field (after honest pre-restart speed reset \u2014 index persists by design); coop row mult===5",
           "id": "B8-A2",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[036-3] git diff of src/hiscores.js shows no sort changes",
-          "evidence": "",
+          "evidence": "git diff src/hiscores.js contains zero sort-line changes (grep -cE \"^[+-].*sort\" -> 0)",
           "id": "B8-A3",
-          "met": false
+          "met": true
         },
         {
           "criterion": "[036-4] plans/README.md row 036 updated",
-          "evidence": "",
+          "evidence": "plans/README.md row 036 -> DONE with summary",
           "id": "B8-A4",
-          "met": false
+          "met": true
         }
       ],
       "id": "B8",
       "plans": [
         "036"
       ],
-      "status": "pending",
+      "status": "complete",
       "title": "Board honesty (mult on rows)"
     },
     {

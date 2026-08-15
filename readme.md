@@ -70,7 +70,8 @@ outside it.
   bonus food (they're quick too — earn it).
 - **Die**: get caught by a blue enemy or let the collect clock hit zero. Your
   run joins the local **BEST RUNS** top-5 (saved in your browser) — ranked by
-  distance, score breaking ties.
+  distance, score breaking ties. Rows note the speed multiplier the run used
+  (`· 2x`) so family bests compare honestly; ascended runs wear a ✦.
 - **Skins**: the SKIN button on the title screen cycles your hero's EARNED
   palettes — LIME at 500u, MIDNIGHT at 1000u, GOLD at 1,000 points, and the
   CELESTIAL palette only an ascended run unlocks. Earned from your saved

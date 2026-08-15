@@ -147,3 +147,14 @@ promoted to `learnings.md`; stable truths to CLAUDE.md.
   P2-always-teal). Debugged: scene-children sampling had to wait out the
   title-screen terrain/cloud stream (boot builds ~2 chunks/frame).
 - Gates: lint 0; skins x2 repeat green; FULL SUITE 179/179 (8.7m).
+
+## 2026-08-15 — B8 [plan 036] Board honesty (mult on rows) — COMPLETE
+
+- state.runMaxMult high-water (reset+reseed in setupNewGame; captured in
+  applySpeedMultiplier's living-seat pass — every mult change routes there);
+  recordScore/recordCoopScore gain a trailing mult param (additive field,
+  only when >1); renderHiscores appends " · Nx" to all three row shapes;
+  sort functions byte-untouched (diff-verified).
+- Spec learning: the seat's speed index persists across restarts BY DESIGN —
+  the "clean 1x second run" case must drop the toy before restarting.
+- Gates: lint 0; hiscores 5/5 + coop mult assert; FULL SUITE 180/180 (8.7m).

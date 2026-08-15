@@ -322,6 +322,7 @@ test('per-player death: spectator chip while the partner plays, then the team de
   expect(boards.coop[0].p2Score).toBe(9);
   expect(boards.coop[0].teamScore).toBe(12);
   expect(boards.coop[0].maxDistance).toBeGreaterThanOrEqual(40);
+  expect(boards.coop[0].mult).toBe(5); // Plan 036: the team's fastest chosen toy (P2 held 5x)
   expect(boards.endless).toEqual([{ score: 11, distance: 22, date: '2026-01-01' }]); // ...solo ladders untouched
   expect(boards.daily).toBeNull();
   expect(boards.classic).toBeNull();

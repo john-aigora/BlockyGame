@@ -484,6 +484,9 @@ function renderHiscores(list, rank, boardTitle = 'BEST RUNS') {
         const li = document.createElement('li');
         // Ascended runs wear a permanent mark (plan 029) — ranking untouched.
         const mark = (entry.asc || entry.ascCount > 0) ? '✦ ' : '';
+        // Speed-multiplier honesty (plan 036): a run that used the toy says
+        // so (" · 5x"); legacy and 1x rows render exactly as before.
+        const multSuffix = entry.mult > 1 ? ` · ${entry.mult}x` : '';
         // Coop rows lead with the TEAM total (their ranking key — plan 026);
         // endless rows lead with DISTANCE — the mode's real currency and now
         // its ranking key (hiscores.js) — with the score alongside; classic
@@ -492,7 +495,7 @@ function renderHiscores(list, rank, boardTitle = 'BEST RUNS') {
             ? `${entry.teamScore} pts — ${entry.maxDistance}u — ${entry.date}`
             : entry.distance !== undefined
                 ? `${entry.distance}u — ${entry.score} pts — ${entry.date}`
-                : `${entry.score} — ${entry.date}`);
+                : `${entry.score} — ${entry.date}`) + multSuffix;
         if (i === rank) li.classList.add('is-new');
         ol.appendChild(li);
     });
@@ -625,16 +628,16 @@ export function endGame(reason, dyingPlayer = state.players[0], { ascended = fal
     if (coopMode()) {
         ({ list, rank } = recordCoopScore(
             state.players[0].score, state.players[1].score, state.furthestDistance,
-            ascendedSeatCount));
+            ascendedSeatCount, state.runMaxMult));
         boardTitle = 'TEAM RUNS';
     } else {
-        ({ list, rank } = recordScore(state.score, state.worldMode, state.furthestDistance, crowned));
+        ({ list, rank } = recordScore(state.score, state.worldMode, state.furthestDistance, crowned, state.runMaxMult));
         boardTitle = 'BEST RUNS';
         if (DAILY_WORLD && state.worldMode === 'endless') {
             // A daily run IS an endless run — the solo board above already
             // recorded it. It ALSO ranks on today's world's own ladder, and
             // THAT is the board the death screen shows (the family race).
-            ({ list, rank } = recordScore(state.score, 'daily', state.furthestDistance, crowned));
+            ({ list, rank } = recordScore(state.score, 'daily', state.furthestDistance, crowned, state.runMaxMult));
             boardTitle = "TODAY'S BEST";
         }
     }
