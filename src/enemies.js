@@ -142,7 +142,10 @@ export function nearestLivingPlayer(pos) {
     let best = null;
     let bestDist = Infinity;
     for (const p of state.players) {
-        if (!p.alive || !p.mesh) continue;
+        // An ascending hero (plan 029) is untargetable: this one filter
+        // removes them from AI targeting, despawn anchoring, and bubble
+        // ownership at once — every consumer routes through here.
+        if (!p.alive || !p.mesh || p.ascension) continue;
         const d = torusDistance(pos, p.mesh.position);
         if (d < bestDist) {
             bestDist = d;
@@ -426,7 +429,7 @@ export function updateEnemies(dt) {
     // The explicit builder (audit C-2) covers the body block only and
     // preserves the airborne flatten rule internally.
     for (const p of state.players) {
-        if (p.alive && p.mesh) setPlayerCollisionBox(playerBoxes[p.seat], p);
+        if (p.alive && p.mesh && !p.ascension) setPlayerCollisionBox(playerBoxes[p.seat], p);
     }
     for (let i = state.enemies.length - 1; i >= 0; i--) {
         const enemyGroup = state.enemies[i];
@@ -590,7 +593,9 @@ export function updateEnemies(dt) {
         setEnemyCollisionBox(scratchBox, enemyGroup); // Body block only (audit C-2)
         let killed = false;
         for (const p of state.players) {
-            if (!p.alive || !p.mesh) continue;
+            // Ascending heroes are uncollidable (plan 029): the ceremony is
+            // sacred ground — no kill, no death, no contact.
+            if (!p.alive || !p.mesh || p.ascension) continue;
             if (!playerBoxes[p.seat].intersectsBox(scratchBox)) continue;
             if (canKillSpecificEnemy(enemyGroup, p)) {
                 killEnemy(enemyGroup, i, p); // splice(i, 1) — safe going backwards

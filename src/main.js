@@ -5,6 +5,7 @@ import { spawnNewEnemies, updateEnemyStreaming, resetEnemyStreaming, updateSpawn
 import { onTouchStart, onTouchMove, onTouchEndOrCancel, gamepadVector, pollGamepad, isGamepadConnected, gamepadDebugInfo, seatInfo } from './input.js';
 import { sfx, isMuted, audioState, music } from './audio.js';
 import { spawnBurst, spawnScorePopup, effectsInfo } from './effects.js';
+import { ascensionInfo } from './ascension.js';
 import { terrainHeight, groundHeightAt, terrainInfo, isWalkable, canMove, terrainTint, isRockFree, biomeRegion, biomeRegionKey } from './terrain.js';
 import { WORLD_SEED, DAILY_WORLD } from './constants.js';
 import { cloudInfo } from './clouds.js';
@@ -64,6 +65,7 @@ window.__game = {
         spawnBurst, // Particle pool-discipline checks (effects spec)
         spawnScorePopup, // Score-popup pool-discipline checks (effects spec)
         effectsInfo, // { reducedMotion, activeParticles, poolSize }
+        ascensionInfo, // Per-seat ceremony state (plan 029) — plain data for the ascension spec
         perfInfo, // { calls, triangles, geometries, textures, frameMsAvg } — plan 020 measurement hook
         // The resolved world seed + whether the daily flag drove it (plan
         // 025) — the worldfun spec pins ?seed=/daily resolution through this.

@@ -135,6 +135,19 @@ export const sfx = {
         blip({ freq: 68, endFreq: 46, type: 'sine', dur: 0.12, vol: 0.08 });
         blip({ freq: 62, endFreq: 44, type: 'sine', dur: 0.1, vol: 0.055, delay: 0.16 });
     },
+    // Ascension (plan 029): a long rising C-major climb into held light —
+    // deliberately the BIGGEST jingle in the game; the run just crowned.
+    ascend: () => {
+        [261.63, 329.63, 392, 523.25, 659.25, 783.99, 1046.5].forEach((f, i) =>
+            blip({ freq: f, dur: 0.14, vol: 0.15, delay: i * 0.16 }));
+        blip({ freq: 1046.5, type: 'triangle', dur: 1.6, vol: 0.10, delay: 1.15 });
+        blip({ freq: 1318.5, type: 'sine', dur: 1.6, vol: 0.08, delay: 1.15 });
+    },
+    // The starburst: one bright chord + a long high shimmer tail.
+    ascendBurst: () => {
+        [1046.5, 1318.5, 1568].forEach((f) => blip({ freq: f, dur: 0.5, vol: 0.12 }));
+        blip({ freq: 2093, endFreq: 3136, type: 'sine', dur: 0.9, vol: 0.06, delay: 0.1 });
+    },
 };
 
 // --- Background music (procedural chiptune loop) -----------------------

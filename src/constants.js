@@ -23,6 +23,20 @@ export const COMBO_WINDOW = 4; // seconds after a kill in which the next kill es
 export const COMBO_MAX = 5; // combo multiplier cap (x1..x5)
 export const MILESTONE_STEP = 1.0; // playerScale interval that fires a growth-milestone celebration
 
+// --- Ascension (plan 029, audit DT-7/DT-8): growth's destination ---
+// Uncapped growth had no endgame: past the speed cap (scale 7.67) size only
+// cost — the run degenerated into an infinite grow/eat loop. At
+// ASCENSION_SCALE the hero has outgrown the world and ASCENDS: a scripted
+// ceremony (beam, rise, starburst) ends that hero's run as a WIN. Solo play
+// below the threshold is byte-identical; in 2P the partner plays on.
+export const ASCENSION_SCALE = 10; // The 90th block — the crowning size
+export const ASCENSION_FORESHADOW_SCALE = 9; // Halo + "THE SKY AWAITS..." — the crown must never be a rug-pull
+export const ASCENSION_BONUS = 500; // Crowning payout — bigger than any single titan beat
+export const ASCENSION_RISE_HEIGHT = 14; // Rise into the cloud band (12-18u) — heaven is where the clouds are
+export const ASCENSION_LIFT_TIME = 2.2; // Beam lands + first lift (game-seconds)
+export const ASCENSION_RISE_TIME = 2.8; // The climb to the cloud band
+export const ASCENSION_BURST_TIME = 1.5; // Shrink-to-star + the final gold burst
+
 // --- Enemy species (plan 024, capability CAP-2) ---
 // speedFactor multiplies actualEnemySpeed for THIS enemy only. The owner rule
 // (see BASE_ENEMY_SPEED below: doubling the player must NOT speed enemies up)

@@ -339,11 +339,17 @@ function updateCameraForPlayer(player, dt) {
             camYpos = camGround + CAMERA_TERRAIN_CLEARANCE;
         }
     }
-    player.camera.position.set(camX, camYpos, camZpos);
+    // Ceremony lift (plan 029): while this hero ascends, the camera rises at
+    // a third of the rise and tilts up at two thirds — the departure stays
+    // framed, the ground stays referenced. Camera motion is screen-space, so
+    // reduced motion (shakeEnabled false) skips it; zero effect when no
+    // ceremony is active.
+    const ascLift = player.ascension && shakeEnabled ? player.ascension.rise : 0;
+    player.camera.position.set(camX, camYpos + ascLift * 0.35, camZpos);
     if (state.worldMode === 'endless') {
         // Aim at the smoothed height too — aiming at the raw p.y would put
         // the crest jolt right back into the frame.
-        player.camera.lookAt(lookTarget.set(p.x, followY, p.z));
+        player.camera.lookAt(lookTarget.set(p.x, followY + ascLift * 0.65, p.z));
     } else {
         player.camera.lookAt(p);
     }

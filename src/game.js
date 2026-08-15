@@ -11,8 +11,9 @@ import {
     DISTANCE_MILESTONE_STEP, REGION_DISCOVER_DEBOUNCE,
     BOSS_DISTANCE, BOSS_LEAD_DISTANCE, BOSS_SCALE_MULT, ENEMY_COLLIDER_HALF_WIDTH,
     JUMP_APEX_HEIGHT, JUMP_APEX_GROWTH, JUMP_AIRTIME, JUMP_AIRTIME_GROWTH,
-    DAILY_WORLD
+    DAILY_WORLD, ASCENSION_BONUS
 } from './constants.js';
+import { initAscensionFx, resetAscension, maybeForeshadow, maybeBeginAscension, updateAscension } from './ascension.js';
 import { initContinuousMovement, resetContinuousMovement, updateContinuousMovement } from './movement-continuous.js';
 import { wrapPosition, torusDeltaComponent } from './worldmath.js';
 import { state, makePlayerState } from './state.js';
@@ -25,7 +26,7 @@ import { initClouds, setCloudMode, updateClouds, shiftClouds } from './clouds.js
 import { initEffects, updateEffects, resetEffects, onCollect, onGrowthMilestone, shiftActiveParticles, spawnTextPopup, onJumpTakeoff, onJumpLand } from './effects.js';
 import { keys, moveVector, clearTransientInput, resetSeatActivity, onKeyDown, onKeyUp, setupTouchControls, setupGamepad, pollGamepad } from './input.js';
 import { rumble } from './rumble.js';
-import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension, resetIndicators, showGoFlourish, updateModeHud, updateDistanceDisplay, resetDistanceDisplay, updateSeatDistanceDisplay, updateHudMode, updateTimeDisplay, resetTimeDisplay } from './ui.js';
+import { el, initUI, hideMessage, showStartOverlay, hideStartOverlay, updateScoreDisplay, createEnemyIndicators, updateKillIndicator, updateOffscreenIndicators, resetCombo, updateDangerPulse, resetTension, resetIndicators, showGoFlourish, updateModeHud, updateDistanceDisplay, resetDistanceDisplay, updateSeatDistanceDisplay, updateHudMode, updateTimeDisplay, resetTimeDisplay, endGame, settleAscendedPlayer } from './ui.js';
 import { resetCollectClock, tickCollectClock, tickComboClock } from './timers.js';
 import { loadWorldMode } from './hiscores.js';
 import { unlockAudio, sfx, music } from './audio.js';
@@ -73,6 +74,7 @@ function init() {
     initClouds(); // Voxel sky (shared geometry/material) — needs the scene
     applyWorldEnvironment(); // Terrain root / classic ground per the saved mode
     initEffects(); // Particle pool + food glow (plan 015) — needs the scene
+    initAscensionFx(); // Halo/beam meshes, built once and parked (plan 029)
 
     // 6. Player and Enemy Objects
     createPlayer(state.players[0]);
@@ -190,6 +192,8 @@ function setupNewGame() {
         p.alive = true;
         p.score = 0;
         p.scale = 1.0; // Initial scale (acts as height for 1x1x1 geometry)
+        p.ascension = null; // A restart mid-ceremony lands grounded (plan 029)
+        p.ascended = false;
         p.distanceBest = 0;
         p.jump.offset = 0;
         p.jump.velocity = 0;
@@ -293,6 +297,7 @@ function setupNewGame() {
     resetSeatActivity(); // Fresh run: the pad-claim keyboard tiebreak re-arms (plan 026)
     hideMessage();
     resetEffects(); // Park all particles; reset squash/walk transients (plan 015)
+    resetAscension(); // Park halo/beam, re-arm the foreshadow (plan 029)
     if (CONTINUOUS_MOVEMENT) resetContinuousMovement(); // Full energy, default heading (plan 014 spike)
 
     // Every new session — fresh boot or post-death restart — returns to the
@@ -350,6 +355,12 @@ function update(dt) {
     // Combo window runs on the same clock (kills in enemies.js refresh it)
     tickComboClock(dt);
 
+    // Ascension ceremonies tick on the game clock (plan 029). Completions
+    // settle HERE — score bonus, spectator or endGame routing — so
+    // ascension.js never imports ui.js (no new import cycles).
+    for (const player of updateAscension(dt)) finishAscension(player);
+    if (!state.gameActive) return; // A solo ascension just crowned the run
+
     // Update kill indicator and enemy colors (visuals first)
     updateKillIndicator(dt);
 
@@ -389,7 +400,9 @@ function update(dt) {
             // extremes of travel; a blocked diagonal creeps along the
             // shoreline instead of freezing).
             for (const player of state.players) {
-                if (!player.alive || !player.mesh) continue;
+                // An ascending hero's position belongs to the ceremony
+                // (plan 029) — input, jump, and grounding all stand down.
+                if (!player.alive || !player.mesh || player.ascension) continue;
                 updateJumpPhysics(player, dt); // Advance the arc BEFORE the slide reads jump.airborne
                 // ONE movement vector for every input source (audit C-5):
                 // moveVector sums this seat's keyboard half + its claimed
@@ -425,7 +438,7 @@ function update(dt) {
             // cancel to a standstill, and stacked sources clamp to unit length
             // inside moveVector instead of adding a second speed on top.
             for (const player of state.players) {
-                if (!player.alive || !player.mesh) continue;
+                if (!player.alive || !player.mesh || player.ascension) continue;
                 const mv = moveVector(player.seat);
                 player.mesh.position.x += mv.x * player.actualSpeed * dt;
                 player.mesh.position.z += mv.z * player.actualSpeed * dt;
@@ -523,6 +536,12 @@ function update(dt) {
                     onGrowthMilestone(player.mesh.position, player.scale, player);
                     sfx.milestone();
                 }
+                // Ascension (plan 029): growth happens ONLY here, so the
+                // foreshadow/trigger checks live here too. Foreshadow first —
+                // a single collect crossing both thresholds still pops the
+                // halo before the beam.
+                maybeForeshadow(player, prevScale);
+                maybeBeginAscension(player);
                 spawnNearPlayer(player);
                 resetCollectClock(player);
                 if (isGold) {
@@ -570,7 +589,7 @@ export function tryJump(seat = 0) {
     if (CONTINUOUS_MOVEMENT) return; // The spike owns Space (boost) — no jump there
     if (!state.gameActive || state.isPaused || state.onStartScreen) return;
     const player = state.players[seat];
-    if (!player || !player.alive || !player.mesh) return; // Spectators don't hop
+    if (!player || !player.alive || !player.mesh || player.ascension) return; // Spectators and ascending heroes don't hop
     if (player.jump.airborne) return; // No double-jump
     const { gravity, velocity } = jumpLaunchParams(player);
     player.jump.airborne = true;
@@ -598,6 +617,24 @@ function updateJumpPhysics(player, dt) {
         jump.airborne = false;
         sfx.land(); // Soft thump
         onJumpLand(player); // Landing dust burst
+    }
+}
+
+// --- Ascension settle (plan 029) ---
+// Runs the frame a ceremony completes: the crowning payout, then either the
+// spectator path (a partner still fights) or the run's ascended end. Lives
+// here — not in ascension.js — so that module stays ui-free (cycle law).
+function finishAscension(player) {
+    player.score += ASCENSION_BONUS;
+    updateScoreDisplay();
+    let othersLiving = 0;
+    for (const q of state.players) {
+        if (q !== player && q.alive) othersLiving++;
+    }
+    if (othersLiving === 0) {
+        endGame('You grew beyond this world.', player, { ascended: true });
+    } else {
+        settleAscendedPlayer(player);
     }
 }
 
@@ -711,7 +748,9 @@ function updateEndlessProgress() {
     // placement belong to the player who crossed the mark.
     let furthestPlayer = null;
     for (const player of state.players) {
-        if (!player.alive || !player.mesh) continue;
+        // Ascending heroes are frozen in place — they set no records and
+        // must not anchor the titan (plan 029).
+        if (!player.alive || !player.mesh || player.ascension) continue;
         const p = player.mesh.position;
         // Region tracking runs EVERY frame — wandering back into new lands
         // must discover them even when no forward-progress record is set.
@@ -1041,7 +1080,7 @@ export function applySpeedMultiplier() {
         // 2P live run: only living heroes set the enemy mult (a dead seat's
         // 5x must not keep the pack hot for the survivor). Solo / overlay:
         // every seat counts (there is only one).
-        if (state.players.length >= 2 && state.gameActive && !p.alive) continue;
+        if (state.players.length >= 2 && state.gameActive && (!p.alive || p.ascension)) continue;
         if (!foundEnemySeat || seatMult > enemyMult) enemyMult = seatMult;
         foundEnemySeat = true;
     }

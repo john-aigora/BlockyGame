@@ -8,6 +8,11 @@ export function makePlayerState(seat = 0) {
     return {
         seat, // 0 = left half / P1, 1 = right half / P2
         alive: true, // false = spectator (their half shows the partner cam)
+        // Ascension (plan 029): `ascension` is the transient ceremony state
+        // machine (null = not ascending); `ascended` is the sticky won-flag
+        // for the end screen and board rows. Both reset in setupNewGame.
+        ascension: null,
+        ascended: false,
         mesh: null, // THREE.Group built by createPlayer
         camera: null, // Per-player PerspectiveCamera (world.js owns follow/zoom)
         scale: 1, // Gameplay height (the render scale follows it on collect)

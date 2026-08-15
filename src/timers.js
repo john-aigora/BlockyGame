@@ -36,7 +36,9 @@ export function tickCollectClock(dt) {
     const coop = state.players.length >= 2;
     let tickThisFrame = false; // "Tick if EITHER is in panic" — but never twice a frame
     for (const p of state.players) {
-        if (!p.alive) continue;
+        // An ascending hero has transcended hunger (plan 029): their clock
+        // freezes for the ceremony — expiry must never kill mid-rise.
+        if (!p.alive || p.ascension) continue;
         p.collectTimeLeft -= dt;
 
         // Panic mode (tension pass): the final PANIC_TIME seconds pulse the
