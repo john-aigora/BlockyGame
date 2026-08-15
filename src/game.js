@@ -213,7 +213,11 @@ function setupNewGame() {
     resetCombo(); // A mid-run restart must not carry a live combo into the new run
     resetTension(); // Nor a pulsing panic timer, red vignette, or racing heartbeat
     resetIndicators(); // Nor last run's enemy arrows / KILL! flash over the overlay
-    resetCameraZoom(); // New runs always start at the default framing
+    // resetCameraZoom moved BELOW the terrain grounding (plan 033, audit
+    // C-21 / prior C-11): it snapshots camAnchorY from the player's mesh y,
+    // and here the mesh still stood on the PREVIOUS run's terrain — the
+    // attract camera opened with a visible vertical drift toward the true
+    // spawn height, the exact lerp-in its own comment forbids.
     updateScoreDisplay();
 
     // The start overlay owns the boot UX (isPaused stays true until
@@ -277,6 +281,9 @@ function setupNewGame() {
     // DISCOVERED banner for the place you start. Needs worldOrigin reset
     // above; biomeRegion is pure math, safe before terrain finishes building.
     resetRegionTracking();
+    // New runs always start at the default framing — snapshotted AFTER the
+    // heroes are re-grounded on the fresh terrain (plan 033, audit C-21).
+    resetCameraZoom();
     // Spawn telegraph (tension pass): the boot enemy materializes too — it
     // starts scaling in on the first unpaused frame, right as the run begins.
     beginMaterialize(firstEnemy);
@@ -343,6 +350,14 @@ function update(dt) {
     // Advance the run clock first: every game-clock consumer (and the test
     // suite) sees a runTime that already includes this frame's dt.
     state.runTime += dt;
+
+    // Deferred pace recompute (plan 033, D-15): killPlayer/settle set the
+    // flag instead of importing this module (cycle break); one frame of
+    // latency on a death's pace drop is imperceptible.
+    if (state.enemyPaceDirty) {
+        state.enemyPaceDirty = false;
+        applySpeedMultiplier();
+    }
 
     // Advance the collect countdown on the game clock (before the enemy loop)
     tickCollectClock(dt);
@@ -1053,7 +1068,10 @@ export function togglePause() {
         el.pauseButton.classList.remove('paused');
         // Don't integrate the paused gap into the next frame's dt
         lastFrameTime = null;
-        if (state.gameActive && !state.onStartScreen) music.start();
+        if (state.gameActive && !state.onStartScreen) {
+            unlockAudio(); // The resume press IS a gesture (audit C-8) — re-arm a suspended context
+            music.start();
+        }
     }
     // The collect countdown runs on the game clock, so pausing inherently
     // freezes it and resuming does NOT reset it.

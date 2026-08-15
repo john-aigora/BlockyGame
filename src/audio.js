@@ -250,6 +250,11 @@ function scheduleStep(s, t) {
 
 function schedulerTick() {
     if (!ctx || !musicGain) return;
+    // Stall recovery (plan 033, audit C-20 / prior C-9): a backgrounded tab
+    // throttles this interval; without a floor the loop would schedule
+    // every missed 16th at once on return — one garbled burst. Drop the
+    // backlog, never replay it.
+    if (nextStepTime < ctx.currentTime) nextStepTime = ctx.currentTime + 0.02;
     while (nextStepTime < ctx.currentTime + LOOKAHEAD_S) {
         scheduleStep(stepIndex, nextStepTime);
         stepIndex = (stepIndex + 1) % LOOP_STEPS;
@@ -260,6 +265,10 @@ function schedulerTick() {
 export const music = {
     start() {
         if (!ctx || muted || musicTimer) return;
+        // Suspended context (iOS/Safari — prior audit C-8): a scheduler on a
+        // dead clock burst-fires everything on resume. The caller's gesture
+        // path (unlockAudio) is responsible for resuming first.
+        if (ctx.state !== 'running') return;
         musicGain = ctx.createGain();
         musicGain.gain.setValueAtTime(0.0001, ctx.currentTime);
         musicGain.gain.exponentialRampToValueAtTime(

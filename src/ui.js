@@ -12,7 +12,9 @@ import { torusDistance } from './worldmath.js';
 import { unlockAudio, sfx, music, isMuted, setMuted, audioState } from './audio.js';
 import { onPlayerDeath, onNewBest, spawnTextPopup } from './effects.js';
 import { rumble } from './rumble.js';
-import { applySpeedMultiplier } from './game.js';
+// NO game.js import (plan 033, audit D-15): that edge closed an import
+// cycle through the entry module. Pace recomputes are requested via
+// state.enemyPaceDirty and consumed by update() next frame.
 
 // Cached DOM references, resolved once at init (plan 007) — the hot loop
 // must never call getElementById. game.js calls initUI() before any UI write.
@@ -532,9 +534,10 @@ export function killPlayer(player, reason) {
     onPlayerDeath(player); // Squash flat + burst for THIS hero only
     sfx.death();
     rumble(180, 0.7, player.seat); // The fallen hero's own pad takes the hit
-    // Enemy pace tracks max LIVING mult — drop a dead seat's 5x immediately
-    // so the survivor is not stuck fighting a pack tuned to the fallen hero.
-    applySpeedMultiplier();
+    // Enemy pace tracks max LIVING mult — drop a dead seat's 5x so the
+    // survivor is not stuck fighting a pack tuned to the fallen hero.
+    // Deferred one frame via the dirty flag (plan 033, D-15 cycle break).
+    state.enemyPaceDirty = true;
     // Spectator mode (plan 026): their half switches to the partner cam
     // (world.js renderFrame) under the WAITING chip; resetIndicators (via
     // endGame/setupNewGame) retires the chip with the run. The text is
@@ -615,9 +618,9 @@ export function endGame(reason, dyingPlayer = state.players[0], { ascended = fal
 export function settleAscendedPlayer(player) {
     if (!state.gameActive || !player.alive) return;
     player.alive = false;
-    // Enemy pace tracks max LIVING mult — drop the ascended seat's toy
-    // immediately, same rule as a death.
-    applySpeedMultiplier();
+    // Enemy pace tracks max LIVING mult — drop the ascended seat's toy,
+    // same rule as a death (dirty-flag deferred; plan 033, D-15).
+    state.enemyPaceDirty = true;
     if (el.seatWaits[player.seat]) {
         el.seatWaits[player.seat].textContent = player.seat === 0 ? 'ASCENDED — WATCHING P2' : 'ASCENDED — WATCHING P1';
         el.seatWaits[player.seat].style.display = 'block';
@@ -872,12 +875,19 @@ export function hideMessage() {
 // resets to 0 on a new game don't. The remove/reflow/add dance retriggers
 // the CSS animation on rapid scoring; reduced-motion users get no pop (CSS).
 export function updateScoreDisplay() {
-    const prev = Number(el.score.textContent);
-    el.score.textContent = state.score;
-    if (state.score > prev) {
-        el.score.classList.remove('score-pop');
-        void el.score.offsetWidth; // Forces a reflow so the animation restarts
-        el.score.classList.add('score-pop');
+    if (coopMode()) {
+        // The solo row is display:none in 2P (plan 033, audit P-16): keep
+        // its text truthful for a roster flip back, but never pay the
+        // read + forced-reflow pop dance for pixels nobody can see.
+        el.score.textContent = state.score;
+    } else {
+        const prev = Number(el.score.textContent);
+        el.score.textContent = state.score;
+        if (state.score > prev) {
+            el.score.classList.remove('score-pop');
+            void el.score.offsetWidth; // Forces a reflow so the animation restarts
+            el.score.classList.add('score-pop');
+        }
     }
     // 2P: each seat's own score column (same pop juice, per column).
     if (coopMode()) {
