@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {
     DUST_PARTICLES_PER_STEP, DUST_LIFE, DUST_SPEED, DUST_COLOR_FROM, DUST_COLOR_TO,
     POPUP_RISE, POPUP_LIFE, GROWTH_FRAME_FACTOR, PANIC_TIME, DEATH_SQUASH_TIME,
-    WATER_LEVEL
+    WATER_LEVEL, FOOD_ANIM_CULL_RADIUS
 } from './constants.js';
 import { state } from './state.js';
 import { torusDelta, torusDeltaComponent, torusDistance } from './worldmath.js';
@@ -771,7 +771,7 @@ function updateFoodGlow() {
                 if (!player.mesh) continue;
                 const dx = c.position.x - player.mesh.position.x;
                 const dz = c.position.z - player.mesh.position.z;
-                if (dx * dx + dz * dz <= 8100) { // 90²
+                if (dx * dx + dz * dz <= FOOD_ANIM_CULL_RADIUS * FOOD_ANIM_CULL_RADIUS) { // Knob in GAME BALANCE (plan 033)
                     visibleToSomeone = true;
                     break;
                 }

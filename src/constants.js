@@ -9,7 +9,7 @@ export const enemyBaseHeight = 1.2; // Base height of enemy
 // --- GAME BALANCE (tune here, nowhere else) ---
 export const FOOD_POINTS = 1; // per block (today's behavior)
 export const KILL_POINTS = 25; // flat bounty per defeated enemy
-export const MAX_ENEMIES = 8; // hard population cap
+export const MAX_ENEMIES = 8; // CLASSIC/debug-only cap (the retired torus arena via forceWorldMode); the SHIPPING endless caps are ENDLESS_ENEMY_CAP / ENDLESS_ENEMY_CAP_COOP below (plan 033, D-17)
 export const ENEMIES_PER_KILL = 2; // spawned per kill, subject to the cap
 export const ENEMY_HEIGHT_FACTOR = 1.5; // new-enemy height vs player (existing value, now named)
 export const SPEED_GROWTH_FACTOR = 0.18; // extra speed per point of playerScale above 1 (big = faster)
@@ -89,6 +89,10 @@ export const SPAWN_MATERIALIZE_START_SCALE = 0.05; // Fraction of full size a ma
 // Red ground warn BEFORE the monster appears — notice time for the player.
 export const SPAWN_WARN_TIME = 0.95; // Seconds the red pulse sits on the ground before materialize (the 1x baseline)
 export const SPAWN_WARN_RADIUS = 1.35; // Base ring radius (scaled up a bit with the enemy)
+export const SPAWN_WARN_RADIUS_MAX = 12; // Warn-disc scale ceiling (plan 033, audit C-22): past this a
+// flat one-groundHeightAt-sample ring reads as underground geometry across ±3.75u terrain, its
+// segments show as a polygon, and its band can cover the player's own feet — the telegraph
+// stops telegraphing. Late-game giants keep their long warn TIME; only the disc is capped.
 // Speed-aware warn scaling (plan 024, audit DT-9): notice is measured in
 // player-travel, not seconds — at 5x speed a fixed 0.95s covered a fifth of
 // the ground it promised at 1x, exactly when reaction time mattered most.
@@ -141,6 +145,12 @@ export const engagementRadius = 15; // Enemies within this radius will try to or
 export const orbitStrengthFactor = 0.4; // How strongly enemies try to orbit (0 to 1)
 export const enemyRandomDriftFactor = 0.3; // How strong the random drift is, relative to enemy speed
 export const AVOID_SPEED_FACTOR = 1.2; // Enemy-separation steering strength, as a multiple of enemy speed (pre-cap; see plan 005)
+// Knobs moved home from their modules (plan 033, audit C-23) — values byte-identical:
+export const ENEMY_AVOID_RADIUS = 7; // Enemies steer apart inside this distance (partner of AVOID_SPEED_FACTOR above; lived in enemies.js)
+export const ENEMY_SEPARATION_HEADROOM = 1.25; // Total-speed cap over species speed — lets separation win slightly over chase (lived in enemies.js)
+export const ROCK_WATER_CLEARANCE = 0.35; // Rocks need terrain this far above WATER_LEVEL — never in or teetering over water (lived in terrain.js)
+export const FOOD_ROCK_CLEARANCE = 0.6; // Food keeps this margin outside a rock's collision circle (lived in terrain.js; peer of FOOD_WATER_CLEARANCE)
+export const FOOD_ANIM_CULL_RADIUS = 90; // Food bob/rotation animates only within this of any hero — approximates the scale-1 fog range (~86u); was an 8100 (90²) literal in effects.js
 export const BASE_ENEMY_SPAWN_DISTANCE = 30; // Base spawn distance for new enemies
 export const SPAWN_DISTANCE_SCALE_FACTOR = 10; // Scaling of spawn distance with player size
 

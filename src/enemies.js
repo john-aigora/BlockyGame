@@ -1,13 +1,14 @@
 import * as THREE from 'three';
 import {
     enemyBaseHeight, worldBoundary, engagementRadius, orbitStrengthFactor,
-    enemyRandomDriftFactor, AVOID_SPEED_FACTOR, BASE_ENEMY_SPAWN_DISTANCE, SPAWN_DISTANCE_SCALE_FACTOR,
+    enemyRandomDriftFactor, AVOID_SPEED_FACTOR, ENEMY_AVOID_RADIUS, ENEMY_SEPARATION_HEADROOM,
+    BASE_ENEMY_SPAWN_DISTANCE, SPAWN_DISTANCE_SCALE_FACTOR,
     KILL_POINTS, MAX_ENEMIES, ENEMIES_PER_KILL, ENEMY_HEIGHT_FACTOR,
     SPAWN_SIZE_PATTERN, PREY_HEIGHT_RANGE, PEER_HEIGHT_RANGE,
     SPRINTER_HEIGHT_RANGE, JUJA_HEIGHT_FACTOR,
     SIZE_BOUNTY_PER_UNIT, COMBO_WINDOW, COMBO_MAX,
     SPAWN_MATERIALIZE_TIME, SPAWN_MATERIALIZE_START_SCALE,
-    SPAWN_WARN_TIME, SPAWN_WARN_RADIUS, SPAWN_WARN_SPEED_REF,
+    SPAWN_WARN_TIME, SPAWN_WARN_RADIUS, SPAWN_WARN_RADIUS_MAX, SPAWN_WARN_SPEED_REF,
     ENEMY_COLLIDER_HALF_WIDTH, ENEMY_WEDGE_TIME, ENEMY_DETOUR_TIME,
     ENDLESS_ENEMY_TARGET, ENDLESS_ENEMY_CAP, ENDLESS_ENEMY_CAP_COOP, ENEMY_DESPAWN_RADIUS,
     ENDLESS_SPAWN_MIN, ENDLESS_SPAWN_MAX, ENDLESS_SPAWN_INTERVAL, RAMP_HEIGHT_STEP,
@@ -238,7 +239,7 @@ export function scheduleEnemySpawn(spawnX, spawnZ, scaleFactor, speciesKey = 'gr
         ? groundHeightAt(spawnX, spawnZ) + 0.08
         : 0.08;
     mesh.position.set(spawnX, y, spawnZ);
-    const r = SPAWN_WARN_RADIUS * Math.max(0.85, scaleFactor);
+    const r = Math.min(SPAWN_WARN_RADIUS_MAX, SPAWN_WARN_RADIUS * Math.max(0.85, scaleFactor)); // Ceiling: plan 033, C-22
     mesh.scale.set(r, r, r);
     state.scene.add(mesh);
     // Speed-aware notice (plan 024, audit DT-9): warn duration scales with
@@ -334,7 +335,8 @@ export function updateSpawnWarnings(dt) {
         p.t -= dt;
         // Per-mesh scale throb (opacity is global above).
         const pulse = 0.5 + 0.5 * Math.sin((p.warnTime - p.t) * 10);
-        const r = SPAWN_WARN_RADIUS * Math.max(0.85, p.scaleFactor) * (0.92 + 0.12 * pulse);
+        const r = Math.min(SPAWN_WARN_RADIUS_MAX, SPAWN_WARN_RADIUS * Math.max(0.85, p.scaleFactor))
+            * (0.92 + 0.12 * pulse); // Same ceiling as schedule time (C-22)
         p.mesh.scale.set(r, r, r);
         // Keep grounded if the origin rebased under the disc.
         if (state.worldMode === 'endless') {
@@ -573,7 +575,7 @@ export function updateEnemies(dt) {
         // Cap total speed; the 1.25 headroom lets separation win slightly
         // over chase without runaway speed. The cap rides the SPECIES speed
         // (plan 024) so a sprinter keeps its separation headroom.
-        const maxSpeed = speciesSpeed * 1.25;
+        const maxSpeed = speciesSpeed * ENEMY_SEPARATION_HEADROOM;
         if (combinedMovement.length() > maxSpeed) {
             combinedMovement.normalize().multiplyScalar(maxSpeed);
         }
@@ -987,7 +989,7 @@ export function updateEnemyStreaming(dt) {
 // within the avoid radius into `out`. The caller scales the result into a
 // steering component before the speed cap.
 function computeAvoidance(enemyGroup, out) {
-    const avoidRadius = 7;
+    const avoidRadius = ENEMY_AVOID_RADIUS; // GAME BALANCE (plan 033, C-23)
     out.set(0, 0, 0);
     // Plain for loop (plan 020 P-6): this runs per enemy pair per frame —
     // the forEach closure was allocation + call overhead in the hottest path.

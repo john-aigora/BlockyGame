@@ -35,7 +35,7 @@ export function makePlayerState(seat = 0) {
         dangerOpacity: 0, // Eased base opacity of THEIR danger vignette
         dangerPeak: 0, // Max dangerOpacity since last drain — a real scare's release earns THEIR PHEW!
         lastSurvivalBeat: -SURVIVAL_BEAT_COOLDOWN, // PHEW!/CLOSE ONE! rate limit, per player
-        heartbeatClock: 0, // Game-clock seconds to THEIR next danger heartbeat
+        heartbeatClock: 0, // Seat 0's clock IS the world heart (one audible heartbeat — ui.js updateDangerPulse reads only the delegate); other seats' fields exist for the reset sweep
         // Camera zoom model: the smoothed actual offsets (zoom LEVEL is shared
         // world state — per-player zoom is out of v1 scope). camAnchorY is the
         // endless vertical-follow smoothing (world.js) — per camera.
@@ -164,6 +164,11 @@ export const state = {
     // another seat's hunters unoutrunnable. Solo never reads this array
     // (enemies.js falls through to actualEnemySpeed — byte-stable).
     enemyPaceForSeat: [undefined, undefined],
+    // Deferred pace recompute (plan 033, audit D-15): ui.js killPlayer/
+    // settleAscendedPlayer set this instead of importing applySpeedMultiplier
+    // from game.js (that import closed a cycle through the entry module);
+    // update() consumes it at the top of the next frame.
+    enemyPaceDirty: false,
 
     // Camera zoom model: the LEVEL is shared (per-player zoom is out of v1);
     // the smoothed camY/camZ offsets live per player.
