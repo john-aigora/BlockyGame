@@ -55,4 +55,3 @@
      the wall-clock ban and hitbox lesson were superseded. They now live in
      their proper sections above; only genuinely retired entries (with a
      [retired] marker and superseding reference) belong here. -->
-

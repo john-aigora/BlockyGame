@@ -4,7 +4,7 @@ import {
     WORLD_SEED, CONTINUOUS_MOVEMENT
 } from './constants.js';
 import { state } from './state.js';
-import { createCharacter } from './characters.js';
+import { createCharacter, disposeCharacter } from './characters.js';
 import { groundHeightAt, applyWorldBend } from './terrain.js';
 import { spawnTextPopup } from './effects.js';
 import { loadGhost, saveGhost } from './hiscores.js';
@@ -76,9 +76,10 @@ export function tickGhostRecording(dt) {
         q(p.scale)
     );
     if (recPoints.length >= GHOST_MAX_SAMPLES * 3) {
-        // Decimate: keep every SECOND sample, double the cadence.
+        // Decimate: keep every SECOND sample, double the cadence. Start at
+        // sample 1 so the first retained point matches the new interval.
         const kept = [];
-        for (let i = 0; i < recPoints.length; i += 6) {
+        for (let i = 3; i < recPoints.length; i += 6) {
             kept.push(recPoints[i], recPoints[i + 1], recPoints[i + 2]);
         }
         recPoints = kept;
@@ -116,6 +117,7 @@ function ensureGhostMesh() {
     });
     applyWorldBend(ghostMaterial);
     ghostMesh = createCharacter({ baseSize: 1, bodyColor: 0x80DEEA, faceColor: 0x222222 });
+    disposeCharacter(ghostMesh); // The hero shadow clone is replaced below.
     ghostMesh.traverse((node) => {
         if (node.isMesh) {
             node.material = ghostMaterial;

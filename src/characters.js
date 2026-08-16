@@ -419,13 +419,19 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
     group.add(shadowQuad);
     group.userData.shadowQuad = shadowQuad;
     group.userData.shadowBaseSize = shadowSize; // effects.js scales the player's from this
+    if (!menacing) {
+        // Hero and ghost shadows are bend-clones. Track them so reskinning
+        // and ghost material replacement can release the old clone.
+        group.userData.ownedMaterials = [shadowQuad.material];
+    }
 
     return group;
 }
 
-// Releases a character's PER-INSTANCE GPU resources (the cloned enemy body
-// and cap materials). Shared/cached geometries and materials are deliberately
-// left alone — they outlive any single character. Call after scene.remove.
+// Releases a character's PER-INSTANCE GPU resources: cloned enemy body/cap
+// materials or a hero/ghost shadow bend-clone. Shared/cached geometries and
+// materials are deliberately left alone — they outlive any single character.
+// Call after scene.remove.
 export function disposeCharacter(group) {
     if (group.userData.ownedMaterials) {
         group.userData.ownedMaterials.forEach(material => material.dispose());
@@ -446,7 +452,7 @@ export const SKIN_PALETTES = [
     { id: 'ember', name: 'EMBER', bodyColor: 0xFF4500 }, // The classic hero — always unlocked
     { id: 'lime', name: 'LIME', bodyColor: 0x9CCC65 }, // Any run ≥ SKIN_UNLOCK_DISTANCE_1
     { id: 'midnight', name: 'MIDNIGHT', bodyColor: 0x5C6BC0 }, // Any run ≥ SKIN_UNLOCK_DISTANCE_2 (you met the titan)
-    { id: 'gold', name: 'GOLD', bodyColor: 0xFFC107 }, // Any board row ≥ SKIN_UNLOCK_SCORE points
+    { id: 'gold', name: 'GOLD', bodyColor: 0xFFC107 }, // Any run score ≥ SKIN_UNLOCK_SCORE
     { id: 'celestial', name: 'CELESTIAL', bodyColor: 0xB39DDB } // Any ASCENDED run (plan 029's lasting trophy)
 ];
 

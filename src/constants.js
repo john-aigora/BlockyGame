@@ -78,11 +78,11 @@ export const BOSS_BOUNTY_MULT = 3; // Titan kill payout multiplier — the late-
 export const BOSS_FOOD_DROP = 10; // Titan death feast: food pieces on the ring below (replaces the species drop)
 export const BOSS_FOOD_RING_RADIUS = 2.65; // Mean feast ring radius (~6u circle across, jittered) — a banquet, not a pile
 
-// --- Skin unlocks (plan 035): earned palettes, derived from the boards ---
-// Unlocks are computed live from board rows (hiscores.js) — no separate
-// unlock storage, nothing to migrate; clearing the boards clears the skins
-// with them (coherent family semantics). Palettes are a LOOK and live in
-// characters.js SKIN_PALETTES; thresholds are progression and live HERE.
+// --- Skin unlocks (plan 035): earned palettes, derived from progression ---
+// Unlocks are computed from the visible boards plus the monotonic progression
+// summary in hiscores.js, so a qualifying run stays earned after its row leaves
+// the top five. Palettes are a LOOK and live in characters.js SKIN_PALETTES;
+// thresholds are progression and live HERE.
 export const SKIN_UNLOCK_DISTANCE_1 = 500; // LIME: any endless/daily run this far — a real journey
 export const SKIN_UNLOCK_DISTANCE_2 = 1000; // MIDNIGHT: you crossed the titan's mark
 export const SKIN_UNLOCK_SCORE = 1000; // GOLD: any row this rich — a hunter's palette

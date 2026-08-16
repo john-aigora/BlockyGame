@@ -250,7 +250,7 @@ export function scheduleEnemySpawn(spawnX, spawnZ, scaleFactor, speciesKey = 'gr
     // for whoever can cover the most ground toward the disc.
     let fastest = 0;
     for (const pl of state.players) {
-        if (pl.alive && pl.actualSpeed > fastest) fastest = pl.actualSpeed;
+        if (pl.alive && !pl.ascension && pl.actualSpeed > fastest) fastest = pl.actualSpeed;
     }
     let warnTime = SPAWN_WARN_TIME * Math.min(2.2, Math.max(1.0,
         (fastest || SPAWN_WARN_SPEED_REF) / SPAWN_WARN_SPEED_REF));
@@ -940,7 +940,7 @@ export function updateEnemyStreaming(dt) {
     const seatOffset = bubbleSpawnCounter % 2;
     for (let n = 0; n < state.players.length; n++) {
         const player = state.players[(n + seatOffset) % state.players.length];
-        if (!player.alive || !player.mesh) continue;
+        if (!player.alive || !player.mesh || player.ascension) continue;
         if (threatCountScratch[player.seat] >= perPlayerTarget) continue;
         if (!spawnAnchor || threatCountScratch[player.seat] < threatCountScratch[spawnAnchor.seat]) {
             spawnAnchor = player;

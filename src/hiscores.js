@@ -15,6 +15,32 @@ const KEY_ENDLESS = 'blocky.hiscores.endless.v1'; // Endless board — its own l
 const KEY_DAILY = 'blocky.hiscores.daily.v1'; // TODAY'S WORLD board — seed-stamped rows; stale worlds prune on read
 const KEY_COOP = 'blocky.hiscores.coop.v1'; // 2P team board (plan 026) — its own ladder; 2P runs record ONLY here
 const MAX = 5;
+const KEY_PROGRESSION = 'blocky.progression.v1'; // Monotonic skin-achievement summary
+
+function loadProgression() {
+    try {
+        const raw = localStorage.getItem(KEY_PROGRESSION);
+        const value = raw ? JSON.parse(raw) : {};
+        return {
+            bestDistance: Number.isFinite(value.bestDistance) ? Math.max(0, Math.floor(value.bestDistance)) : 0,
+            bestScore: Number.isFinite(value.bestScore) ? Math.max(0, value.bestScore) : 0,
+            everAscended: value.everAscended === true
+        };
+    } catch {
+        return { bestDistance: 0, bestScore: 0, everAscended: false };
+    }
+}
+
+function recordProgression(bestDistance, bestScore, everAscended) {
+    const current = loadProgression();
+    const next = {
+        bestDistance: Math.max(current.bestDistance, Number.isFinite(bestDistance) ? Math.max(0, Math.floor(bestDistance)) : 0),
+        bestScore: Math.max(current.bestScore, Number.isFinite(bestScore) ? Math.max(0, bestScore) : 0),
+        everAscended: current.everAscended || everAscended === true
+    };
+    try { localStorage.setItem(KEY_PROGRESSION, JSON.stringify(next)); }
+    catch { /* storage may be unavailable — boards still degrade safely */ }
+}
 
 // --- Coop (2P) board (plan 026) ---
 // Entry: { p1Score, p2Score, teamScore, maxDistance, date } ranked by
@@ -118,6 +144,20 @@ export function loadHiscores(mode = 'endless') {
 // richest.
 export function recordScore(score, mode = 'endless', distance = 0, asc = false, mult = 1) {
     const list = loadHiscores(mode);
+    if (mode === 'endless' || mode === 'daily') {
+        // Preserve progression evidence before this run can be trimmed from
+        // the visible top-five board. Existing rows are folded in too, which
+        // migrates qualifying legacy rows before a later run evicts them.
+        let bestDistance = distance;
+        let bestScore = score;
+        let everAscended = asc === true;
+        for (const row of list) {
+            if (row.distance > bestDistance) bestDistance = row.distance;
+            if (row.score > bestScore) bestScore = row.score;
+            if (row.asc === true) everAscended = true;
+        }
+        recordProgression(bestDistance, bestScore, everAscended);
+    }
     const entry = { score, date: new Date().toISOString().slice(0, 10) };
     if (mode === 'endless' || mode === 'daily') entry.distance = Math.max(0, Math.floor(distance));
     // Ascension mark (plan 029): additive optional field, ranking untouched.
@@ -141,9 +181,9 @@ export function recordScore(score, mode = 'endless', distance = 0, asc = false, 
 // --- Hero skins (plan 035) ---
 // Selection persists under one key; UNLOCKS are DERIVED live from the solo
 // board rows (endless + daily — the boards this household actually plays),
-// so there is no unlock storage to corrupt or migrate.
+// plus the monotonic progression summary so a qualifying run stays earned
+// after it leaves the visible top-five board.
 const KEY_SKIN = 'blocky.skin.v1';
-
 export function loadSelectedSkin() {
     try {
         const id = localStorage.getItem(KEY_SKIN);
@@ -156,13 +196,15 @@ export function saveSelectedSkin(id) {
     catch { /* storage unavailable — the pick still applies this session */ }
 }
 
+
 // Ordered unlocked skin ids (always starts with ember). Order matches
 // characters.js SKIN_PALETTES so the cycle button walks it stably.
 export function computeUnlockedSkins() {
     const rows = [...loadHiscores('endless'), ...loadHiscores('daily')];
-    let bestDistance = 0;
-    let bestScore = 0;
-    let anyAscended = false;
+    const progression = loadProgression();
+    let bestDistance = progression.bestDistance;
+    let bestScore = progression.bestScore;
+    let anyAscended = progression.everAscended;
     for (const r of rows) {
         if (Number.isFinite(r.distance) && r.distance > bestDistance) bestDistance = r.distance;
         if (Number.isFinite(r.score) && r.score > bestScore) bestScore = r.score;

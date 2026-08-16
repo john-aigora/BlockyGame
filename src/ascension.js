@@ -48,6 +48,7 @@ let fxClock = 0; // Local pulse clock (game dt) — halo bob/spin phase
 
 const BEAM_HEIGHT = ASCENSION_RISE_HEIGHT + 4;
 const CEREMONY_TOTAL = ASCENSION_LIFT_TIME + ASCENSION_RISE_TIME + ASCENSION_BURST_TIME;
+const SCALE_EPSILON = 1e-9; // Absorb repeated 0.1 growth rounding at thresholds
 
 // Scratch origins — never allocated per beat (house no-alloc law).
 const fxOrigin = { x: 0, y: 0, z: 0 };
@@ -111,7 +112,8 @@ function ascensionEligible(player) {
 // near — called from the collect handler with the pre-growth scale.
 export function maybeForeshadow(player, prevScale) {
     if (!ascensionEligible(player) || foreshadowShown[player.seat]) return;
-    if (player.scale < ASCENSION_FORESHADOW_SCALE || prevScale >= ASCENSION_FORESHADOW_SCALE) return;
+    if (player.scale + SCALE_EPSILON < ASCENSION_FORESHADOW_SCALE ||
+        prevScale + SCALE_EPSILON >= ASCENSION_FORESHADOW_SCALE) return;
     foreshadowShown[player.seat] = true;
     const halo = halos[player.seat];
     if (halo) halo.visible = true;
@@ -125,7 +127,7 @@ export function maybeForeshadow(player, prevScale) {
 
 // The trigger: called from the collect handler after growth applied.
 export function maybeBeginAscension(player) {
-    if (!ascensionEligible(player) || player.scale < ASCENSION_SCALE) return;
+    if (!ascensionEligible(player) || player.scale + SCALE_EPSILON < ASCENSION_SCALE) return;
     const p = player.mesh.position;
     player.ascension = {
         phase: 'lift',
@@ -222,7 +224,7 @@ export function updateAscension(dt) {
             if (a.trailClock >= 0.25) {
                 a.trailClock -= 0.25;
                 fxOrigin.x = mesh.position.x;
-                fxOrigin.y = mesh.position.y + player.scale * mesh.scale.y * 0.5;
+                fxOrigin.y = mesh.position.y + mesh.scale.y * 0.5;
                 fxOrigin.z = mesh.position.z;
                 spawnBurst(fxOrigin, {
                     count: 10,
@@ -255,11 +257,11 @@ export function updateAscension(dt) {
         if (halo && halo.visible) {
             halo.position.set(
                 mesh.position.x,
-                mesh.position.y + player.scale * mesh.scale.y + 0.75,
+                mesh.position.y + mesh.scale.y + 0.75,
                 mesh.position.z
             );
             halo.rotation.z = fxClock * 0.8;
-            halo.scale.setScalar(Math.max(0.15, 0.9 * player.scale * mesh.scale.y));
+            halo.scale.setScalar(Math.max(0.15, 0.9 * mesh.scale.y));
         }
         // --- Completion ---
         if (a.t >= CEREMONY_TOTAL) {
@@ -297,14 +299,20 @@ export function updateAscension(dt) {
 // Debug/test introspection (main.js) — plain data only, never THREE objects.
 export function ascensionInfo() {
     return {
-        seats: state.players.map((p) => ({
-            seat: p.seat,
-            active: !!p.ascension,
-            phase: p.ascension ? p.ascension.phase : null,
-            rise: p.ascension ? p.ascension.rise : 0,
-            ascended: p.ascended,
-            foreshadowShown: foreshadowShown[p.seat] === true,
-            haloVisible: !!(halos[p.seat] && halos[p.seat].visible)
-        }))
+        seats: state.players.map((p) => {
+            const halo = halos[p.seat];
+            return {
+                seat: p.seat,
+                active: !!p.ascension,
+                phase: p.ascension ? p.ascension.phase : null,
+                rise: p.ascension ? p.ascension.rise : 0,
+                ascended: p.ascended,
+                foreshadowShown: foreshadowShown[p.seat] === true,
+                haloVisible: !!(halo && halo.visible),
+                heroY: p.mesh ? p.mesh.position.y : null,
+                haloY: halo && halo.visible ? halo.position.y : null,
+                haloScale: halo && halo.visible ? halo.scale.x : null
+            };
+        })
     };
 }

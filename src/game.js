@@ -182,6 +182,7 @@ function init() {
             const p = state.players[0];
             if (p.mesh) {
                 state.scene.remove(p.mesh);
+                disposeCharacter(p.mesh);
                 p.mesh = null;
             }
             createPlayer(p); // Resolves the newly selected skin (characters.js)

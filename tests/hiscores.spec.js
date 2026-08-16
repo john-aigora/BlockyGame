@@ -60,6 +60,37 @@ test('list is trimmed to top 5 and a worse run does not displace them', async ({
   expect(stored.length).toBe(5);
   expect(Math.min(...stored.map((e) => e.score))).toBe(10); // 0 didn't place
 });
+test('a qualifying score stays unlocked after its short run misses the top-five board', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('blocky.hiscores.endless.v1', JSON.stringify([
+      { score: 50, date: '2026-01-01', distance: 500 },
+      { score: 40, date: '2026-01-01', distance: 400 },
+      { score: 30, date: '2026-01-01', distance: 300 },
+      { score: 20, date: '2026-01-01', distance: 200 },
+      { score: 10, date: '2026-01-01', distance: 100 }
+    ]));
+  });
+  await openGame(page);
+  await startGame(page);
+  await page.evaluate(() => {
+    const s = window.__game.state;
+    s.score = 1000;
+    s.furthestDistance = 0;
+    s.collectTimeLeft = 0.05;
+    window.__game.debug.advance(0.1);
+  });
+  await waitForGameOver(page);
+  const stored = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('blocky.hiscores.endless.v1')));
+  expect(stored).toHaveLength(5);
+  expect(stored.some((row) => row.score === 1000)).toBe(false);
+  const progression = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('blocky.progression.v1')));
+  expect(progression.bestScore).toBeGreaterThanOrEqual(1000);
+  expect((await page.evaluate(() => window.__game.debug.skinInfo())).unlocked)
+    .toContain('gold');
+});
+
 
 test('corrupt storage never crashes: death screen still renders', async ({ page }) => {
   await page.addInitScript(() => {

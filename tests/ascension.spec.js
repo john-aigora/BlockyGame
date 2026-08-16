@@ -75,6 +75,14 @@ test('crossing scale 9 foreshadows: halo appears and THE SKY AWAITS... fires onc
   const popup = await page.evaluate(() => window.__game.debug.effectsInfo().lastPopupText);
   expect(popup).toBe('THE SKY AWAITS...');
 });
+test('repeated 0.1 growth crosses scale 9 and 10 without an extra pickup', async ({ page }) => {
+  await bootSolo(page);
+  await growPast(page, Number('8.899999999999986')); // 1 + 79 * 0.1 before pickup 80
+  expect((await seatInfo(page)).foreshadowShown).toBe(true);
+  await growPast(page, Number('9.899999999999982')); // 1 + 89 * 0.1 before pickup 90
+  expect((await seatInfo(page)).active).toBe(true);
+});
+
 
 test('the 90th block triggers the ceremony; the hero is untouchable and unhungry mid-rise', async ({ page }) => {
   test.setTimeout(120000);
@@ -100,6 +108,10 @@ test('the 90th block triggers the ceremony; the hero is untouchable and unhungry
   info = await seatInfo(page);
   expect(info.active).toBe(true);
   expect(info.rise).toBeGreaterThan(0); // The climb is real
+  // The ceremony uses the rendered hero scale once. A double scale would
+  // place the halo tens of units above the hero at scale 10.
+  expect(info.haloY - info.heroY).toBeLessThan(20);
+  expect(info.haloScale).toBeLessThan(20);
 });
 
 test('solo completion: ASCENDED! screen, crowned reason, +500 bonus, marked board row', async ({ page }) => {
