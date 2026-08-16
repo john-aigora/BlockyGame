@@ -2,7 +2,9 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
-  timeout: 45000,
+  // CI software-GL runners can take longer than the local 45s default for
+  // live-clock tests, so keep the same assertions with a larger wall ceiling.
+  timeout: process.env.CI ? 90000 : 45000,
   // Bounded parallelism (plan 017): game-driving specs race the live
   // simulation, and at the default worker count (cpus/2 = 5 here) headless
   // software-GL rendering plus always-on trace/video capture starves frames
