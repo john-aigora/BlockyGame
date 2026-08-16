@@ -174,9 +174,9 @@ publicly (they live in plan 030 only — the repo is public).
 - **Giant-scale breakage family** (spawn-overlap at S≳12.6/17, bubble
   placement deadlock at S≳21, shadow-frustum inversion at S≳19.5,
   fog/window-edge exposure at large pullback, cloud-band clipping at jump
-  apex S≳7): **structurally retired by plan 029's ASCENSION_SCALE=10 cap**
-  — runs end before the thresholds. Revive only if the cap is ever raised
-  past ~12 (thresholds + sites recorded in plan 033's maintenance notes).
+  apex S≳7): **reopened** — owner retune raised `ASCENSION_SCALE` from 10
+  to 251 (2500th block), past the ~12 revive line. Thresholds + sites
+  remain in plan 033's maintenance notes.
   The one pre-threshold member, the warn-ring blowup (C-22), is fixed in 033.
 - **ui.js split (D-16)**: ui.js doubled to 1065 lines and owns 8 subsystems;
   the recommended first slice is extracting the tension block to

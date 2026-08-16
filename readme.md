@@ -76,8 +76,8 @@ outside it.
   palettes — LIME at 500u, MIDNIGHT at 1000u, GOLD at 1,000 points, and the
   CELESTIAL palette only an ascended run unlocks. Earned from your saved
   boards (clearing browser data clears skins with them); P2 is always teal.
-- **Ascend**: keep growing and the sky notices. At size 9 a golden halo
-  appears (`THE SKY AWAITS...`); at size 10 — the 90th block — the run
+- **Ascend**: keep growing and the sky notices. At size 250 a golden halo
+  appears (`THE SKY AWAITS...`); at size 251 — the 2500th block — the run
   crowns itself: a beam of light, a spinning rise into the clouds, a
   starburst, **+500 points**, and an **ASCENDED!** screen instead of GAME
   OVER. Ascended runs wear a permanent ✦ on the board. In 2 PLAYERS one hero
@@ -167,7 +167,7 @@ src/
   rumble.js         gamepad vibration (isolated to avoid import cycles)
   hiscores.js       local top-5 storage (per-mode boards)
   input.js          keyboard + gamepad + multitouch-safe drag controls
-  ascension.js      the scale-10 crowning ceremony (halo, beam, rise, starburst)
+  ascension.js      the scale-251 crowning ceremony (halo, beam, rise, starburst)
   ghost.js          ghost runs: per-seed path record + spectral replay
   movement-continuous.js  plan-014 design spike (LBS-style movement + boost),
                     active only behind ?move=continuous

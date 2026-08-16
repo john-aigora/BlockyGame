@@ -29,8 +29,11 @@ export const MILESTONE_STEP = 1.0; // playerScale interval that fires a growth-m
 // ASCENSION_SCALE the hero has outgrown the world and ASCENDS: a scripted
 // ceremony (beam, rise, starburst) ends that hero's run as a WIN. Solo play
 // below the threshold is byte-identical; in 2P the partner plays on.
-export const ASCENSION_SCALE = 10; // The 90th block — the crowning size
-export const ASCENSION_FORESHADOW_SCALE = 9; // Halo + "THE SKY AWAITS..." — the crown must never be a rug-pull
+// Owner playtest: the original 90th-block crown (scale 10) landed too soon.
+// 2500 foods × growthFactor 0.1 from scale 1 → scale 251. Foreshadow stays
+// one scale-unit (10 foods) below — same warning window as the 9→10 pair.
+export const ASCENSION_SCALE = 251; // The 2500th block — the crowning size
+export const ASCENSION_FORESHADOW_SCALE = 250; // Halo + "THE SKY AWAITS..." — the crown must never be a rug-pull
 export const ASCENSION_BONUS = 500; // Crowning payout — bigger than any single titan beat
 export const ASCENSION_RISE_HEIGHT = 14; // Rise into the cloud band (12-18u) — heaven is where the clouds are
 export const ASCENSION_LIFT_TIME = 2.2; // Beam lands + first lift (game-seconds)
