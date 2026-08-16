@@ -7,12 +7,15 @@ import {
 } from './constants.js';
 import { state } from './state.js';
 import { canKillSpecificEnemy } from './enemies.js';
-import { recordScore, recordCoopScore, loadHiscores } from './hiscores.js';
+import { recordScore, recordCoopScore, loadHiscores, loadGhost, loadSelectedSkin, computeUnlockedSkins } from './hiscores.js';
+import { SKIN_PALETTES } from './characters.js';
 import { torusDistance } from './worldmath.js';
 import { unlockAudio, sfx, music, isMuted, setMuted, audioState } from './audio.js';
 import { onPlayerDeath, onNewBest, spawnTextPopup } from './effects.js';
 import { rumble } from './rumble.js';
-import { applySpeedMultiplier } from './game.js';
+// NO game.js import (plan 033, audit D-15): that edge closed an import
+// cycle through the entry module. Pace recomputes are requested via
+// state.enemyPaceDirty and consumed by update() next frame.
 
 // Cached DOM references, resolved once at init (plan 007) — the hot loop
 // must never call getElementById. game.js calls initUI() before any UI write.
@@ -30,6 +33,7 @@ export const el = {
     comboChip: null,
     dangerVignette: null,
     messageBox: null,
+    deathTitle: null, // Swapped per show (plan 029): 'GAME OVER' or 'ASCENDED!'
     deathReason: null,
     finalScore: null,
     startOverlay: null,
@@ -45,6 +49,9 @@ export const el = {
     goFlourish: null,
     dailyToggle: null,
     seedValue: null,
+    ghostLine: null, // RACING THE GHOST overlay line (plan 034)
+    ghostDistance: null,
+    skinButton: null, // SKIN: <NAME> cycle button (plan 035)
     // --- 2P dual-mode elements (plan 026) ---
     onePlayerButton: null, // Start-overlay roster picker
     twoPlayerButton: null,
@@ -88,6 +95,7 @@ export function initUI() {
     el.killIndicator = document.getElementById('kill-indicator');
     el.comboChip = document.getElementById('combo-chip');
     el.messageBox = document.getElementById('message-box');
+    el.deathTitle = document.getElementById('death-title');
     el.deathReason = document.getElementById('death-reason');
     el.finalScore = document.getElementById('final-score');
     el.startOverlay = document.getElementById('start-overlay');
@@ -103,6 +111,9 @@ export function initUI() {
     el.goFlourish = document.getElementById('go-flourish');
     el.dailyToggle = document.getElementById('daily-toggle');
     el.seedValue = document.getElementById('seed-value');
+    el.ghostLine = document.getElementById('ghost-line');
+    el.ghostDistance = document.getElementById('ghost-distance');
+    el.skinButton = document.getElementById('skin-button');
     el.onePlayerButton = document.getElementById('one-player-button');
     el.twoPlayerButton = document.getElementById('two-player-button');
     el.scoreDisplay = document.getElementById('score-display');
@@ -208,6 +219,19 @@ export function showGoFlourish() {
     el.goFlourish.classList.add('go-play');
 }
 
+// --- Skin button label (plan 035) ---
+// "SKIN: <NAME>" — the selected palette when unlocked, ember otherwise
+// (matching resolveSkinColor's fallback in characters.js). Refreshed on
+// every overlay show so a run's fresh unlocks appear immediately.
+export function refreshSkinButton() {
+    if (!el.skinButton) return;
+    const unlocked = computeUnlockedSkins();
+    const selected = loadSelectedSkin();
+    const id = selected && unlocked.includes(selected) ? selected : 'ember';
+    const palette = SKIN_PALETTES.find((s) => s.id === id);
+    el.skinButton.textContent = `SKIN: ${palette ? palette.name : 'EMBER'}`;
+}
+
 // --- Per-mode HUD visibility (audit D-4) ---
 // The mode-picker UI is retired (classic is a test/debug path via
 // forceWorldMode only); what survives is the LIVE per-mode HUD state: the
@@ -282,6 +306,20 @@ function updateFamilyBest() {
     } else {
         el.familyBest.style.display = 'none';
     }
+    // Ghost line (plan 034): announce the race when a stored ghost exists
+    // for THIS seed and replay is on. The tiny ?ghost=0 read is duplicated
+    // here on purpose — ui.js must not import ghost.js (importer-count
+    // law), and this runs only on overlay shows.
+    if (el.ghostLine) {
+        const ghostOff = new URLSearchParams(location.search).get('ghost') === '0';
+        const ghost = !ghostOff && !coopMode() ? loadGhost(WORLD_SEED) : null;
+        if (ghost) {
+            el.ghostDistance.textContent = ghost.distance;
+            el.ghostLine.style.display = '';
+        } else {
+            el.ghostLine.style.display = 'none';
+        }
+    }
 }
 
 // --- Start Overlay Functions (plan 008) ---
@@ -292,6 +330,7 @@ export function showStartOverlay() {
     state.onStartScreen = true;
     updateJumpButton(); // The menu never shows the touch JUMP control
     updateFamilyBest();
+    refreshSkinButton(); // The label reflects skins the LAST run may have unlocked (plan 035)
     // Title warmth (plan 023): a QUIET music bed under the menu — but only
     // when a real gesture already unlocked the context (the gate submit
     // counts; index.html rides unlockAudio on it). A bypassed gate or a
@@ -381,7 +420,11 @@ export function resetTimeDisplay() {
 // #hiscore-slot hosts the local top-5 leaderboard (plan 009). A rank-0
 // NEW BEST earns confetti bursts behind the box + a victory fanfare.
 // Endless deaths also show how far the run pushed.
-export function showDeathScreen(reason, hiscores = [], rank = -1, boardTitle = 'BEST RUNS') {
+export function showDeathScreen(reason, hiscores = [], rank = -1, boardTitle = 'BEST RUNS', ascended = false) {
+    // Title per show (plan 029): the INVARIANT is that death shows always
+    // restore exactly 'GAME OVER' (five specs pin the exact text) — an
+    // ascension end that came before must never leak its title forward.
+    if (el.deathTitle) el.deathTitle.textContent = ascended ? 'ASCENDED!' : 'GAME OVER';
     el.deathReason.textContent = reason;
     const coop = coopMode();
     // 2P: the two columns + team line replace the solo score/distance lines.
@@ -439,15 +482,20 @@ function renderHiscores(list, rank, boardTitle = 'BEST RUNS') {
     ol.className = 'hiscore-list';
     list.forEach((entry, i) => {
         const li = document.createElement('li');
+        // Ascended runs wear a permanent mark (plan 029) — ranking untouched.
+        const mark = (entry.asc || entry.ascCount > 0) ? '✦ ' : '';
+        // Speed-multiplier honesty (plan 036): a run that used the toy says
+        // so (" · 5x"); legacy and 1x rows render exactly as before.
+        const multSuffix = entry.mult > 1 ? ` · ${entry.mult}x` : '';
         // Coop rows lead with the TEAM total (their ranking key — plan 026);
         // endless rows lead with DISTANCE — the mode's real currency and now
         // its ranking key (hiscores.js) — with the score alongside; classic
         // rows are untouched (score-ranked, score-first).
-        li.textContent = entry.teamScore !== undefined
+        li.textContent = mark + (entry.teamScore !== undefined
             ? `${entry.teamScore} pts — ${entry.maxDistance}u — ${entry.date}`
             : entry.distance !== undefined
                 ? `${entry.distance}u — ${entry.score} pts — ${entry.date}`
-                : `${entry.score} — ${entry.date}`;
+                : `${entry.score} — ${entry.date}`) + multSuffix;
         if (i === rank) li.classList.add('is-new');
         ol.appendChild(li);
     });
@@ -524,13 +572,19 @@ export function killPlayer(player, reason) {
     onPlayerDeath(player); // Squash flat + burst for THIS hero only
     sfx.death();
     rumble(180, 0.7, player.seat); // The fallen hero's own pad takes the hit
-    // Enemy pace tracks max LIVING mult — drop a dead seat's 5x immediately
-    // so the survivor is not stuck fighting a pack tuned to the fallen hero.
-    applySpeedMultiplier();
+    // Enemy pace tracks max LIVING mult — drop a dead seat's 5x so the
+    // survivor is not stuck fighting a pack tuned to the fallen hero.
+    // Deferred one frame via the dirty flag (plan 033, D-15 cycle break).
+    state.enemyPaceDirty = true;
     // Spectator mode (plan 026): their half switches to the partner cam
     // (world.js renderFrame) under the WAITING chip; resetIndicators (via
-    // endGame/setupNewGame) retires the chip with the run.
-    if (el.seatWaits[player.seat]) el.seatWaits[player.seat].style.display = 'block';
+    // endGame/setupNewGame) retires the chip with the run. The text is
+    // written on EVERY show (single-writer-per-show rule, plan 029): a
+    // death after a prior ascension must restore the default label.
+    if (el.seatWaits[player.seat]) {
+        el.seatWaits[player.seat].textContent = player.seat === 0 ? 'WAITING FOR P2' : 'WAITING FOR P1';
+        el.seatWaits[player.seat].style.display = 'block';
+    }
     // Their half's transient overlays go dark — nothing to fight the chip.
     if (el.seatKills[player.seat]) el.seatKills[player.seat].style.display = 'none';
     // Death breaks THEIR chain (B8 review ADV-7): zero the state with the
@@ -544,7 +598,7 @@ export function killPlayer(player, reason) {
     }
 }
 
-export function endGame(reason, dyingPlayer = state.players[0]) {
+export function endGame(reason, dyingPlayer = state.players[0], { ascended = false } = {}) {
     if (!state.gameActive) return;
     state.gameActive = false;
     dyingPlayer.alive = false; // The final death — every seat is down now
@@ -553,36 +607,73 @@ export function endGame(reason, dyingPlayer = state.players[0]) {
     resetIndicators(); // Nor stale enemy arrows / a frozen KILL! flash
     updateJumpButton(); // The dead can't hop — hide the touch JUMP control
     music.stop(); // 0.3s fadeout — the death jingle plays over it
-    sfx.death();
-    rumble(180, 0.7, dyingPlayer.seat); // Stronger death pulse when the pad can rumble
-    onPlayerDeath(dyingPlayer); // Squash flat + orange-red burst (pool), behind the beat
+    if (!ascended) {
+        // An ascended end already left in light (plan 029): no death sting,
+        // no death rumble, no squash — the hero is gone, gloriously.
+        sfx.death();
+        rumble(180, 0.7, dyingPlayer.seat); // Stronger death pulse when the pad can rumble
+        onPlayerDeath(dyingPlayer); // Squash flat + orange-red burst (pool), behind the beat
+    }
     // Per-mode boards: the death screen shows the ladder of the mode that
     // just ended, and endless runs never pollute the classic top-5. A 2P
     // run records ONLY the coop team board (plan 026) — never the solo
-    // endless/daily ladders (different game, different ladder).
+    // endless/daily ladders (different game, different ladder). Ascension
+    // (plan 029): rows carry the mark; a team run containing an ascension
+    // is a crowned run (title shows ASCENDED! either way).
+    const ascendedSeatCount = state.players.filter((p) => p.ascended).length;
+    const crowned = ascended || ascendedSeatCount > 0;
     let list;
     let rank;
     let boardTitle;
     if (coopMode()) {
         ({ list, rank } = recordCoopScore(
-            state.players[0].score, state.players[1].score, state.furthestDistance));
+            state.players[0].score, state.players[1].score, state.furthestDistance,
+            ascendedSeatCount, state.runMaxMult));
         boardTitle = 'TEAM RUNS';
     } else {
-        ({ list, rank } = recordScore(state.score, state.worldMode, state.furthestDistance));
+        ({ list, rank } = recordScore(state.score, state.worldMode, state.furthestDistance, crowned, state.runMaxMult));
         boardTitle = 'BEST RUNS';
         if (DAILY_WORLD && state.worldMode === 'endless') {
             // A daily run IS an endless run — the solo board above already
             // recorded it. It ALSO ranks on today's world's own ladder, and
             // THAT is the board the death screen shows (the family race).
-            ({ list, rank } = recordScore(state.score, 'daily', state.furthestDistance));
+            ({ list, rank } = recordScore(state.score, 'daily', state.furthestDistance, crowned, state.runMaxMult));
             boardTitle = "TODAY'S BEST";
         }
     }
     deathScreenTimer = setTimeout(() => {
         deathScreenTimer = null;
         if (state.gameActive || state.onStartScreen) return; // A restart beat us to it
-        showDeathScreen(reason, list, rank, boardTitle);
+        showDeathScreen(reason, list, rank, boardTitle, crowned);
     }, DEATH_SCREEN_DELAY * 1000);
+    // Ghost finalize signal (plan 034): consumed by game.js's frame loop —
+    // this module must not import ghost.js (the D-15 cycle law).
+    state.runEnded = true;
+}
+
+// Settles an ASCENDED hero while a partner still fights (plan 029): the
+// spectator bookkeeping of killPlayer WITHOUT the death juice — no squash,
+// no death sting, no rumble; the ceremony already provided the exit. The
+// last active hero's ascension routes through endGame instead (game.js
+// finishAscension owns that fork).
+export function settleAscendedPlayer(player) {
+    if (!state.gameActive || !player.alive) return;
+    player.alive = false;
+    // Enemy pace tracks max LIVING mult — drop the ascended seat's toy,
+    // same rule as a death (dirty-flag deferred; plan 033, D-15).
+    state.enemyPaceDirty = true;
+    if (el.seatWaits[player.seat]) {
+        el.seatWaits[player.seat].textContent = player.seat === 0 ? 'ASCENDED — WATCHING P2' : 'ASCENDED — WATCHING P1';
+        el.seatWaits[player.seat].style.display = 'block';
+    }
+    if (el.seatKills[player.seat]) el.seatKills[player.seat].style.display = 'none';
+    player.comboCount = 0;
+    player.comboTimeLeft = 0;
+    hideComboChip(player);
+    if (el.seatVignettes[player.seat]) {
+        el.seatVignettes[player.seat].__lastCss = null;
+        el.seatVignettes[player.seat].style.opacity = '0';
+    }
 }
 
 // --- Tension systems (awesome pass) ---
@@ -636,7 +727,9 @@ export function updateDangerPulse(dt) {
     let maxIntensity = 0; // Music layer request = MAX of the players' states (plan 026)
     let anyHeartbeatDanger = false; // Heartbeat fires if EITHER hero is in prey-less dread
     for (const player of state.players) {
-        if (!player.alive || !player.mesh) continue;
+        // An ascending hero (plan 029) has left the dread channel: no
+        // vignette, no heartbeat, no near-miss beats during the ceremony.
+        if (!player.alive || !player.mesh || player.ascension) continue;
         let nearest = Infinity;
         let anyKillable = false;
         for (const enemyGroup of state.enemies) {
@@ -823,12 +916,19 @@ export function hideMessage() {
 // resets to 0 on a new game don't. The remove/reflow/add dance retriggers
 // the CSS animation on rapid scoring; reduced-motion users get no pop (CSS).
 export function updateScoreDisplay() {
-    const prev = Number(el.score.textContent);
-    el.score.textContent = state.score;
-    if (state.score > prev) {
-        el.score.classList.remove('score-pop');
-        void el.score.offsetWidth; // Forces a reflow so the animation restarts
-        el.score.classList.add('score-pop');
+    if (coopMode()) {
+        // The solo row is display:none in 2P (plan 033, audit P-16): keep
+        // its text truthful for a roster flip back, but never pay the
+        // read + forced-reflow pop dance for pixels nobody can see.
+        el.score.textContent = state.score;
+    } else {
+        const prev = Number(el.score.textContent);
+        el.score.textContent = state.score;
+        if (state.score > prev) {
+            el.score.classList.remove('score-pop');
+            void el.score.offsetWidth; // Forces a reflow so the animation restarts
+            el.score.classList.add('score-pop');
+        }
     }
     // 2P: each seat's own score column (same pop juice, per column).
     if (coopMode()) {
@@ -890,7 +990,7 @@ export function updateKillIndicator(dt) {
         for (const player of state.players) {
             const badge = el.seatKills[player.seat];
             if (!badge) continue;
-            const anyForSeat = player.alive &&
+            const anyForSeat = player.alive && !player.ascension &&
                 state.enemies.some((enemy) => canKillSpecificEnemy(enemy, player));
             if (anyForSeat) {
                 badge.style.display = 'block';
@@ -908,7 +1008,9 @@ export function updateKillIndicator(dt) {
         }
         return;
     }
-    const anyEnemyKillable = state.enemies.some(enemy => canKillSpecificEnemy(enemy));
+    // Solo ceremony (plan 029): the KILL! flash stands down with the hunt.
+    const anyEnemyKillable = !state.players[0].ascension &&
+        state.enemies.some(enemy => canKillSpecificEnemy(enemy));
     if (!el.killIndicator) return;
     if (anyEnemyKillable) {
         el.killIndicator.style.display = 'block';
@@ -952,7 +1054,7 @@ export function updateOffscreenIndicators() {
         const halfW = Math.floor(state.gameCanvasRect.width / 2);
         for (const player of state.players) {
             const poolStart = player.seat * poolHalf;
-            if (player.alive && player.camera) {
+            if (player.alive && !player.ascension && player.camera) {
                 const rectLeft = player.seat === 0 ? 0 : halfW;
                 const rectWidth = player.seat === 0 ? halfW : state.gameCanvasRect.width - halfW;
                 updateIndicatorsForView(player.camera, player, rectLeft, rectWidth,
@@ -961,6 +1063,11 @@ export function updateOffscreenIndicators() {
                 hideIndicatorRange(poolStart, poolStart + poolHalf);
             }
         }
+        return;
+    }
+    if (state.players[0].ascension) {
+        // Solo ceremony (plan 029): arrows point at threats — there are none.
+        hideIndicatorRange(0, MAX_ENEMY_INDICATORS);
         return;
     }
     updateIndicatorsForView(state.camera, state.players[0], 0, state.gameCanvasRect.width,

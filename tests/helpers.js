@@ -42,6 +42,14 @@ export async function startGame(page) {
   await expect(page.locator('#start-overlay')).toBeHidden();
 }
 
+// Boot + start in one call (plan 032, T-17): three specs carried identical
+// private copies. NOTE the name is historical — endless IS the default mode;
+// no mode switch happens here (that misdirection was T-17's real complaint).
+export async function bootEndless(page) {
+  await openGame(page);
+  await startGame(page);
+}
+
 // Classic torus for wrap/AI suites (product UI no longer exposes it).
 export async function forceClassic(page) {
   await page.evaluate(() => window.__game.debug.forceWorldMode('classic'));
@@ -102,6 +110,18 @@ export async function installMockPads(page, pads = [{}]) {
       setButton: (index, pressed) => api.setButton(0, index, pressed)
     };
   }, pads);
+}
+
+// Press → poll → release → poll: one clean button edge on a mock pad.
+// Extracted from tests/gamepad.spec.js (plan 031) and extended with a pad
+// slot for the dual-pad per-seat scenarios. Requires installMockPads first.
+export function pressEdge(page, button, slot = 0) {
+  return page.evaluate(([b, s]) => {
+    window.__mockPads.setButton(s, b, true);
+    window.__game.debug.pollGamepad();
+    window.__mockPads.setButton(s, b, false);
+    window.__game.debug.pollGamepad();
+  }, [button, slot]);
 }
 
 // One seat's 2P HUD locators (plan 026). Solo keeps the classic ids

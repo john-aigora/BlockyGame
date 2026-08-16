@@ -1,12 +1,14 @@
-import { applySpeedMultiplier, speedUp, speedDown, cycleSpeed, forceWorldMode, perfInfo, setPlayerCount, advanceGameTime } from './game.js';
+import { applySpeedMultiplier, speedUp, speedDown, cycleSpeed, forceWorldMode, perfInfo, setPlayerCount, advanceGameTime, ghostInfo } from './game.js';
 import { state } from './state.js';
 import { spawnNearPlayer, spawnAtPosition, spawnChunkFood } from './collectibles.js';
 import { spawnNewEnemies, updateEnemyStreaming, resetEnemyStreaming, updateSpawnWarnings, debugSpawnSpecies, pendingSpawnInfo, clearPendingSpawns } from './enemies.js';
 import { onTouchStart, onTouchMove, onTouchEndOrCancel, gamepadVector, pollGamepad, isGamepadConnected, gamepadDebugInfo, seatInfo } from './input.js';
 import { sfx, isMuted, audioState, music } from './audio.js';
 import { spawnBurst, spawnScorePopup, effectsInfo } from './effects.js';
+import { ascensionInfo } from './ascension.js';
 import { terrainHeight, groundHeightAt, terrainInfo, isWalkable, canMove, terrainTint, isRockFree, biomeRegion, biomeRegionKey } from './terrain.js';
 import { WORLD_SEED, DAILY_WORLD } from './constants.js';
+import { loadSelectedSkin, computeUnlockedSkins } from './hiscores.js';
 import { cloudInfo } from './clouds.js';
 import { movementDebug } from './movement-continuous.js';
 
@@ -64,6 +66,9 @@ window.__game = {
         spawnBurst, // Particle pool-discipline checks (effects spec)
         spawnScorePopup, // Score-popup pool-discipline checks (effects spec)
         effectsInfo, // { reducedMotion, activeParticles, poolSize }
+        ascensionInfo, // Per-seat ceremony state (plan 029) — plain data for the ascension spec
+        ghostInfo, // Ghost record/replay state (plan 034) — re-exported through game.js
+        skinInfo: () => ({ selected: loadSelectedSkin(), unlocked: computeUnlockedSkins() }), // Plan 035
         perfInfo, // { calls, triangles, geometries, textures, frameMsAvg } — plan 020 measurement hook
         // The resolved world seed + whether the daily flag drove it (plan
         // 025) — the worldfun spec pins ?seed=/daily resolution through this.

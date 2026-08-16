@@ -175,6 +175,15 @@ export function shiftClouds(dx, dz) {
 // Runs during pause and on the title screen on purpose: clouds are scenery,
 // and a breathing sky keeps the attract scene alive. dt is real frame time
 // clamped by the caller's MAX_DELTA.
+// Smoothstep on [0,1] — hoisted to module scope (plan 033, audit P-15): the
+// inner declaration allocated one closure per cloud per frame, ~1,200-2,400/s
+// (this loop deliberately runs through pause and the title screen), and it
+// was the last survivor of the plan-020 closure sweep.
+const smooth01 = (t) => {
+    const k = Math.min(1, Math.max(0, t));
+    return k * k * (3 - 2 * k);
+};
+
 function animateCloud(cloud, px, pz, dt) {
     const ud = cloud.userData;
     ud.anchorX = wrapCoord(ud.anchorX + CLOUD_WIND_X * dt);
@@ -195,10 +204,6 @@ function animateCloud(cloud, px, pz, dt) {
     // opacity even when a cloud drifts by. Distance is to the NEAREST
     // living hero (plan 026) — either half deserves a clear head.
     const d = nearestHeroDistance(cloud.position.x, cloud.position.z, px, pz);
-    const smooth01 = (t) => {
-        const k = Math.min(1, Math.max(0, t));
-        return k * k * (3 - 2 * k);
-    };
     const overhead = smooth01((d - CLOUD_CLEAR_NEAR) / (CLOUD_CLEAR_FAR - CLOUD_CLEAR_NEAR));
     const presence = 0.55 + 0.45 * smooth01((d - CLOUD_CLEAR_FAR) / 24);
     cloud.scale.setScalar(Math.max(0.001, smooth01(ud.appear) * overhead * presence));

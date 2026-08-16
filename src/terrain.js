@@ -4,7 +4,7 @@ import {
     CHUNK_BUILDS_PER_FRAME, TERRAIN_AMPLITUDE, TERRAIN_WAVELENGTH, WORLD_SEED,
     WATER_LEVEL, CURVE_STRENGTH, SPAWN_MESA_RADIUS,
     ROCKS_PER_CHUNK_MAX, ROCK_SPAWN_CLEARANCE,
-    WATER_WALK_MARGIN, ROCK_COLLIDER_FACTOR,
+    WATER_WALK_MARGIN, ROCK_COLLIDER_FACTOR, ROCK_WATER_CLEARANCE, FOOD_ROCK_CLEARANCE,
     FOOD_PER_CHUNK_MIN, FOOD_PER_CHUNK_MAX, FOOD_WATER_CLEARANCE, GOLD_CHUNK_CHANCE,
     minSpawnDistanceFromPlayer,
     BIOME_WAVELENGTH, BIOME_TINT_STRENGTH, SHORE_BAND_HEIGHT, SHORE_BAND_BOOST,
@@ -682,7 +682,7 @@ function scatterRocks(chunk, centerTrueX, centerTrueZ) {
         const blocksRoll = next();
         const yawRoll = next();
         const h = terrainHeight(tx, tz);
-        if (h < WATER_LEVEL + 0.35) continue; // Never in (or teetering over) water
+        if (h < WATER_LEVEL + ROCK_WATER_CLEARANCE) continue; // Never in (or teetering over) water — knob in GAME BALANCE (plan 033)
         if (Math.hypot(tx, tz) < ROCK_SPAWN_CLEARANCE) continue; // Clear of the run-start point
         const rock = acquireRock();
         const size = 0.7 + sizeRoll * 1.1;
@@ -898,7 +898,7 @@ function isFoodSpotTrue(tx, tz, nearChunk) {
         for (const c of nearChunk.colliders) {
             const ddx = tx - c.x;
             const ddz = tz - c.z;
-            const rr = c.r + 0.6;
+            const rr = c.r + FOOD_ROCK_CLEARANCE; // Knob in GAME BALANCE (plan 033)
             if (ddx * ddx + ddz * ddz < rr * rr) return false;
         }
         return true;

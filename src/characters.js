@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { state } from './state.js';
 import { applyWorldBend } from './terrain.js';
+import { loadSelectedSkin, computeUnlockedSkins } from './hiscores.js';
 
 // --- Shared GPU resource caches (plan 007) ---
 // Geometries are cached per baseSize (every part dimension derives from
@@ -418,13 +419,19 @@ export function createCharacter({ baseSize, bodyColor, faceColor, perInstanceBod
     group.add(shadowQuad);
     group.userData.shadowQuad = shadowQuad;
     group.userData.shadowBaseSize = shadowSize; // effects.js scales the player's from this
+    if (!menacing) {
+        // Hero and ghost shadows are bend-clones. Track them so reskinning
+        // and ghost material replacement can release the old clone.
+        group.userData.ownedMaterials = [shadowQuad.material];
+    }
 
     return group;
 }
 
-// Releases a character's PER-INSTANCE GPU resources (the cloned enemy body
-// and cap materials). Shared/cached geometries and materials are deliberately
-// left alone — they outlive any single character. Call after scene.remove.
+// Releases a character's PER-INSTANCE GPU resources: cloned enemy body/cap
+// materials or a hero/ghost shadow bend-clone. Shared/cached geometries and
+// materials are deliberately left alone — they outlive any single character.
+// Call after scene.remove.
 export function disposeCharacter(group) {
     if (group.userData.ownedMaterials) {
         group.userData.ownedMaterials.forEach(material => material.dispose());
@@ -436,14 +443,44 @@ export function disposeCharacter(group) {
 // orange-red at a glance across the whole screen. A look, not balance.
 export const P2_BODY_COLOR = 0x26C6DA;
 
+// --- Hero skins (plan 035, CAP-3) ---
+// A LOOK table (unlock thresholds live in constants.js GAME BALANCE).
+// Each palette costs three cached materials on first use — the shared
+// color cache absorbs everything else. Teal is deliberately absent: it is
+// P2's identity and the two heroes must stay tellable-apart.
+export const SKIN_PALETTES = [
+    { id: 'ember', name: 'EMBER', bodyColor: 0xFF4500 }, // The classic hero — always unlocked
+    { id: 'lime', name: 'LIME', bodyColor: 0x9CCC65 }, // Any run ≥ SKIN_UNLOCK_DISTANCE_1
+    { id: 'midnight', name: 'MIDNIGHT', bodyColor: 0x5C6BC0 }, // Any run ≥ SKIN_UNLOCK_DISTANCE_2 (you met the titan)
+    { id: 'gold', name: 'GOLD', bodyColor: 0xFFC107 }, // Any run score ≥ SKIN_UNLOCK_SCORE
+    { id: 'celestial', name: 'CELESTIAL', bodyColor: 0xB39DDB } // Any ASCENDED run (plan 029's lasting trophy)
+];
+
+// Seat 0 wears the SELECTED skin when it is unlocked; anything else — a
+// missing selection, unavailable storage, a since-locked id — resolves to
+// ember, byte-identical to the pre-skins hero. Other seats keep their
+// explicit palette (P2's teal comes in through opts.bodyColor).
+function resolveSkinColor(seat) {
+    if (seat !== 0) return 0xFF4500;
+    const selected = loadSelectedSkin();
+    if (!selected || selected === 'ember') return 0xFF4500;
+    if (!computeUnlockedSkins().includes(selected)) return 0xFF4500;
+    const palette = SKIN_PALETTES.find((s) => s.id === selected);
+    return palette ? palette.bodyColor : 0xFF4500;
+}
+
 // Builds the hero for one player slot (plan 026: seat-indexed; P2 gets its
 // own palette via bodyColor). Tags the mesh with a back-reference to its
 // player state so effects.js walk/shadow/blink can stay player-generic.
-export function createPlayer(playerState = state.players[0], { bodyColor = 0xFF4500 } = {}) {
+export function createPlayer(playerState = state.players[0], opts = {}) {
     if (playerState.mesh) {
         state.scene.remove(playerState.mesh); // Remove old player group if it exists
     }
-    const playerGroup = createCharacter({ baseSize: 1.0, bodyColor, faceColor: 0x000000 }); // Bright Orange-Red body, black face (P1)
+    // Explicit palette wins (P2's teal); seat 0 otherwise wears the selected
+    // unlocked skin (plan 035) — resolving to the classic ember exactly when
+    // nothing is selected, so the default hero is byte-identical.
+    const bodyColor = opts.bodyColor ?? resolveSkinColor(playerState.seat);
+    const playerGroup = createCharacter({ baseSize: 1.0, bodyColor, faceColor: 0x000000 });
 
     // Assign to the player slot; keep the classic state.player alias pointed
     // at seat 0's mesh (the suites and solo paths read it).

@@ -1,13 +1,14 @@
 import * as THREE from 'three';
 import {
     enemyBaseHeight, worldBoundary, engagementRadius, orbitStrengthFactor,
-    enemyRandomDriftFactor, AVOID_SPEED_FACTOR, BASE_ENEMY_SPAWN_DISTANCE, SPAWN_DISTANCE_SCALE_FACTOR,
+    enemyRandomDriftFactor, AVOID_SPEED_FACTOR, ENEMY_AVOID_RADIUS, ENEMY_SEPARATION_HEADROOM,
+    BASE_ENEMY_SPAWN_DISTANCE, SPAWN_DISTANCE_SCALE_FACTOR,
     KILL_POINTS, MAX_ENEMIES, ENEMIES_PER_KILL, ENEMY_HEIGHT_FACTOR,
     SPAWN_SIZE_PATTERN, PREY_HEIGHT_RANGE, PEER_HEIGHT_RANGE,
     SPRINTER_HEIGHT_RANGE, JUJA_HEIGHT_FACTOR,
     SIZE_BOUNTY_PER_UNIT, COMBO_WINDOW, COMBO_MAX,
     SPAWN_MATERIALIZE_TIME, SPAWN_MATERIALIZE_START_SCALE,
-    SPAWN_WARN_TIME, SPAWN_WARN_RADIUS, SPAWN_WARN_SPEED_REF,
+    SPAWN_WARN_TIME, SPAWN_WARN_RADIUS, SPAWN_WARN_RADIUS_MAX, SPAWN_WARN_SPEED_REF,
     ENEMY_COLLIDER_HALF_WIDTH, ENEMY_WEDGE_TIME, ENEMY_DETOUR_TIME,
     ENDLESS_ENEMY_TARGET, ENDLESS_ENEMY_CAP, ENDLESS_ENEMY_CAP_COOP, ENEMY_DESPAWN_RADIUS,
     ENDLESS_SPAWN_MIN, ENDLESS_SPAWN_MAX, ENDLESS_SPAWN_INTERVAL, RAMP_HEIGHT_STEP,
@@ -142,7 +143,10 @@ export function nearestLivingPlayer(pos) {
     let best = null;
     let bestDist = Infinity;
     for (const p of state.players) {
-        if (!p.alive || !p.mesh) continue;
+        // An ascending hero (plan 029) is untargetable: this one filter
+        // removes them from AI targeting, despawn anchoring, and bubble
+        // ownership at once — every consumer routes through here.
+        if (!p.alive || !p.mesh || p.ascension) continue;
         const d = torusDistance(pos, p.mesh.position);
         if (d < bestDist) {
             bestDist = d;
@@ -235,7 +239,7 @@ export function scheduleEnemySpawn(spawnX, spawnZ, scaleFactor, speciesKey = 'gr
         ? groundHeightAt(spawnX, spawnZ) + 0.08
         : 0.08;
     mesh.position.set(spawnX, y, spawnZ);
-    const r = SPAWN_WARN_RADIUS * Math.max(0.85, scaleFactor);
+    const r = Math.min(SPAWN_WARN_RADIUS_MAX, SPAWN_WARN_RADIUS * Math.max(0.85, scaleFactor)); // Ceiling: plan 033, C-22
     mesh.scale.set(r, r, r);
     state.scene.add(mesh);
     // Speed-aware notice (plan 024, audit DT-9): warn duration scales with
@@ -246,7 +250,7 @@ export function scheduleEnemySpawn(spawnX, spawnZ, scaleFactor, speciesKey = 'gr
     // for whoever can cover the most ground toward the disc.
     let fastest = 0;
     for (const pl of state.players) {
-        if (pl.alive && pl.actualSpeed > fastest) fastest = pl.actualSpeed;
+        if (pl.alive && !pl.ascension && pl.actualSpeed > fastest) fastest = pl.actualSpeed;
     }
     let warnTime = SPAWN_WARN_TIME * Math.min(2.2, Math.max(1.0,
         (fastest || SPAWN_WARN_SPEED_REF) / SPAWN_WARN_SPEED_REF));
@@ -331,7 +335,8 @@ export function updateSpawnWarnings(dt) {
         p.t -= dt;
         // Per-mesh scale throb (opacity is global above).
         const pulse = 0.5 + 0.5 * Math.sin((p.warnTime - p.t) * 10);
-        const r = SPAWN_WARN_RADIUS * Math.max(0.85, p.scaleFactor) * (0.92 + 0.12 * pulse);
+        const r = Math.min(SPAWN_WARN_RADIUS_MAX, SPAWN_WARN_RADIUS * Math.max(0.85, p.scaleFactor))
+            * (0.92 + 0.12 * pulse); // Same ceiling as schedule time (C-22)
         p.mesh.scale.set(r, r, r);
         // Keep grounded if the origin rebased under the disc.
         if (state.worldMode === 'endless') {
@@ -426,7 +431,7 @@ export function updateEnemies(dt) {
     // The explicit builder (audit C-2) covers the body block only and
     // preserves the airborne flatten rule internally.
     for (const p of state.players) {
-        if (p.alive && p.mesh) setPlayerCollisionBox(playerBoxes[p.seat], p);
+        if (p.alive && p.mesh && !p.ascension) setPlayerCollisionBox(playerBoxes[p.seat], p);
     }
     for (let i = state.enemies.length - 1; i >= 0; i--) {
         const enemyGroup = state.enemies[i];
@@ -509,7 +514,15 @@ export function updateEnemies(dt) {
         // species can't outrun its own separation steering. Random drift and
         // avoidance deliberately stay on the GLOBAL speed (plan 024: only
         // the four sites thread the factor).
-        const speciesSpeed = state.actualEnemySpeed * ud.species.speedFactor;
+        // Per-target pace (plan 031, audit C-15): in coop this hunter runs
+        // at the pace ITS target's speed toy sets — no seat's 5x can make
+        // another seat's hunters unoutrunnable. Solo reads the classic
+        // global (byte-stable). Random drift and separation deliberately
+        // stay on the GLOBAL speed (plan 024's four-site rule).
+        const paceBase = state.players.length >= 2 && state.enemyPaceForSeat[target.seat] !== undefined
+            ? state.enemyPaceForSeat[target.seat]
+            : state.actualEnemySpeed;
+        const speciesSpeed = paceBase * ud.species.speedFactor;
 
         // --- Random Movement Component (calculated for all states) ---
         enemyGroup.timeToChangeRandomVelocity -= dt;
@@ -562,7 +575,7 @@ export function updateEnemies(dt) {
         // Cap total speed; the 1.25 headroom lets separation win slightly
         // over chase without runaway speed. The cap rides the SPECIES speed
         // (plan 024) so a sprinter keeps its separation headroom.
-        const maxSpeed = speciesSpeed * 1.25;
+        const maxSpeed = speciesSpeed * ENEMY_SEPARATION_HEADROOM;
         if (combinedMovement.length() > maxSpeed) {
             combinedMovement.normalize().multiplyScalar(maxSpeed);
         }
@@ -590,7 +603,9 @@ export function updateEnemies(dt) {
         setEnemyCollisionBox(scratchBox, enemyGroup); // Body block only (audit C-2)
         let killed = false;
         for (const p of state.players) {
-            if (!p.alive || !p.mesh) continue;
+            // Ascending heroes are uncollidable (plan 029): the ceremony is
+            // sacred ground — no kill, no death, no contact.
+            if (!p.alive || !p.mesh || p.ascension) continue;
             if (!playerBoxes[p.seat].intersectsBox(scratchBox)) continue;
             if (canKillSpecificEnemy(enemyGroup, p)) {
                 killEnemy(enemyGroup, i, p); // splice(i, 1) — safe going backwards
@@ -925,7 +940,7 @@ export function updateEnemyStreaming(dt) {
     const seatOffset = bubbleSpawnCounter % 2;
     for (let n = 0; n < state.players.length; n++) {
         const player = state.players[(n + seatOffset) % state.players.length];
-        if (!player.alive || !player.mesh) continue;
+        if (!player.alive || !player.mesh || player.ascension) continue;
         if (threatCountScratch[player.seat] >= perPlayerTarget) continue;
         if (!spawnAnchor || threatCountScratch[player.seat] < threatCountScratch[spawnAnchor.seat]) {
             spawnAnchor = player;
@@ -974,7 +989,7 @@ export function updateEnemyStreaming(dt) {
 // within the avoid radius into `out`. The caller scales the result into a
 // steering component before the speed cap.
 function computeAvoidance(enemyGroup, out) {
-    const avoidRadius = 7;
+    const avoidRadius = ENEMY_AVOID_RADIUS; // GAME BALANCE (plan 033, C-23)
     out.set(0, 0, 0);
     // Plain for loop (plan 020 P-6): this runs per enemy pair per frame —
     // the forEach closure was allocation + call overhead in the hottest path.

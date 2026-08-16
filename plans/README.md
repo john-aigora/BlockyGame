@@ -38,15 +38,16 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (with one-line reason) | REJE
 A second full audit (commit `128d18e`, after 016 merged) lives in
 [audit-2026-07-31.md](audit-2026-07-31.md): red-baseline attribution (7 stale
 specs + lint), ~60 vetted technical findings with stable IDs, 10 design tensions,
-capability map, and the fun-catalog index. NOTE: the suite is RED on main —
-see finding BASE-1; plan 017 repairs it and gates everything else.
+capability map, and the fun-catalog index. (The RED-main state it describes was
+repaired by plan 017 and is long merged — see the status below.)
 
 ## 2026-07-31 run: plans 017–028 (owner selected "all", plus two new owner requests)
 
-**Status (2026-08-08): run COMPLETE on `feat/audit-coop-2026` (unmerged, never
-pushed) — rows 017–028 all DONE; suite 150 tests green, lint 0, build 0 at the
-run head. One human step remains: 018's family hardware check (`?paddebug=1`).
-The RED-main note above still describes `main` — the repair lives on the branch.**
+**Status (updated 2026-08-14): run COMPLETE and MERGED to `main` via PR #4
+(`1460e3b`, 2026-08-08); PR #5 (per-player 2P speed multipliers) followed.
+Baseline on `main` at `c1ffd13`: suite 154/154 green (8.3 m), lint 0, build 0
+— measured 2026-08-14. One human step remains: 018's family hardware check
+(`?paddebug=1`; the tool for it is `/pad-test.html`).**
 
 Owner requests folded in: **two-player split-screen mode** (026) and **fix the
 joysticks** (018 — root cause: pad-selection lock never rescans + unconditional
@@ -56,7 +57,7 @@ which hardened BlockyGame's own pad code for dual-port DB9 adapters).
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
 | 017 | Baseline repair: green lint+tests, failure artifacts, CI | P1 | M | — (GATES ALL) | DONE |
-| 018 | Gamepad reliability: rescan-first selection, honest scoring, per-pad edges | P1 | M | 017 | DONE — code+tests landed, gamepad spec 10/10, hardware check pending family; full-suite criterion BLOCKED by pre-existing balance.spec.js:42 combo race (exposed by schedule shift; see execution log 2026-08-08 B2) |
+| 018 | Gamepad reliability: rescan-first selection, honest scoring, per-pad edges | P1 | M | 017 | DONE — code+tests landed, gamepad spec 10/10, hardware check pending family (**the tool for it is `/pad-test.html`** — live pad/axis/button readout; in-game `?paddebug=1`); the balance.spec combo race was fixed in the 017-028 run |
 | 019 | Fairness pass: honest hitboxes, truthful arrows, input integrity | P1 | M | 017 | DONE |
 | 020 | Perf pass 1: perfInfo hook, shadow diet, culling, hot-loop hygiene, mobile tier | P1 | M | 017 | DONE |
 | 021 | Docs truth + root CLAUDE.md + Node pinning | P2 | S | 017 | DONE |
@@ -94,8 +95,11 @@ which hardened BlockyGame's own pad code for dual-port DB9 adapters).
 [017] → [018, 021] → [019, 020] → [022, 023] → [024, 027-step-1-only?] → no —
 keep it simple: [017] → [018, 021] → [019, 020] → [022] → [023] → [024] →
 [025] → [026] → [027] → [028 + final docs re-touch]. 022 lands before 023
-because item 12 moves the HUD nodes 023 writes beside. Never push to origin
-(read-only remote + owner rule); LOCAL-ONLY run on one feature branch.
+because item 12 moves the HUD nodes 023 writes beside. *(Historical note —
+the "never push / LOCAL-ONLY" rule below described THAT run and is dead:
+the live workflow since PR #4 is push to the fork + land via PR.)* ~~Never
+push to origin (read-only remote + owner rule); LOCAL-ONLY run on one
+feature branch.~~
 
 ### Deliberately deferred (recorded so the run doesn't improvise them)
 
@@ -107,6 +111,88 @@ because item 12 moves the HUD nodes 023 writes beside. Never push to origin
   verdict); only the picker corpse and boot waste go (022).
 - Ghost runs, skins/pets/wins, share cards, challenge modes: next fun wave —
   see the catalog in audit-2026-07-31.md §10.
+
+## 2026-08-14 audit: plans 029–033
+
+Third audit (commit `c1ffd13`, standard depth: 4 parallel read-only agents +
+lead vetting; baseline verified green before auditing). Headline: the owner
+asked for a fix to the runaway-growth loop — "ascension" (plan 029) is the
+answer, and it also structurally retires most of the giant-scale breakage
+class found this round. Findings continue the stable-ID convention
+(C-15…C-24, P-13…P-16, D-14…D-18, T-12…T-17, DX-5…DX-8, DOC-9…DOC-13,
+SEC-4…SEC-7, DEP-1/2); full details live in the plan files' "Current state"
+sections and the 2026-08-14 chat report.
+
+| Plan | Title | Priority | Effort | Depends on | Status |
+|------|-------|----------|--------|------------|--------|
+| 029 | Ascension — "going to heaven" ceremony ends runaway growth as a win (owner headline; DT-7/DT-8) | P1 | L | — | DONE — src/ascension.js ceremony (foreshadow halo at 9, beam/rise/starburst at 10, +500, ASCENDED! screen, ✦ rows, 2P settle chip); 8-case ascension.spec; suite 154→162; balance.spec giant-scale probes mark ascension spent (behavior-driven update, intent preserved) |
+| 030 | Security hardening: per-page CSP scoping, npm audit fix (2 dev-tree highs), .env safety net | P2 | S | — | DONE — 4-block CSP (game page script-src 'self' only; museum gets the exact pinned cdnjs path; form-action everywhere); root audit 0 vulns (lockfile-only fix); video/ tree audit RECORDED (3 high, local-only); .env net + video/.env.example; POST-DEPLOY manual console check required (headers are production-only) |
+| 031 | 2P fairness: per-target enemy pace (C-15), canvas-rect truth (C-16/D-14/P-13), 58e3262 + pad Y/X coverage (T-12/T-13) | P1 | M | — | DONE — enemyPaceForSeat per-target rule (kinematic + arithmetic specs; P2 survives what the max rule killed); onWindowResize owns rect + viewW/H (renderFrame layout read gone); death/roster recompute + pad Y/X routing + coop-wide exit covered; suite 162→164 |
+| 032 | CI completes verification (build step, browser cache, single PR run) + docs truth (DOC-9..13, DX-7/8, T-17) | P2 | S-M | — | DONE — ci.yml build+cache+scoped-push+45m; test:one script documented; learnings/todo/readme/CLAUDE.md truth pass (CLAUDE.md owns exact count: 164 at this batch; B9 re-touches); eslint exemption recorded; bootEndless -> helpers |
+| 033 | Small-fix bundle: 2P input allocations (P-14), cloud closure (P-15), reflow guard (P-16), audio clamp (C-20/C-8), camera anchor (C-21), warn-ring clamp (C-22), knob extraction (C-23), ui→game cycle break (D-15), comment truth (D-17) | P3 | M | 031 | DONE — all nine landed (5 slices: disjoint steps own commits, file-overlapping steps thematic); knob values byte-identical; suite 164/164 |
+| 034 | Ghost runs — race the stored best on the same seeded world (catalog #9) | P2 | M | — (soft: after 029/031/033 merge-adjacency) | DONE — record (true-coord quantized samples, interval-doubling cap) → finalize via runEnded signal → replay vs runTime with fell/ascended marker; overlay RACING THE GHOST line; ?ghost=0; 8-case spec; suite 164→172 |
+| 035 | Hero skins + milestone unlocks (CAP-3; Celestial skin reads 029's asc field) | P3 | S-M | — (soft: 029 for Celestial) | DONE — 5 palettes (SKIN_PALETTES look-table + GAME BALANCE thresholds); unlocks DERIVED live from boards; SKIN cycle button (mode-button pattern, overlay-only, in-place reskin); default byte-stable; P2 teal untouchable; 7-case spec; suite 172→179 |
+| 036 | Board honesty — record the run's speed multiplier on rows (DT-3) | P3 | S | — (merge-adjacent to 029/031) | DONE — runMaxMult high-water via applySpeedMultiplier (device boost excluded); additive row field + ' · Nx' suffix on all three row shapes; ranking byte-untouched; suite 179→180 |
+
+The master narrative tying all of this together — current state, workstream
+rationale, execution DAG, open owner decisions, and the bug↔issue map —
+lives in **[ROADMAP.md](ROADMAP.md)**.
+
+### GitHub issues (filed 2026-08-14 on john-aigora/BlockyGame)
+
+Every vetted bug has an issue; security findings are deliberately NOT filed
+publicly (they live in plan 030 only — the repo is public).
+
+| Issue | Bug (audit ID) | Plan |
+|---|---|---|
+| [#6](https://github.com/john-aigora/BlockyGame/issues/6) | Runaway growth has no endgame (DT-7/DT-8) | 029 |
+| [#7](https://github.com/john-aigora/BlockyGame/issues/7) | 2P enemy pace = max of both seats (C-15) | 031 |
+| [#8](https://github.com/john-aigora/BlockyGame/issues/8) | Stale arrow geometry on layout flips (C-16/D-14) | 031 |
+| [#9](https://github.com/john-aigora/BlockyGame/issues/9) | Per-seat speed feature untested (T-12/T-13) | 031 |
+| [#10](https://github.com/john-aigora/BlockyGame/issues/10) | Music scheduler backlog burst + resume guard (C-20/C-8) | 033 |
+| [#11](https://github.com/john-aigora/BlockyGame/issues/11) | Restart camera anchor drift (C-21) | 033 |
+| [#12](https://github.com/john-aigora/BlockyGame/issues/12) | Warn ring unbounded at late-game scale (C-22) | 033 |
+| [#13](https://github.com/john-aigora/BlockyGame/issues/13) | 2P input pad-cache bypass + allocations (P-14) | 033 |
+| [#14](https://github.com/john-aigora/BlockyGame/issues/14) | Per-cloud closure per frame (P-15) | 033 |
+| [#15](https://github.com/john-aigora/BlockyGame/issues/15) | Coop scoring reflows a hidden element (P-16) | 033 |
+| [#16](https://github.com/john-aigora/BlockyGame/issues/16) | CI: no build step, no browser cache, double PR runs (DX-5/6) | 032 |
+| [#17](https://github.com/john-aigora/BlockyGame/issues/17) | Docs drift (DOC-9..13, DX-7/8) | 032 |
+| [#18](https://github.com/john-aigora/BlockyGame/issues/18) | Giant-scale umbrella — retired by the Ascension cap (C-17/18/19/24) | 029 |
+
+### Dependency notes (029–033)
+
+- 029, 030, 031, 032 are mutually independent — any order; 029 first is the
+  owner's priority. **033 lands after 031** (both reshape
+  `applySpeedMultiplier`/input.js; 033's drift check assumes 031's state).
+- If 029 lands before 032, plan 032 re-measures the suite count instead of
+  using 154.
+- 030's CSP verification includes a POST-DEPLOY manual check (headers are
+  production-only) — noted inside the plan.
+
+### Considered and deferred/rejected this audit (do not re-derive)
+
+- **Giant-scale breakage family** (spawn-overlap at S≳12.6/17, bubble
+  placement deadlock at S≳21, shadow-frustum inversion at S≳19.5,
+  fog/window-edge exposure at large pullback, cloud-band clipping at jump
+  apex S≳7): **structurally retired by plan 029's ASCENSION_SCALE=10 cap**
+  — runs end before the thresholds. Revive only if the cap is ever raised
+  past ~12 (thresholds + sites recorded in plan 033's maintenance notes).
+  The one pre-threshold member, the warn-ring blowup (C-22), is fixed in 033.
+- **ui.js split (D-16)**: ui.js doubled to 1065 lines and owns 8 subsystems;
+  the recommended first slice is extracting the tension block to
+  `src/tension.js` (~190 lines, characterized by tests/tension.spec.js).
+  Deferred to its own future plan — do not fold into 033.
+- **hiscores.js read/write consolidation (D-18)**: real duplication, but
+  persisted-data risk outweighs standalone benefit; do it as step 1 of the
+  NEXT board/schema change.
+- **Pre-commit hooks / prettier / Dependabot**: declined — two contributors,
+  CI gates lint, a bot would fight the three.js pin.
+- **`?move=continuous` spike (C-14/T-10)**: STILL the oldest open owner
+  decision (adopt-and-rewrite vs delete, pending family playtest since
+  July). Unchanged; surfaced again in the 2026-08-14 report.
+- **npm-audit advisory skepticism**: the two 2026 advisories
+  (brace-expansion GHSA-rgw5-rvv9-x895, nanoid GHSA-2v37-7h3g-55p8) were
+  verified live on 2026-08-14 — both real, both dev-tree-only, fixed in 030.
 
 ## Dependency notes
 

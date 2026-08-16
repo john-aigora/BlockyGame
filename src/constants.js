@@ -9,7 +9,7 @@ export const enemyBaseHeight = 1.2; // Base height of enemy
 // --- GAME BALANCE (tune here, nowhere else) ---
 export const FOOD_POINTS = 1; // per block (today's behavior)
 export const KILL_POINTS = 25; // flat bounty per defeated enemy
-export const MAX_ENEMIES = 8; // hard population cap
+export const MAX_ENEMIES = 8; // CLASSIC/debug-only cap (the retired torus arena via forceWorldMode); the SHIPPING endless caps are ENDLESS_ENEMY_CAP / ENDLESS_ENEMY_CAP_COOP below (plan 033, D-17)
 export const ENEMIES_PER_KILL = 2; // spawned per kill, subject to the cap
 export const ENEMY_HEIGHT_FACTOR = 1.5; // new-enemy height vs player (existing value, now named)
 export const SPEED_GROWTH_FACTOR = 0.18; // extra speed per point of playerScale above 1 (big = faster)
@@ -22,6 +22,20 @@ export const SIZE_BOUNTY_PER_UNIT = 5; // extra kill points per whole unit of th
 export const COMBO_WINDOW = 4; // seconds after a kill in which the next kill escalates the combo
 export const COMBO_MAX = 5; // combo multiplier cap (x1..x5)
 export const MILESTONE_STEP = 1.0; // playerScale interval that fires a growth-milestone celebration
+
+// --- Ascension (plan 029, audit DT-7/DT-8): growth's destination ---
+// Uncapped growth had no endgame: past the speed cap (scale 7.67) size only
+// cost — the run degenerated into an infinite grow/eat loop. At
+// ASCENSION_SCALE the hero has outgrown the world and ASCENDS: a scripted
+// ceremony (beam, rise, starburst) ends that hero's run as a WIN. Solo play
+// below the threshold is byte-identical; in 2P the partner plays on.
+export const ASCENSION_SCALE = 10; // The 90th block — the crowning size
+export const ASCENSION_FORESHADOW_SCALE = 9; // Halo + "THE SKY AWAITS..." — the crown must never be a rug-pull
+export const ASCENSION_BONUS = 500; // Crowning payout — bigger than any single titan beat
+export const ASCENSION_RISE_HEIGHT = 14; // Rise into the cloud band (12-18u) — heaven is where the clouds are
+export const ASCENSION_LIFT_TIME = 2.2; // Beam lands + first lift (game-seconds)
+export const ASCENSION_RISE_TIME = 2.8; // The climb to the cloud band
+export const ASCENSION_BURST_TIME = 1.5; // Shrink-to-star + the final gold burst
 
 // --- Enemy species (plan 024, capability CAP-2) ---
 // speedFactor multiplies actualEnemySpeed for THIS enemy only. The owner rule
@@ -64,6 +78,23 @@ export const BOSS_BOUNTY_MULT = 3; // Titan kill payout multiplier — the late-
 export const BOSS_FOOD_DROP = 10; // Titan death feast: food pieces on the ring below (replaces the species drop)
 export const BOSS_FOOD_RING_RADIUS = 2.65; // Mean feast ring radius (~6u circle across, jittered) — a banquet, not a pile
 
+// --- Skin unlocks (plan 035): earned palettes, derived from progression ---
+// Unlocks are computed from the visible boards plus the monotonic progression
+// summary in hiscores.js, so a qualifying run stays earned after its row leaves
+// the top five. Palettes are a LOOK and live in characters.js SKIN_PALETTES;
+// thresholds are progression and live HERE.
+export const SKIN_UNLOCK_DISTANCE_1 = 500; // LIME: any endless/daily run this far — a real journey
+export const SKIN_UNLOCK_DISTANCE_2 = 1000; // MIDNIGHT: you crossed the titan's mark
+export const SKIN_UNLOCK_SCORE = 1000; // GOLD: any row this rich — a hunter's palette
+
+// --- Ghost runs (plan 034): race the stored best on the same seed ---
+// The world is deterministic per seed, so the best run's PATH is replayable:
+// a translucent spectral hero re-runs it against the live game clock. One
+// ghost per seed, best-distance wins; recording is solo-endless only.
+export const GHOST_SAMPLE_INTERVAL = 0.15; // Game-seconds between path samples (~7/s — smooth replay, ~26KB per 10 min after quantization)
+export const GHOST_MAX_SAMPLES = 4000; // Buffer cap: hitting it drops every 2nd sample and DOUBLES the live interval (long runs keep full shape at half resolution)
+export const GHOST_OPACITY = 0.38; // Spectral but unmistakable — never confusable with a live hero
+
 // Tension systems (awesome pass): make danger and urgency legible.
 export const DANGER_MUSIC_THRESHOLD = 0.12; // dangerOpacity above this (with NO prey alive) lifts the music to the danger layer (2) — just past the vignette's first visible breath, so the pad arrives with the dread, not before
 export const PANIC_TIME = 5; // Collect-countdown seconds at/below which panic engages (red pulse, tick sfx, food arrow)
@@ -75,6 +106,10 @@ export const SPAWN_MATERIALIZE_START_SCALE = 0.05; // Fraction of full size a ma
 // Red ground warn BEFORE the monster appears — notice time for the player.
 export const SPAWN_WARN_TIME = 0.95; // Seconds the red pulse sits on the ground before materialize (the 1x baseline)
 export const SPAWN_WARN_RADIUS = 1.35; // Base ring radius (scaled up a bit with the enemy)
+export const SPAWN_WARN_RADIUS_MAX = 12; // Warn-disc scale ceiling (plan 033, audit C-22): past this a
+// flat one-groundHeightAt-sample ring reads as underground geometry across ±3.75u terrain, its
+// segments show as a polygon, and its band can cover the player's own feet — the telegraph
+// stops telegraphing. Late-game giants keep their long warn TIME; only the disc is capped.
 // Speed-aware warn scaling (plan 024, audit DT-9): notice is measured in
 // player-travel, not seconds — at 5x speed a fixed 0.95s covered a fifth of
 // the ground it promised at 1x, exactly when reaction time mattered most.
@@ -127,6 +162,12 @@ export const engagementRadius = 15; // Enemies within this radius will try to or
 export const orbitStrengthFactor = 0.4; // How strongly enemies try to orbit (0 to 1)
 export const enemyRandomDriftFactor = 0.3; // How strong the random drift is, relative to enemy speed
 export const AVOID_SPEED_FACTOR = 1.2; // Enemy-separation steering strength, as a multiple of enemy speed (pre-cap; see plan 005)
+// Knobs moved home from their modules (plan 033, audit C-23) — values byte-identical:
+export const ENEMY_AVOID_RADIUS = 7; // Enemies steer apart inside this distance (partner of AVOID_SPEED_FACTOR above; lived in enemies.js)
+export const ENEMY_SEPARATION_HEADROOM = 1.25; // Total-speed cap over species speed — lets separation win slightly over chase (lived in enemies.js)
+export const ROCK_WATER_CLEARANCE = 0.35; // Rocks need terrain this far above WATER_LEVEL — never in or teetering over water (lived in terrain.js)
+export const FOOD_ROCK_CLEARANCE = 0.6; // Food keeps this margin outside a rock's collision circle (lived in terrain.js; peer of FOOD_WATER_CLEARANCE)
+export const FOOD_ANIM_CULL_RADIUS = 90; // Food bob/rotation animates only within this of any hero — approximates the scale-1 fog range (~86u); was an 8100 (90²) literal in effects.js
 export const BASE_ENEMY_SPAWN_DISTANCE = 30; // Base spawn distance for new enemies
 export const SPAWN_DISTANCE_SCALE_FACTOR = 10; // Scaling of spawn distance with player size
 

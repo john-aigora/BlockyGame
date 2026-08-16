@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openGame, startGame, waitGameSeconds, installMockPads } from './helpers.js';
+import { openGame, startGame, waitGameSeconds, installMockPads, pressEdge } from './helpers.js';
 
 // Physical gamepad support (HTML Gamepad API). Playwright cannot inject a
 // real controller, so the suite installs mock pads on navigator.getGamepads
@@ -247,15 +247,8 @@ async function padReady(page) {
   await page.evaluate(() => window.__game.debug.pollGamepad());
 }
 
-// Press → poll → release → poll: one clean edge on `button`.
-function pressEdge(page, button) {
-  return page.evaluate((b) => {
-    window.__mockPad.setButton(b, true);
-    window.__game.debug.pollGamepad();
-    window.__mockPad.setButton(b, false);
-    window.__game.debug.pollGamepad();
-  }, button);
-}
+// pressEdge (press → poll → release → poll) now lives in helpers.js
+// (plan 031) — same behavior, plus a pad-slot arg for dual-pad scenarios.
 
 test('D-pad buttons move the player (standard mapping 12-15)', async ({ page }) => {
   await padReady(page);

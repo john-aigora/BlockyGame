@@ -60,6 +60,37 @@ test('list is trimmed to top 5 and a worse run does not displace them', async ({
   expect(stored.length).toBe(5);
   expect(Math.min(...stored.map((e) => e.score))).toBe(10); // 0 didn't place
 });
+test('a qualifying score stays unlocked after its short run misses the top-five board', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('blocky.hiscores.endless.v1', JSON.stringify([
+      { score: 50, date: '2026-01-01', distance: 500 },
+      { score: 40, date: '2026-01-01', distance: 400 },
+      { score: 30, date: '2026-01-01', distance: 300 },
+      { score: 20, date: '2026-01-01', distance: 200 },
+      { score: 10, date: '2026-01-01', distance: 100 }
+    ]));
+  });
+  await openGame(page);
+  await startGame(page);
+  await page.evaluate(() => {
+    const s = window.__game.state;
+    s.score = 1000;
+    s.furthestDistance = 0;
+    s.collectTimeLeft = 0.05;
+    window.__game.debug.advance(0.1);
+  });
+  await waitForGameOver(page);
+  const stored = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('blocky.hiscores.endless.v1')));
+  expect(stored).toHaveLength(5);
+  expect(stored.some((row) => row.score === 1000)).toBe(false);
+  const progression = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('blocky.progression.v1')));
+  expect(progression.bestScore).toBeGreaterThanOrEqual(1000);
+  expect((await page.evaluate(() => window.__game.debug.skinInfo())).unlocked)
+    .toContain('gold');
+});
+
 
 test('corrupt storage never crashes: death screen still renders', async ({ page }) => {
   await page.addInitScript(() => {
@@ -72,4 +103,48 @@ test('corrupt storage never crashes: death screen still renders', async ({ page 
   await expect(page.locator('#death-title')).toHaveText('GAME OVER');
   // Corrupt data reads as an empty list; this run is recorded as its only entry.
   await expect(page.locator('#hiscore-slot .hiscore-list li')).toHaveCount(1);
+});
+
+test('board rows record the run\'s chosen speed multiplier — and only when it was used (plan 036)', async ({ page }) => {
+  await page.addInitScript(() => {
+    // A legacy row (no mult field) must render exactly as before.
+    localStorage.setItem('blocky.hiscores.endless.v1',
+      JSON.stringify([{ score: 7, distance: 120, date: '2026-01-01' }]));
+  });
+  await openGame(page);
+  await startGame(page);
+  // Choose 2x through the real control path, then die by clock expiry.
+  await page.evaluate(() => {
+    window.__game.debug.cycleSpeed(0); // 1x -> 1.5x
+    window.__game.debug.cycleSpeed(0); // 1.5x -> 2x
+    window.__game.debug.advance(16);
+  });
+  await waitForGameOver(page);
+  const rows = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('blocky.hiscores.endless.v1')));
+  const fresh = rows.find((r) => r.date !== '2026-01-01');
+  const legacy = rows.find((r) => r.date === '2026-01-01');
+  expect(fresh.mult).toBe(2);
+  expect(legacy.mult).toBeUndefined(); // Untouched
+  // The rendered board says so too — and ONLY for the run that used it.
+  await expect(page.locator('#hiscore-slot .hiscore-list')).toContainText('· 2x');
+  const legacyRowText = await page.locator('#hiscore-slot .hiscore-list li')
+    .filter({ hasText: '2026-01-01' }).textContent();
+  expect(legacyRowText).not.toContain('·');
+
+  // An untouched 1x run stores NO mult field and renders NO suffix. The
+  // seat's speed index PERSISTS across restarts (pre-existing behavior),
+  // so drop back to 1x BEFORE restarting — the high-water reseeds at setup.
+  await page.evaluate(() => {
+    window.__game.state.players[0].speedMultiplierIndex = 0;
+    window.__game.debug.applySpeedMultiplier();
+  });
+  await page.locator('#restart-button').click();
+  await startGame(page);
+  await page.evaluate(() => window.__game.debug.advance(16));
+  await waitForGameOver(page);
+  const rows2 = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('blocky.hiscores.endless.v1')));
+  const oneX = rows2.filter((r) => r.date !== '2026-01-01' && r.mult === undefined);
+  expect(oneX.length).toBeGreaterThanOrEqual(1);
 });

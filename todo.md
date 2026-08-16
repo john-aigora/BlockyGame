@@ -1,6 +1,7 @@
 # Blocky Collector 3D - Todo & Future Ideas
 
 > Bug fixes and infra improvements from the 2026 overhaul are tracked as plans in `plans/` — this file is the feature wishlist. Items marked [x] shipped in that overhaul.
+> **CLAUDE.md's "Closed decisions" overrides anything here** (e.g. the Roblox section below is rejected — kept for history only).
 
 This file tracks potential future enhancements and features for the game.
 
@@ -38,14 +39,14 @@ This file tracks potential future enhancements and features for the game.
     - [ ] Current: Enemy defeat spawns 4 food particles at death location.
     - [ ] LBS Style: When a yellow (killable) enemy is defeated, spawn 4–6 food blocks in a wider random spread/burst around the enemy's last position.
     - [ ] Adjust spawning/size of initial "Noob" (food) blocks if they feel "too close and too big".
-- [ ] **More Varied Enemy Types:**
-    - [ ] Existing ideas: Different movement patterns, ranged attacks, boss enemies.
-    - [ ] **"Juja-like" Enemies (Low-Risk, Resource Drop - LBS Beetles Style):**
-        - [ ] Appearance: Smaller, faster, distinct (e.g., different shape/color).
-        - [ ] Spawning: Periodically.
-        - [ ] Behavior: Simpler movement, less aggressive.
-        - [ ] Reward: Drop extra food when defeated.
-        - [ ] Consequence: No game over on player contact (or minor penalty).
+- [x] **More Varied Enemy Types:** _(shipped: species table, plan 024; the 1000u TITAN boss, plan 025)_
+    - [x] Existing ideas: Different movement patterns, ranged attacks, boss enemies. _(sprinter 2.2x + juja 2.6x movement characters; the titan is the boss beat — ranged attacks still open)_
+    - [x] **"Juja-like" Enemies (Low-Risk, Resource Drop - LBS Beetles Style):** _(shipped: `juja` in ENEMY_SPECIES, plan 024)_
+        - [x] Appearance: Smaller, faster, distinct (e.g., different shape/color). _(0.35x height, green, 2.6x speed)_
+        - [x] Spawning: Periodically. _(SPAWN_SIZE_PATTERN rotation slot)_
+        - [x] Behavior: Simpler movement, less aggressive. _(flees unconditionally)_
+        - [x] Reward: Drop extra food when defeated. _(foodDrop 2, bonus-snack economics)_
+        - [x] Consequence: No game over on player contact (or minor penalty). _(harmless: true — excluded from every threat surface)_
 - [ ] **Power-ups (Spawned Randomly as Collectible Orbs - LBS Style):**
     - [ ] **Magnet:** Pulls nearby food.
     - [ ] **Speed Burst:** Temporary base speed increase (no energy cost).
@@ -60,7 +61,7 @@ This file tracks potential future enhancements and features for the game.
     *   [x] Increase enemy speed or spawn rate over time or based on score. _(endless: +speed, +population every 150u of distance)_
     *   [x] Introduce tougher enemy variants as the game progresses. _(endless: enemies grow +20% height per ramp level)_
 
-## Monetization & Platform Specifics (Roblox Focus - From Gemini Summary)
+## Monetization & Platform Specifics (Roblox Focus - From Gemini Summary) _(REJECTED — see CLAUDE.md Closed decisions: "No Roblox port"; kept for history)_
 - [ ] **Roblox Platform Integration:** (General task for deployment)
 - [ ] **Skin Packs / Visual Overhaul for Roblox:**
     - [ ] Enemies (currently blue blocks) become Corgis with red eyes.
@@ -122,7 +123,7 @@ This file tracks potential future enhancements and features for the game.
 - [ ] **High Score System:**
     *   [x] Track and display personal high scores (local storage).
     *   [ ] Track and display a global high score (requires backend).
-    *   [ ] Track and display a daily high score (requires backend).
+    *   [x] Track and display a daily high score. _(shipped LOCALLY: TODAY'S WORLD seeded board `blocky.hiscores.daily.v1`, plan 025 — a cross-device/backend variant is still open)_
     *   [x] Display leaderboard on game-over screen.
 - [ ] **Unlockable Skins & Progression (LBS Style & Roblox):**
     *   [ ] Unlock cosmetic skins (e.g., different player colors, face designs, Roblox avatar items if applicable) by reaching score milestones or using "Wins".

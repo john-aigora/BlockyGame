@@ -21,7 +21,11 @@ The world itself is a **seed**: the start overlay shows the number
 (`SEED 20260726`), `?seed=<int>` in the URL summons any world on demand, and
 the **TODAY'S WORLD** toggle switches everyone onto the same date-seeded map —
 the family races one shared world all day, and those runs also rank on their
-own **TODAY'S BEST** board (stale days prune themselves). Out in the wild:
+own **TODAY'S BEST** board (stale days prune themselves). And the race is
+now visible: every solo run records its path, and the best run per seed
+comes back as a **ghost** — a translucent spectral hero re-running it live
+beside you (`RACING THE GHOST: 843u` on the title screen; a marker where it
+fell or ascended; `?ghost=0` hides it). Beat the ghost and YOU become it. Out in the wild:
 biome regions now have **names** — hold a new region for a moment and a
 `DISCOVERED: THE TEAL SHALLOWS` banner fires (the death screen counts your
 REGIONS) — rare glowing **gold blocks** pay 5 points (worth a detour, not a
@@ -49,6 +53,9 @@ outside it.
   separate pad; wiggle the stick once to claim. The FIRST button press (or
   stick wiggle) on a not-yet-active pad only claims that pad and is
   deliberately not acted on — press or wiggle once, then play.
+  **Controllers acting up?** Open `/pad-test.html` — a standalone live
+  readout of every pad, axis, and button the browser sees (in-game,
+  `?paddebug=1` overlays the same data).
 - **Grow**: grab a LIME block at least every 15 seconds — food is worth 1 point
   and makes you taller.
 - **Hunt**: when you're taller than an enemy it turns YELLOW and runs. Touch it
@@ -63,7 +70,18 @@ outside it.
   bonus food (they're quick too — earn it).
 - **Die**: get caught by a blue enemy or let the collect clock hit zero. Your
   run joins the local **BEST RUNS** top-5 (saved in your browser) — ranked by
-  distance, score breaking ties.
+  distance, score breaking ties. Rows note the speed multiplier the run used
+  (`· 2x`) so family bests compare honestly; ascended runs wear a ✦.
+- **Skins**: the SKIN button on the title screen cycles your hero's EARNED
+  palettes — LIME at 500u, MIDNIGHT at 1000u, GOLD at 1,000 points, and the
+  CELESTIAL palette only an ascended run unlocks. Earned from your saved
+  boards (clearing browser data clears skins with them); P2 is always teal.
+- **Ascend**: keep growing and the sky notices. At size 9 a golden halo
+  appears (`THE SKY AWAITS...`); at size 10 — the 90th block — the run
+  crowns itself: a beam of light, a spinning rise into the clouds, a
+  starburst, **+500 points**, and an **ASCENDED!** screen instead of GAME
+  OVER. Ascended runs wear a permanent ✦ on the board. In 2 PLAYERS one hero
+  can ascend while the partner plays on.
 - **Pause**: **P** or **Enter** (or pad Start, or the on-screen button). Space
   is jump, not pause.
 - **Extras**: game-speed cycle, two-way zoom, mute (sound effects and the
@@ -117,7 +135,8 @@ export PATH="$HOME/.local/elves-tools/node/bin:$PATH"
 ```bash
 npm install
 npm run dev        # dev server at http://localhost:5173
-npm test           # Playwright test suite (see `npx playwright test --list`)
+npm test           # FULL Playwright suite (~8 min; runs alone on port 5173)
+npm run test:one -- tests/coop.spec.js   # one spec (same port — never alongside a full run)
 npm run lint       # ESLint
 npm run build      # production build into dist/
 npm run preview    # serve the production build locally
@@ -148,6 +167,8 @@ src/
   rumble.js         gamepad vibration (isolated to avoid import cycles)
   hiscores.js       local top-5 storage (per-mode boards)
   input.js          keyboard + gamepad + multitouch-safe drag controls
+  ascension.js      the scale-10 crowning ceremony (halo, beam, rise, starburst)
+  ghost.js          ghost runs: per-seed path record + spectral replay
   movement-continuous.js  plan-014 design spike (LBS-style movement + boost),
                     active only behind ?move=continuous
   gate.js           in-app password gate (session-scoped unlock)
@@ -157,8 +178,17 @@ tests/              Playwright specs (smoke, timing, gameover, world, camera,
                     resources, hiscores, audio, balance, touch, effects,
                     endless + endless-stream + endless-polish, gate, gamepad,
                     fairness, hitbox, tension, toys, species, worldfun, coop,
-                    spawnwarn) + shared helpers
-plans/              the audit + implementation plans this overhaul followed
+                    spawnwarn, ascension, ghost, skins) + shared helpers
+public/
+  favicon.svg       site icon
+  original.html     wrapper page for the museum build (served OUTSIDE the gate)
+  original/         byte-for-byte May 2025 original — never edit, never lint
+  pad-test.html     standalone controller diagnostic (live pad/axis/button readout)
+plans/              the audits + implementation plans + ROADMAP this overhaul follows
+vercel.json         per-page security headers (CSP — see Deploying below)
+.github/workflows/  CI: lint + build + full suite on PRs and main pushes
+docs/elves/         autonomous-run docs (learnings + run plans)
+CLAUDE.md           durable repo truth for agents (owns the exact test count)
 ```
 
 Key technical facts:
@@ -185,8 +215,16 @@ The repo is a standard Vite app — Vercel detects it automatically.
 3. Framework preset shows **Vite** (build `vite build`, output `dist/`) —
    accept and **Deploy**.
 4. Every push to `main` now auto-deploys. The repo's `vercel.json` adds
-   security headers (nosniff, referrer policy, and a site-wide CSP covering the
-   live game and the `/original` archive). The build itself needs no configuration.
+   security headers (nosniff, referrer policy) and a **per-page-scoped CSP**
+   (plan 030): the live game page allows scripts from `self` only (Vite
+   externalizes everything), while `/original*` and `/pad-test.html` carry
+   their own inline-script allowances — and the `/original` archive uses a
+   path-scoped CDN allowance for its one pinned three.js file instead of
+   SRI, because the museum build is byte-frozen and cannot carry an
+   `integrity` attribute. Headers are production-only (neither `vite dev`
+   nor `vite preview` serves them): after a deploy, load `/`,
+   `/original.html`, and `/pad-test.html` with the console open — zero CSP
+   violations expected. The build itself needs no configuration.
 
 Alternatively, from a machine with the Vercel CLI logged in: `npx vercel` then
 `npx vercel --prod`.

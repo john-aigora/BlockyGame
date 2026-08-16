@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openGame, startGame, waitForGameOver, waitGameSeconds } from './helpers.js';
+import { openGame, startGame, waitForGameOver, waitGameSeconds, bootEndless } from './helpers.js';
 import { PLAYER_COLLIDER_HALF_WIDTH } from '../src/constants.js';
 
 // Toys + polish (owner queue items 4-5 + QA board flag): voxel clouds in
@@ -13,11 +13,6 @@ const WL = -0.9; // WATER_LEVEL (constants.js)
 test.beforeEach(async ({ page }) => {
   page.on('pageerror', (err) => { throw new Error(`Page error: ${err.message}`); });
 });
-
-async function bootEndless(page) {
-  await openGame(page);
-  await startGame(page);
-}
 
 test('endless sky: seeded clouds stream with the chunk window and recycle through the pool', async ({ page }) => {
   test.setTimeout(150000);

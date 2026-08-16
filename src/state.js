@@ -8,6 +8,11 @@ export function makePlayerState(seat = 0) {
     return {
         seat, // 0 = left half / P1, 1 = right half / P2
         alive: true, // false = spectator (their half shows the partner cam)
+        // Ascension (plan 029): `ascension` is the transient ceremony state
+        // machine (null = not ascending); `ascended` is the sticky won-flag
+        // for the end screen and board rows. Both reset in setupNewGame.
+        ascension: null,
+        ascended: false,
         mesh: null, // THREE.Group built by createPlayer
         camera: null, // Per-player PerspectiveCamera (world.js owns follow/zoom)
         scale: 1, // Gameplay height (the render scale follows it on collect)
@@ -30,7 +35,7 @@ export function makePlayerState(seat = 0) {
         dangerOpacity: 0, // Eased base opacity of THEIR danger vignette
         dangerPeak: 0, // Max dangerOpacity since last drain — a real scare's release earns THEIR PHEW!
         lastSurvivalBeat: -SURVIVAL_BEAT_COOLDOWN, // PHEW!/CLOSE ONE! rate limit, per player
-        heartbeatClock: 0, // Game-clock seconds to THEIR next danger heartbeat
+        heartbeatClock: 0, // Seat 0's clock IS the world heart (one audible heartbeat — ui.js updateDangerPulse reads only the delegate); other seats' fields exist for the reset sweep
         // Camera zoom model: the smoothed actual offsets (zoom LEVEL is shared
         // world state — per-player zoom is out of v1 scope). camAnchorY is the
         // endless vertical-follow smoothing (world.js) — per camera.
@@ -154,6 +159,25 @@ export const state = {
     // applySpeedMultiplier (game.js) recomputes player actualSpeed (per seat)
     // and actualEnemySpeed (world: max living player mult + ramp).
     actualEnemySpeed: undefined, // Will store the fully adjusted enemy speed
+    // Coop per-seat enemy pace (plan 031, audit C-15): a hunter runs at the
+    // pace its TARGET's seat multiplier sets, so no seat's 5x toy can make
+    // another seat's hunters unoutrunnable. Solo never reads this array
+    // (enemies.js falls through to actualEnemySpeed — byte-stable).
+    enemyPaceForSeat: [undefined, undefined],
+    // Deferred pace recompute (plan 033, audit D-15): ui.js killPlayer/
+    // settleAscendedPlayer set this instead of importing applySpeedMultiplier
+    // from game.js (that import closed a cycle through the entry module);
+    // update() consumes it at the top of the next frame.
+    enemyPaceDirty: false,
+    // Run-ended signal (plan 034): endGame (ui.js) raises it; game.js's
+    // frame loop consumes it to finalize the ghost recording — ui.js must
+    // not import ghost.js (cycle law), so the field IS the interface.
+    runEnded: false,
+    // Board honesty (plan 036, audit DT-3): the highest CHOSEN speed
+    // multiplier any seat touched from the overlay onward — recorded on
+    // board rows (" · 5x") so family bests compare honestly. The mobile
+    // device boost is a device class, not a chosen toy: excluded by design.
+    runMaxMult: 1,
 
     // Camera zoom model: the LEVEL is shared (per-player zoom is out of v1);
     // the smoothed camY/camZ offsets live per player.
@@ -189,6 +213,11 @@ export const state = {
     gameCanvasRect: { left: 0, top: 0, width: 0, height: 0 }, // Store game container dimensions
     gameCanvasCenterX: 0,
     gameCanvasCenterY: 0,
+    // Render-buffer sizes (plan 031, audit P-13): clientWidth/Height as of
+    // the last onWindowResize — what renderer.setSize used. DISTINCT from
+    // gameCanvasRect (border-inclusive, for touch/indicator screen math).
+    viewW: 0,
+    viewH: 0,
 };
 
 // Living players, in seat order. Allocates — fine for per-event paths; the

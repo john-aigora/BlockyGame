@@ -124,8 +124,25 @@ function activeGamepad() {
     return padCacheResult;
 }
 
+// Frame-cached RAW PAD LIST (plan 033, audit P-14): Chrome materializes
+// fresh Gamepad objects on every navigator.getGamepads() call — the exact
+// cost the P-7 selection cache removed, which the 2P per-seat path
+// (seatPadVector) had regressed by calling the API directly. Same
+// invalidation rule as the selection cache: pollGamepad bumps the counter
+// once per frame, connect/disconnect bump it immediately, and the test
+// mocks stay correct because their pad objects mutate in place.
+let padListCounter = -1;
+let cachedPadList = null;
+function padList() {
+    if (padListCounter !== padPollCounter) {
+        padListCounter = padPollCounter;
+        cachedPadList = navigator.getGamepads ? navigator.getGamepads() : null;
+    }
+    return cachedPadList;
+}
+
 function scanActiveGamepad() {
-    const list = navigator.getGamepads ? navigator.getGamepads() : null;
+    const list = padList();
     if (!list) return null;
 
     let best = null;
@@ -323,8 +340,7 @@ function seatPadVector(seat) {
         seatPadScratch.z = 0;
         return seatPadScratch;
     }
-    const list = navigator.getGamepads ? navigator.getGamepads() : null;
-    return computePadVector(padByIndex(list, idx), seatPadScratch);
+    return computePadVector(padByIndex(padList(), idx), seatPadScratch);
 }
 
 // Re-export for debug callers that already import input.
@@ -489,11 +505,16 @@ export function pollGamepad() {
     snapshotButtons(gp);
 }
 
+// Per-frame intent scratch for pollGamepadSeats (plan 033, P-14).
+const speedUpSeatsScratch = [];
+const speedDownSeatsScratch = [];
+const jumpSeatsScratch = [];
+
 // The 2P poll body (plan 026): claims + per-pad edges. Reuses the per-pad
 // edge Map (prevPadButtonsByIndex) — each pad's buttons edge independently,
 // and a fresh pad seeds without firing, exactly like the solo hand-off rule.
 function pollGamepadSeats() {
-    const list = navigator.getGamepads ? navigator.getGamepads() : null;
+    const list = padList();
     if (!list) {
         if (prevPadButtonsByIndex.size) prevPadButtonsByIndex.clear();
         padConnected = false;
@@ -510,11 +531,16 @@ function pollGamepadSeats() {
     let wantReset = false;
     let wantPause = false;
     let wantMute = false;
-    const speedUpSeats = [];
-    const speedDownSeats = [];
+    // Module scratch (plan 033, audit P-14): these intent lists were fresh
+    // arrays every frame — the threatCountScratch pattern instead.
+    const speedUpSeats = speedUpSeatsScratch;
+    speedUpSeats.length = 0;
+    const speedDownSeats = speedDownSeatsScratch;
+    speedDownSeats.length = 0;
     let wantZoomIn = false;
     let wantZoomOut = false;
-    const jumpSeats = [];
+    const jumpSeats = jumpSeatsScratch;
+    jumpSeats.length = 0;
     const onStart = state.onStartScreen;
     const inRun = state.gameActive && !state.onStartScreen;
     const onDeath = !state.gameActive && !state.onStartScreen;
@@ -621,6 +647,11 @@ function pollGamepadSeats() {
 // identical, and this text only actually changes on connect/movement edges.
 let padHudEl = null;
 let lastPadHudText = null;
+let padHudLastId = null;
+let padHudLastMapping = null;
+let padHudMode = '';
+let padHudShort = '';
+
 function updatePadHud(gp) {
     if (!padHudEl) {
         padHudEl = document.getElementById('pad-status');
@@ -632,8 +663,17 @@ function updatePadHud(gp) {
         return;
     }
     if (padHudEl.hidden) padHudEl.hidden = false;
-    const mode = gp.mapping === 'standard' ? 'XInput' : 'DirectInput';
-    const short = (gp.id || 'Gamepad').split('(')[0].trim().slice(0, 22);
+    // Identity pieces memoized per pad (plan 033, P-14): the split/trim/
+    // slice chain allocated strings every frame for a label that changes
+    // only when the pad itself does.
+    if (gp.id !== padHudLastId || gp.mapping !== padHudLastMapping) {
+        padHudLastId = gp.id;
+        padHudLastMapping = gp.mapping;
+        padHudMode = gp.mapping === 'standard' ? 'XInput' : 'DirectInput';
+        padHudShort = (gp.id || 'Gamepad').split('(')[0].trim().slice(0, 22);
+    }
+    const mode = padHudMode;
+    const short = padHudShort;
     const mv = gamepadVector();
     const live = Math.hypot(mv.x, mv.z) > 0.05 ? ' · live' : '';
     const text = state.onStartScreen
@@ -670,7 +710,7 @@ export function setupGamepad() {
     setSeatPadResolver((seat) => {
         const idx = seatClaims[seat];
         if (idx == null) return null;
-        return padByIndex(navigator.getGamepads ? navigator.getGamepads() : null, idx);
+        return padByIndex(padList(), idx); // Frame-cached list (P-14)
     });
     window.addEventListener('gamepadconnected', (e) => {
         padPollCounter++; // Invalidate the selection cache — react this frame
@@ -968,16 +1008,11 @@ export function setupTouchControls() {
     const container = state.gameContainer;
 
     if (container) {
-        // Calculate game container center once, and on resize
-        const updateGameCanvasBounds = () => { // Renamed for clarity
-            const rect = container.getBoundingClientRect();
-            state.gameCanvasRect = rect; // Store the whole rect
-            state.gameCanvasCenterX = rect.left + rect.width / 2;
-            state.gameCanvasCenterY = rect.top + rect.height / 2;
-        };
-        updateGameCanvasBounds(); // Initial calculation
-        window.addEventListener('resize', updateGameCanvasBounds); // Update on window resize
-
+        // Canvas geometry (rect + centers) is owned by world.js
+        // onWindowResize since plan 031 (audit C-16): the coop-wide class
+        // flip resizes the container with NO window resize event, so the
+        // old listener here went stale on every 1P<->2P transition. Every
+        // layout change already routes through onWindowResize.
         container.addEventListener('touchstart', onTouchStart);
         container.addEventListener('touchmove', onTouchMove);
         container.addEventListener('touchend', onTouchEndOrCancel);
