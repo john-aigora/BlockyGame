@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     # The suite is ~8 min at 3 local workers; CI serializes (workers: 1) with
     # one retry, so give real headroom before the kill (plan 032, DX-6).
-    timeout-minutes: 45
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
