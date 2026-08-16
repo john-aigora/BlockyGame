@@ -30,20 +30,19 @@ and the next layer of fun.
 The owner-reported problem — grow → eat → grow forever — is structural:
 growth is uncapped, its payoff stops at scale 7.67, and everything scales
 WITH the player, so past ~scale 8 the game is inflation without gameplay.
-**Ascension** ends the loop as a *win*: halo foreshadowing at scale 9; at
-scale 10 a ~6.5-game-second ceremony (light beam, gold rings, the hero
+**Ascension** ends the loop as a *win*: halo foreshadowing at scale 250; at
+scale 251 (the 2500th block; owner retune from the original 90th-block / scale-10
+start) a ~6.5-game-second ceremony (light beam, gold rings, the hero
 rises spinning into the cloud layer, shrinks to a star, bursts, +500) ends
 that hero's run with an "ASCENDED!" screen and a permanent ✦ on the board.
 Co-op composes (one hero ascends, the partner plays on). Every knob lands
 in GAME BALANCE.
 
-Ascension is also load-bearing engineering: the audit's giant-scale
-breakage family (enemies spawning inside a scale-13+ player, the spawn
-system deadlocking near scale 21, shadow inversion at 19.5, fog exposing
-the streamed world edge at large camera pullback) all sit ABOVE the scale-10
-cap. Landing 029 retires that entire bug class; the thresholds are recorded
-in [033's maintenance notes](033-perf-debt-smalls.md) in case the cap is
-ever raised.
+Raising the cap past ~12 reopens the audit's giant-scale breakage family
+(enemies spawning inside a scale-13+ player, the spawn system deadlocking
+near scale 21, shadow inversion at 19.5, fog exposing the streamed world
+edge at large camera pullback). Thresholds and sites stay in
+[033's maintenance notes](033-perf-debt-smalls.md).
 
 **Sequence**: nothing blocks it; it is the highest-priority item. Lands
 best FIRST so 032's doc pass records the new test count once.
@@ -130,8 +129,9 @@ modes — see the catalog index in [audit-2026-07-31.md](audit-2026-07-31.md) §
    recommended): confirm the intent — the alternative reading (one shared
    world pace set by the fastest seat) is what the current code comment
    claims, and it is exactly what makes P2 helpless.
-3. **Ascension tuning** after the first family runs: `ASCENSION_SCALE` 10
-   is the recommended start; every ceremony knob is in GAME BALANCE.
+3. **Ascension tuning** — done: owner playtest moved the crown from the
+   90th block (scale 10) to the 2500th (scale 251); foreshadow stays 10
+   foods below. Every ceremony knob remains in GAME BALANCE.
 4. **Family hardware check** for the DB9 sticks — `/pad-test.html` is the
    diagnostic page built for it (plan 018's one outstanding human step).
 

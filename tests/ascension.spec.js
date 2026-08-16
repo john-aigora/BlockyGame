@@ -1,8 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { openGame, startGame, waitGameSeconds, settleFrames } from './helpers.js';
+import { ASCENSION_SCALE, ASCENSION_FORESHADOW_SCALE, growthFactor } from '../src/constants.js';
 
 // --- Ascension (plan 029) ---
-// Growth's destination: at ASCENSION_SCALE (10) the hero ascends — a
+// Growth's destination: at ASCENSION_SCALE the hero ascends — a
 // game-clock ceremony that ends the run as a WIN. These specs drive the
 // REAL trigger path (a collect crossing the threshold) via debug.advance —
 // never wall-clock waits — and pin: below-threshold neutrality, the
@@ -10,6 +11,11 @@ import { openGame, startGame, waitGameSeconds, settleFrames } from './helpers.js
 // ascended end (title, reason, board mark, bonus), the GAME OVER restore
 // invariant, the 2P settle (partner plays on), pause freezing the ceremony,
 // and the GPU resource plateau across repeated ceremonies.
+// Thresholds are imported so a balance retune does not rewrite every case.
+const justUnderForeshadow = ASCENSION_FORESHADOW_SCALE - 0.5;
+const crossForeshadow = ASCENSION_FORESHADOW_SCALE - 0.05;
+const crossCrown = ASCENSION_SCALE - 0.05;
+const foodsTo = (scale) => Math.round((scale - 1) / growthFactor);
 
 async function bootSolo(page) {
   await openGame(page);
@@ -22,6 +28,14 @@ async function bootSolo(page) {
 async function growPast(page, scale) {
   await page.evaluate((s) => {
     const g = window.__game;
+    // A late-game hero's pickup box covers the whole food bubble AND every
+    // nearby prey. Sweep both, then take exactly one collect frame —
+    // spawnNearPlayer would otherwise land inside the box and chain-grow.
+    g.state.collectibles.forEach((c) => g.state.scene.remove(c));
+    g.state.collectibles = [];
+    g.state.enemies.forEach((e) => g.state.scene.remove(e));
+    g.state.enemies = [];
+    g.debug.clearPendingSpawns();
     g.state.playerScale = s;
     // Mirror the render scale like every real growth does (game.js collect
     // path) — the pickup box measures the RENDER scale, and spawnAtPosition
@@ -29,8 +43,10 @@ async function growPast(page, scale) {
     g.state.player.scale.set(s, s, s);
     const p = g.state.player.position;
     g.debug.spawnAtPosition({ x: p.x, y: 0, z: p.z });
+    g.debug.advance(1 / 60); // One update: the planted food, nothing else
+    g.state.collectibles.forEach((c) => g.state.scene.remove(c));
+    g.state.collectibles = [];
   }, scale);
-  await page.evaluate(() => window.__game.debug.advance(0.5));
   // A collect grows the gameplay scale by exactly 0.1 — polling the scale is
   // deterministic no matter WHICH nearby food the giant box swept first
   // (live frames run between evaluate round-trips).
@@ -56,7 +72,7 @@ async function clearThreats(page) {
 
 test('growth below the foreshadow threshold is byte-neutral: no halo, no ceremony', async ({ page }) => {
   await bootSolo(page);
-  await growPast(page, 8.5); // -> 8.6, under ASCENSION_FORESHADOW_SCALE
+  await growPast(page, justUnderForeshadow); // one collect still under ASCENSION_FORESHADOW_SCALE
   const info = await seatInfo(page);
   expect(info.active).toBe(false);
   expect(info.ascended).toBe(false);
@@ -65,9 +81,9 @@ test('growth below the foreshadow threshold is byte-neutral: no halo, no ceremon
   expect(await page.evaluate(() => window.__game.state.gameActive)).toBe(true);
 });
 
-test('crossing scale 9 foreshadows: halo appears and THE SKY AWAITS... fires once', async ({ page }) => {
+test('crossing the foreshadow scale shows the halo and THE SKY AWAITS... fires once', async ({ page }) => {
   await bootSolo(page);
-  await growPast(page, 8.95); // -> 9.05 crosses the foreshadow scale
+  await growPast(page, crossForeshadow); // one collect crosses ASCENSION_FORESHADOW_SCALE
   const info = await seatInfo(page);
   expect(info.foreshadowShown).toBe(true);
   expect(info.haloVisible).toBe(true);
@@ -75,28 +91,31 @@ test('crossing scale 9 foreshadows: halo appears and THE SKY AWAITS... fires onc
   const popup = await page.evaluate(() => window.__game.debug.effectsInfo().lastPopupText);
   expect(popup).toBe('THE SKY AWAITS...');
 });
-test('repeated 0.1 growth crosses scale 9 and 10 without an extra pickup', async ({ page }) => {
+test('repeated 0.1 growth crosses foreshadow and crown without an extra pickup', async ({ page }) => {
   await bootSolo(page);
-  await growPast(page, Number('8.899999999999986')); // 1 + 79 * 0.1 before pickup 80
+  // The live 0.1 accumulation, not a rounded 8.9/9.9 — binary float must
+  // still cross each imported threshold on the exact food that should.
+  await growPast(page, 1 + (foodsTo(ASCENSION_FORESHADOW_SCALE) - 1) * growthFactor);
   expect((await seatInfo(page)).foreshadowShown).toBe(true);
-  await growPast(page, Number('9.899999999999982')); // 1 + 89 * 0.1 before pickup 90
+  await growPast(page, 1 + (foodsTo(ASCENSION_SCALE) - 1) * growthFactor);
   expect((await seatInfo(page)).active).toBe(true);
 });
 
 
-test('the 90th block triggers the ceremony; the hero is untouchable and unhungry mid-rise', async ({ page }) => {
+test('the crowning block triggers the ceremony; the hero is untouchable and unhungry mid-rise', async ({ page }) => {
   test.setTimeout(120000);
   await bootSolo(page);
-  await growPast(page, 9.95); // -> 10.05 >= ASCENSION_SCALE
+  await growPast(page, crossCrown); // one collect crosses ASCENSION_SCALE
   let info = await seatInfo(page);
   expect(info.active).toBe(true);
   expect(info.phase).toBe('lift');
   // A giant grunt materialized ON the ascending hero: contact must not end
-  // the run (ceremony collision exemption) — scale 20 body is far taller
-  // than the scale-10 hero, so outside the ceremony this is instant death.
+  // the run (ceremony collision exemption). Height 2× the hero so outside
+  // the ceremony this is instant death at any ASCENSION_SCALE.
   await page.evaluate(() => {
     const p = window.__game.state.player.position;
-    window.__game.debug.spawnSpecies('grunt', p.x, p.z, 20);
+    const s = window.__game.state.playerScale;
+    window.__game.debug.spawnSpecies('grunt', p.x, p.z, (s * 2) / 1.2);
   });
   const clockBefore = await page.evaluate(() => window.__game.state.collectTimeLeft);
   await page.evaluate(() => window.__game.debug.advance(2));
@@ -109,15 +128,16 @@ test('the 90th block triggers the ceremony; the hero is untouchable and unhungry
   expect(info.active).toBe(true);
   expect(info.rise).toBeGreaterThan(0); // The climb is real
   // The ceremony uses the rendered hero scale once. A double scale would
-  // place the halo tens of units above the hero at scale 10.
-  expect(info.haloY - info.heroY).toBeLessThan(20);
-  expect(info.haloScale).toBeLessThan(20);
+  // place the halo a full extra body-height above the head.
+  const scale = await page.evaluate(() => window.__game.state.playerScale);
+  expect(info.haloY - info.heroY).toBeLessThan(scale + 2);
+  expect(info.haloScale).toBeLessThan(scale * 1.05);
 });
 
 test('solo completion: ASCENDED! screen, crowned reason, +500 bonus, marked board row', async ({ page }) => {
   test.setTimeout(120000);
   await bootSolo(page);
-  await growPast(page, 9.95);
+  await growPast(page, crossCrown);
   const scoreAtTrigger = await page.evaluate(() => window.__game.state.score);
   await page.evaluate(() => window.__game.debug.advance(8)); // Ceremony total is 6.5 game-seconds
   expect(await page.evaluate(() => window.__game.state.gameActive)).toBe(false);
@@ -140,7 +160,7 @@ test('solo completion: ASCENDED! screen, crowned reason, +500 bonus, marked boar
 test('a death after an ascension restores the exact GAME OVER title (the invariant)', async ({ page }) => {
   test.setTimeout(150000);
   await bootSolo(page);
-  await growPast(page, 9.95);
+  await growPast(page, crossCrown);
   await page.evaluate(() => window.__game.debug.advance(8));
   await expect(page.locator('#message-box')).toBeVisible({ timeout: 20000 });
   await expect(page.locator('#death-title')).toHaveText('ASCENDED!');
@@ -160,16 +180,23 @@ test('2P: P2 ascends mid-run — the partner plays on under an ASCENDED chip; th
   await startGame(page);
   await expect(page.locator('#coop-hud')).toBeVisible();
   // Grow P2 past the threshold with a real collect at THEIR feet.
-  await page.evaluate(() => {
+  await page.evaluate((s) => {
     const g = window.__game;
-    g.state.players[1].scale = 9.95;
-    g.state.players[1].mesh.scale.set(9.95, 9.95, 9.95); // Render mirror (see growPast)
+    g.state.collectibles.forEach((c) => g.state.scene.remove(c));
+    g.state.collectibles = [];
+    g.state.enemies.forEach((e) => g.state.scene.remove(e));
+    g.state.enemies = [];
+    g.debug.clearPendingSpawns();
+    g.state.players[1].scale = s;
+    g.state.players[1].mesh.scale.set(s, s, s); // Render mirror (see growPast)
     const p = g.state.players[1].mesh.position;
     g.debug.spawnAtPosition({ x: p.x, y: 0, z: p.z });
-  });
-  await page.evaluate(() => window.__game.debug.advance(0.5));
+    g.debug.advance(1 / 60);
+    g.state.collectibles.forEach((c) => g.state.scene.remove(c));
+    g.state.collectibles = [];
+  }, crossCrown);
   await expect.poll(() => page.evaluate(() => window.__game.state.players[1].scale))
-    .toBeGreaterThanOrEqual(10);
+    .toBeGreaterThanOrEqual(ASCENSION_SCALE);
   await expect.poll(() => seatInfo(page, 1).then((s) => s.active)).toBe(true);
   // Keep P1 alive through the ceremony: fed (their clock keeps running —
   // only the ascending hero's freezes) and unhunted (P1 stands still at
@@ -204,7 +231,7 @@ test('2P: P2 ascends mid-run — the partner plays on under an ASCENDED chip; th
 test('pause freezes the ceremony mid-rise; resume continues it', async ({ page }) => {
   test.setTimeout(120000);
   await bootSolo(page);
-  await growPast(page, 9.95);
+  await growPast(page, crossCrown);
   await page.evaluate(() => window.__game.debug.advance(1));
   await page.locator('#pause-button').click();
   const riseA = await seatInfo(page).then((s) => s.rise);
@@ -220,7 +247,7 @@ test('pause freezes the ceremony mid-rise; resume continues it', async ({ page }
 test('ceremony GPU resources plateau: a second crowned run allocates nothing new', async ({ page }) => {
   test.setTimeout(150000);
   await bootSolo(page);
-  await growPast(page, 9.95);
+  await growPast(page, crossCrown);
   await page.evaluate(() => window.__game.debug.advance(8));
   await expect(page.locator('#message-box')).toBeVisible({ timeout: 20000 });
   await settleFrames(page, 3); // Let the renderer register everything once
@@ -228,7 +255,7 @@ test('ceremony GPU resources plateau: a second crowned run allocates nothing new
   await page.locator('#restart-button').click();
   await expect(page.locator('#start-overlay')).toBeVisible();
   await startGame(page);
-  await growPast(page, 9.95);
+  await growPast(page, crossCrown);
   await page.evaluate(() => window.__game.debug.advance(8));
   await expect(page.locator('#message-box')).toBeVisible({ timeout: 20000 });
   await settleFrames(page, 3);

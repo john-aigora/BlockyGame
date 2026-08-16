@@ -36,7 +36,7 @@ change. Run-ephemeral lessons live in `docs/elves/learnings.md`.
   shows "ASCENDED!" — and a 2P run where EITHER seat ascended is a crowned
   team run and shows "ASCENDED!" even when the final end was the partner's
   death (deliberate; ascension spec pins both directions).
-- Growth ends at `ASCENSION_SCALE` (10): the ascension ceremony is the run's
+- Growth ends at `ASCENSION_SCALE` (251, the 2500th block): the ascension ceremony is the run's
   win condition — new features must respect an ascending player's stand-down
   (untargetable, uncollidable, clock-frozen; grep `player.ascension` gates).
 - ALL entity-to-entity direction/distance math routes through

@@ -275,9 +275,8 @@ context of any hit).
   subsystems; `tests/tension.spec.js` already characterizes the block.
 - `hiscores.js` read/write duplication: consolidate ONLY when the next
   board or a `.v2` schema bump lands (the shapes must stay byte-stable).
-- Deferred giant-scale findings (revive ONLY if plan 029's
-  `ASCENSION_SCALE` is ever raised past ~12): spawn-clearance overlap at
-  S≳12.6 (titan) / S≳17 (giants at high ramp), bubble placement deadlock at
-  S≳21, shadow-frustum inversion at S≳19.5, fog/window-edge exposure at
-  high camera pullback. Thresholds and sites in the 2026-08-14 audit
-  section of `plans/README.md`.
+- Giant-scale findings (reopened: `ASCENSION_SCALE` is now 251, past the
+  ~12 revive line): spawn-clearance overlap at S≳12.6 (titan) / S≳17
+  (giants at high ramp), bubble placement deadlock at S≳21, shadow-frustum
+  inversion at S≳19.5, fog/window-edge exposure at high camera pullback.
+  Thresholds and sites in the 2026-08-14 audit section of `plans/README.md`.
